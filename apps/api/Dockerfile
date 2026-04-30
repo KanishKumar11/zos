@@ -7,7 +7,7 @@ COPY package.json pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 
-RUN pnpm install --frozen-lockfile=false
+RUN HUSKY=0 pnpm install --frozen-lockfile=false
 RUN pnpm --filter @agency/shared build
 RUN pnpm --filter @agency/api build
 
@@ -26,7 +26,7 @@ COPY --from=builder /repo/package.json /repo/pnpm-workspace.yaml ./
 COPY --from=builder /repo/packages/shared ./packages/shared
 COPY --from=builder /repo/apps/api/package.json ./apps/api/package.json
 COPY --from=builder /repo/apps/api/dist ./apps/api/dist
-RUN pnpm install --prod --frozen-lockfile=false
+RUN HUSKY=0 pnpm install --prod --frozen-lockfile=false
 
 EXPOSE 4000
 CMD ["node", "apps/api/dist/main.js"]
