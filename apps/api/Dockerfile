@@ -10,6 +10,8 @@ COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 
 RUN pnpm install --frozen-lockfile=false
+# Switch to production NODE_ENV for the actual build (devDeps already installed)
+ENV NODE_ENV=production
 RUN pnpm --filter @agency/shared build
 RUN pnpm --filter @agency/api build
 

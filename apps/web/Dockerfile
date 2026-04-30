@@ -16,6 +16,8 @@ COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
 
 RUN pnpm install --frozen-lockfile=false
+# Switch to production NODE_ENV for the actual Next.js build (devDeps already installed)
+ENV NODE_ENV=production
 RUN pnpm --filter @agency/shared build
 RUN pnpm --filter @agency/web build
 
