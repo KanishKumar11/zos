@@ -1,0 +1,162 @@
+// Invoice detail (OWNER-only) — line items, payments, send action.
+'use client';
+
+import { use } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+import {
+  InvoiceStatus,
+  Role,
+  recordPaymentSchema,
+  type RecordPaymentInput,
+} from '@agency/shared';
+
+import { RoleGate } from '@/components/auth/role-gate';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import { formatPaise } from '@/lib/formatters';
+
+import {
+  useInvoice,
+  useRecordPayment,
+  useSendInvoice,
+} from '@/features/invoices/invoices.hooks';
+
+export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  return (
+    <RoleGate allow={[Role.OWNER]} fallback={<p className="text-sm text-muted-foreground">Restricted.</p>}>
+      <Inner id={id} />
+    </RoleGate>
+  );
+}
+
+function Inner({ id }: { id: string }) {
+  const inv = useInvoice(id);
+  const send = useSendInvoice();
+  const pay = useRecordPayment();
+  const today = new Date().toISOString().slice(0, 10);
+  const form = useForm<RecordPaymentInput>({
+    resolver: zodResolver(recordPaymentSchema),
+    defaultValues: { paidAt: today, amountPaise: 0 },
+  });
+
+  if (inv.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (!inv.data) return <p className="text-sm text-muted-foreground">Not found.</p>;
+  const i = inv.data;
+  const due = Math.max(0, i.totalPaise - i.paidPaise);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">{i.number}</h1>
+          <p className="text-sm text-muted-foreground">{i.status}</p>
+        </div>
+        {i.status === InvoiceStatus.DRAFT && (
+          <Button onClick={() => send.mutate(id)} disabled={send.isPending}>
+            {send.isPending ? 'Sending…' : 'Mark as sent'}
+          </Button>
+        )}
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Line items</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <THead>
+              <TR>
+                <TH>Description</TH>
+                <TH>Qty</TH>
+                <TH>Unit</TH>
+                <TH>Total</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {i.lineItems.map((li, idx) => (
+                <TR key={idx}>
+                  <TD>{li.description}</TD>
+                  <TD>{li.qty}</TD>
+                  <TD>{formatPaise(li.unitPaise, i.currency)}</TD>
+                  <TD>{formatPaise(Math.round(li.qty * li.unitPaise), i.currency)}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+          <div className="mt-4 grid gap-1 text-sm">
+            <p>Subtotal: {formatPaise(i.subTotalPaise, i.currency)}</p>
+            <p>GST {i.gstPercent}%: {formatPaise(i.gstPaise, i.currency)}</p>
+            <p className="font-semibold">Total: {formatPaise(i.totalPaise, i.currency)}</p>
+            <p>Paid: {formatPaise(i.paidPaise, i.currency)}</p>
+            <p>Outstanding: {formatPaise(due, i.currency)}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Payments</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Table>
+            <THead>
+              <TR>
+                <TH>Date</TH>
+                <TH>Amount</TH>
+                <TH>Reference</TH>
+                <TH>Method</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {i.payments.map((p) => (
+                <TR key={p._id}>
+                  <TD>{new Date(p.paidAt).toLocaleDateString()}</TD>
+                  <TD>{formatPaise(p.amountPaise, i.currency)}</TD>
+                  <TD>{p.reference || '—'}</TD>
+                  <TD>{p.method || '—'}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+          {due > 0 && (
+            <form
+              className="grid gap-3 md:grid-cols-4"
+              onSubmit={form.handleSubmit((v) =>
+                pay.mutate(
+                  { id, body: v },
+                  {
+                    onSuccess: () => form.reset({ paidAt: today, amountPaise: 0 }),
+                  },
+                ),
+              )}
+            >
+              <div className="space-y-1">
+                <Label>Date</Label>
+                <Input type="date" {...form.register('paidAt')} />
+              </div>
+              <div className="space-y-1">
+                <Label>Amount (paise)</Label>
+                <Input type="number" {...form.register('amountPaise', { valueAsNumber: true })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Reference</Label>
+                <Input {...form.register('reference')} />
+              </div>
+              <div className="flex items-end">
+                <Button type="submit" disabled={pay.isPending}>
+                  {pay.isPending ? 'Saving…' : 'Record'}
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
