@@ -5,6 +5,12 @@ RUN corepack enable && corepack prepare pnpm@9.7.0 --activate
 ENV NODE_ENV=development
 WORKDIR /repo
 
+# Promote NEXT_PUBLIC_* build-args to ENV so Next.js bakes them in at compile time
+ARG NEXT_PUBLIC_API_BASE_URL
+ARG NEXT_PUBLIC_APP_NAME
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
+    NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
+
 COPY package.json pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
