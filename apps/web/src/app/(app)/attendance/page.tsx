@@ -8,14 +8,18 @@ import { AttendanceStatus, Role } from '@agency/shared';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 
 import {
+  useAdminMarkAttendance,
   useCheckIn,
   useCheckOut,
   useMyAttendance,
   useTeamAttendance,
 } from '@/features/attendance/attendance.hooks';
+import { useTeamList } from '@/features/team/team.hooks';
 import { useAuthStore } from '@/store/auth.store';
 
 const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -118,7 +122,89 @@ export default function AttendancePage() {
           </CardContent>
         </Card>
       )}
+
+      {(role === Role.OWNER || role === Role.ADMIN) && <AdminMarkCard />}
     </div>
+  );
+}
+
+function AdminMarkCard() {
+  const list = useTeamList({ page: 1, pageSize: 200 });
+  const mark = useAdminMarkAttendance();
+  const [userId, setUserId] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [status, setStatus] = useState<AttendanceStatus>(AttendanceStatus.PRESENT);
+  const [workedMinutes, setWorkedMinutes] = useState<number>(480);
+  const [note, setNote] = useState('');
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Manual mark (Admin)</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="grid gap-3 md:grid-cols-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!userId) return;
+            mark.mutate(
+              {
+                userId,
+                date,
+                status,
+                workedMinutes,
+                ...(note ? { note } : {}),
+              } as never,
+              { onSuccess: () => setNote('') },
+            );
+          }}
+        >
+          <div className="space-y-1">
+            <Label>User</Label>
+            <Select value={userId} onChange={(e) => setUserId(e.target.value)}>
+              <option value="">Select…</option>
+              {(list.data?.items ?? []).map((u) => (
+                <option key={u._id} value={u._id}>
+                  {u.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Date</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Status</Label>
+            <Select value={status} onChange={(e) => setStatus(e.target.value as AttendanceStatus)}>
+              {Object.values(AttendanceStatus).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Minutes</Label>
+            <Input
+              type="number"
+              value={workedMinutes}
+              onChange={(e) => setWorkedMinutes(Number(e.target.value) || 0)}
+            />
+          </div>
+          <div className="space-y-1 md:col-span-4">
+            <Label>Note</Label>
+            <Input value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+          <div className="flex items-end">
+            <Button type="submit" disabled={!userId || mark.isPending}>
+              {mark.isPending ? 'Saving…' : 'Mark'}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 

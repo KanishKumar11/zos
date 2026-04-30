@@ -1,7 +1,7 @@
 // Announcements feed page.
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { AudienceType, Role } from '@agency/shared';
 
@@ -11,16 +11,33 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { RichTextEditor } from '@/components/rich-text-editor';
 
 import {
   useAnnouncements,
   useCreateAnnouncement,
   useDeleteAnnouncement,
+  useMarkAnnouncementRead,
 } from '@/features/notifications/notifications.hooks';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function AnnouncementsPage() {
   const list = useAnnouncements();
   const remove = useDeleteAnnouncement();
+  const markRead = useMarkAnnouncementRead();
+  const me = useAuthStore((s) => s.user);
+  const markedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!me?.id || !list.data) return;
+    for (const a of list.data) {
+      const isRead = (a.readBy ?? []).some((r) => r.userId === me.id);
+      if (!isRead && !markedRef.current.has(a._id)) {
+        markedRef.current.add(a._id);
+        markRead.mutate(a._id);
+      }
+    }
+  }, [list.data, me?.id, markRead]);
 
   return (
     <div className="space-y-6">
@@ -51,7 +68,7 @@ export default function AnnouncementsPage() {
               </RoleGate>
             </CardHeader>
             <CardContent>
-              <p className="whitespace-pre-line text-sm">{a.body}</p>
+              <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: a.body }} />
             </CardContent>
           </Card>
         ))}
@@ -83,6 +100,7 @@ function ComposeCard() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (!title.trim() || !body.trim()) return;
             create.mutate(
               { title, body, audienceType, pinned },
               { onSuccess: reset },
@@ -96,12 +114,7 @@ function ComposeCard() {
           </div>
           <div className="space-y-1 md:col-span-2">
             <Label>Body</Label>
-            <textarea
-              className="min-h-32 w-full rounded border bg-background px-3 py-2 text-sm"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              required
-            />
+            <RichTextEditor value={body} onChange={setBody} />
           </div>
           <div className="space-y-1">
             <Label>Audience</Label>

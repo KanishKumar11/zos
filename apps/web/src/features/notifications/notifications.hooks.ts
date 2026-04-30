@@ -22,6 +22,7 @@ export interface AnnouncementRow {
   createdBy: string;
   publishedAt?: string;
   createdAt: string;
+  readBy?: { userId: string; readAt: string }[];
 }
 export interface NotificationRow {
   _id: string;
@@ -41,6 +42,7 @@ export const announcementsApi = {
   update: (id: string, body: UpdateAnnouncementInput) =>
     unwrap<AnnouncementRow>(api.patch(`/announcements/${id}`, body)),
   remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/announcements/${id}`)),
+  markRead: (id: string) => unwrap<{ ok: boolean }>(api.post(`/announcements/${id}/read`, {})),
 };
 
 export const notificationsApi = {
@@ -93,5 +95,22 @@ export function useMarkAllRead() {
   return useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+}
+export function useMarkRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => notificationsApi.markRead(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+}
+export function useMarkAnnouncementRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => announcementsApi.markRead(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['announcements'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+    },
   });
 }

@@ -1,11 +1,11 @@
 // Leaves page — apply, list mine, manager queue.
 'use client';
 
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
-import { LeaveStatus, LeaveType, Role, requestLeaveSchema, type RequestLeaveInput } from '@agency/shared';
+import { LeaveStatus, LeaveType, Role, requestLeaveSchema } from '@agency/shared';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,13 +35,14 @@ export default function LeavesPage() {
   const cancel = useCancelLeave();
 
   const today = new Date().toISOString().slice(0, 10);
-  const form = useForm<RequestLeaveInput>({
-    resolver: zodResolver(requestLeaveSchema),
-    defaultValues: { type: LeaveType.ANNUAL, startDate: today, endDate: today, reason: '' },
+  type RequestLeaveForm = z.input<typeof requestLeaveSchema>;
+  const form = useForm<RequestLeaveForm>({
+    resolver: zodResolver(requestLeaveSchema) as never,
+    defaultValues: { type: LeaveType.ANNUAL, startDate: today, endDate: today, reason: '' } as never,
   });
 
   const onSubmit = form.handleSubmit((values) =>
-    request.mutate(values, { onSuccess: () => form.reset({ ...values, reason: '' }) }),
+    request.mutate(values as never, { onSuccess: () => form.reset({ ...values, reason: '' }) }),
   );
 
   return (

@@ -4,8 +4,9 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
-import { createHolidaySchema, type CreateHolidayInput } from '@agency/shared';
+import { createHolidaySchema } from '@agency/shared';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,13 +34,13 @@ export default function HolidaysPage() {
   const remove = useDeleteHoliday();
   const [open, setOpen] = useState(false);
 
-  const form = useForm<CreateHolidayInput>({
-    resolver: zodResolver(createHolidaySchema),
-    defaultValues: { name: '', date: '' },
+  const form = useForm<z.input<typeof createHolidaySchema>>({
+    resolver: zodResolver(createHolidaySchema) as never,
+    defaultValues: { name: '', date: '' } as never,
   });
 
   const onSubmit = form.handleSubmit(async (values) => {
-    await create.mutateAsync(values);
+    await create.mutateAsync(values as never);
     setOpen(false);
     form.reset();
   });

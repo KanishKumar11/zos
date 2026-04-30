@@ -5,11 +5,12 @@ import { use } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
+import { z } from 'zod';
+
 import {
   InvoiceStatus,
   Role,
   recordPaymentSchema,
-  type RecordPaymentInput,
 } from '@agency/shared';
 
 import { RoleGate } from '@/components/auth/role-gate';
@@ -41,9 +42,10 @@ function Inner({ id }: { id: string }) {
   const send = useSendInvoice();
   const pay = useRecordPayment();
   const today = new Date().toISOString().slice(0, 10);
-  const form = useForm<RecordPaymentInput>({
-    resolver: zodResolver(recordPaymentSchema),
-    defaultValues: { paidAt: today, amountPaise: 0 },
+  type RecordPaymentForm = z.input<typeof recordPaymentSchema>;
+  const form = useForm<RecordPaymentForm>({
+    resolver: zodResolver(recordPaymentSchema) as never,
+    defaultValues: { paidAt: today, amountPaise: 0 } as never,
   });
 
   if (inv.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -141,9 +143,9 @@ function Inner({ id }: { id: string }) {
               className="grid gap-3 md:grid-cols-4"
               onSubmit={form.handleSubmit((v) =>
                 pay.mutate(
-                  { id, body: v },
+                  { id, body: v as never },
                   {
-                    onSuccess: () => form.reset({ paidAt: today, amountPaise: 0 }),
+                    onSuccess: () => form.reset({ paidAt: today, amountPaise: 0 } as never),
                   },
                 ),
               )}

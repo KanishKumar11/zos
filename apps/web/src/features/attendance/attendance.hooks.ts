@@ -98,6 +98,17 @@ export function useCheckOut() {
     onError: (err: Error) => toast.error(err.message),
   });
 }
+export function useAdminMarkAttendance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AdminMarkAttendanceInput) => attendanceApi.adminMark(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['attendance'] });
+      toast.success('Attendance marked');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
 
 // Leaves hooks
 export function useMyLeaves() {

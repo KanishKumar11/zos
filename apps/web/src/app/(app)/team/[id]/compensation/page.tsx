@@ -4,8 +4,9 @@
 import { use, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
-import { CompensationType, Role, upsertCompensationSchema, type UpsertCompensationInput } from '@agency/shared';
+import { CompensationType, Role, upsertCompensationSchema } from '@agency/shared';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,8 +39,8 @@ function Inner({ id }: { id: string }) {
   const history = useCompensationHistory(id);
   const upsert = useUpsertCompensation();
 
-  const form = useForm<UpsertCompensationInput>({
-    resolver: zodResolver(upsertCompensationSchema),
+  const form = useForm<z.input<typeof upsertCompensationSchema>>({
+    resolver: zodResolver(upsertCompensationSchema) as never,
     defaultValues: {
       type: CompensationType.FIXED_MONTHLY,
       baseAmount: 0,
@@ -51,7 +52,7 @@ function Inner({ id }: { id: string }) {
       professionalTax: 0,
       tdsMonthly: 0,
       effectiveFrom: new Date().toISOString().slice(0, 10),
-    },
+    } as never,
   });
 
   useEffect(() => {
@@ -67,11 +68,11 @@ function Inner({ id }: { id: string }) {
         professionalTax: comp.data.professionalTax,
         tdsMonthly: comp.data.tdsMonthly,
         effectiveFrom: comp.data.effectiveFrom.slice(0, 10),
-      });
+      } as never);
     }
   }, [comp.data, form]);
 
-  const onSubmit = form.handleSubmit((values) => upsert.mutate({ userId: id, body: values }));
+  const onSubmit = form.handleSubmit((values) => upsert.mutate({ userId: id, body: values as never }));
 
   return (
     <div className="space-y-6">

@@ -3,11 +3,9 @@
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
-import {
-  createTimeEntrySchema,
-  type CreateTimeEntryInput,
-} from '@agency/shared';
+import { createTimeEntrySchema } from '@agency/shared';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,9 +21,9 @@ export default function TimePage() {
   const list = useMyTime();
   const log = useLogTime();
   const today = new Date().toISOString().slice(0, 10);
-  const form = useForm<CreateTimeEntryInput>({
-    resolver: zodResolver(createTimeEntrySchema),
-    defaultValues: { date: today, minutes: 60, billable: false },
+  const form = useForm<z.input<typeof createTimeEntrySchema>>({
+    resolver: zodResolver(createTimeEntrySchema) as never,
+    defaultValues: { date: today, minutes: 60, billable: false } as never,
   });
 
   const total = (list.data ?? []).reduce((acc, e) => acc + e.minutes, 0);
@@ -42,7 +40,7 @@ export default function TimePage() {
           <form
             className="grid gap-3 md:grid-cols-5"
             onSubmit={form.handleSubmit((v) =>
-              log.mutate(v, { onSuccess: () => form.reset({ date: today, minutes: 60, billable: false }) }),
+              log.mutate(v as never, { onSuccess: () => form.reset({ date: today, minutes: 60, billable: false } as never) }),
             )}
           >
             <div className="space-y-1">

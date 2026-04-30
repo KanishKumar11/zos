@@ -6,11 +6,12 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { useMarkAllRead, useNotifications } from '@/features/notifications/notifications.hooks';
+import { useMarkAllRead, useMarkRead, useNotifications } from '@/features/notifications/notifications.hooks';
 
 export default function NotificationsPage() {
   const inbox = useNotifications();
   const markAll = useMarkAllRead();
+  const markRead = useMarkRead();
 
   return (
     <div className="space-y-6">
@@ -41,7 +42,13 @@ export default function NotificationsPage() {
                       </p>
                     </div>
                     {n.linkPath && (
-                      <Link className="text-sm underline" href={n.linkPath}>
+                      <Link
+                        className="text-sm underline"
+                        href={n.linkPath}
+                        onClick={() => {
+                          if (!n.readAt) markRead.mutate([n._id]);
+                        }}
+                      >
                         Open
                       </Link>
                     )}

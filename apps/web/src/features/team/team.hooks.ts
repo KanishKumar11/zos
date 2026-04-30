@@ -6,8 +6,10 @@ import type {
   AdminUpdateUserInput,
   BankDetailsInput,
   ListUsersQuery,
+  OnboardingPatchInput,
   Role,
   UpdateProfileInput,
+  UserDocumentInput,
 } from '@agency/shared';
 
 import { qk } from '@/lib/query-keys';
@@ -94,6 +96,57 @@ export function useInviteMember() {
       designationId?: string;
     }) => teamApi.invite(input),
     onSuccess: () => toast.success('Invite sent'),
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+// Member documents
+export function useAddMemberDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; body: UserDocumentInput }) =>
+      teamApi.addDocument(vars.id, vars.body),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: qk.users.byId(vars.id) });
+      toast.success('Document added');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+export function useRemoveMemberDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; docId: string }) =>
+      teamApi.removeDocument(vars.id, vars.docId),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: qk.users.byId(vars.id) });
+      toast.success('Document removed');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+// Onboarding
+export function useSetOnboarding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; body: OnboardingPatchInput }) =>
+      teamApi.setOnboarding(vars.id, vars.body),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: qk.users.byId(vars.id) });
+      toast.success('Checklist saved');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+export function useToggleOnboarding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; idx: number }) =>
+      teamApi.toggleOnboarding(vars.id, vars.idx),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: qk.users.byId(vars.id) });
+    },
     onError: (err: Error) => toast.error(err.message),
   });
 }
