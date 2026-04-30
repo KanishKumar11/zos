@@ -1,6 +1,8 @@
 # Web Dockerfile
 FROM node:20-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9.7.0 --activate
+# Override any NODE_ENV build-arg so devDependencies (tsc, etc.) are installed
+ENV NODE_ENV=development
 WORKDIR /repo
 
 COPY package.json pnpm-workspace.yaml turbo.json tsconfig.base.json ./
