@@ -1,4 +1,4 @@
-// Tailwind base + CSS variable design tokens (light & dark) + shadcn animation defaults.
+/* Tailwind base + CSS variable design tokens (light & dark) + shadcn animation defaults. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
