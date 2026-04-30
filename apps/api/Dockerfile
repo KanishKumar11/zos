@@ -1,4 +1,4 @@
-# --- Build stage ---
+# API Dockerfile
 FROM node:20-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9.7.0 --activate
 WORKDIR /repo
@@ -8,7 +8,7 @@ COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 
 RUN pnpm install --frozen-lockfile=false
-RUN pnpm --filter @agency/shared build || true
+RUN pnpm --filter @agency/shared build
 RUN pnpm --filter @agency/api build
 
 # --- Runtime stage ---
