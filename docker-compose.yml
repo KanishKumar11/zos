@@ -1,16 +1,6 @@
 version: '3.9'
 
 services:
-  mongo:
-    image: mongo:7
-    container_name: agency-mongo
-    restart: unless-stopped
-    volumes:
-      - mongo-data:/data/db
-    environment:
-      MONGO_INITDB_DATABASE: agency
-    # no ports exposed — only reachable by other services inside the stack
-
   api:
     build:
       context: .
@@ -19,10 +9,6 @@ services:
     restart: unless-stopped
     ports:
       - '4000:4000'
-    env_file:
-      - apps/api/.env
-    depends_on:
-      - mongo
 
   web:
     build:
@@ -32,10 +18,5 @@ services:
     restart: unless-stopped
     ports:
       - '3000:3000'
-    env_file:
-      - apps/web/.env
     depends_on:
       - api
-
-volumes:
-  mongo-data:
