@@ -1,12 +1,15 @@
 // Payroll controller — OWNER+ADMIN can manage runs; employees can view own payslips.
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, ParseIntPipe, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 
 import {
   Role,
   createPayrollRunSchema,
   finalizePayrollRunSchema,
+  payslipAdjustmentSchema,
   type CreatePayrollRunInput,
   type FinalizePayrollRunInput,
+  type PayslipAdjustmentInput,
 } from '@agency/shared';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -67,5 +70,47 @@ export class PayrollController {
   @Get('payslips/me')
   mine(@CurrentUser() user: JwtPayload) {
     return this.svc.myPayslips(user.sub);
+  }
+
+  // -- Adjustments (OWNER/ADMIN, only when run is DRAFT) ---------------------
+
+  @Roles(Role.OWNER, Role.ADMIN)
+  @Post('payslips/:id/adjustments')
+  addAdjustment(
+    @Param('id', ObjectIdPipe) id: string,
+    @Body(new ZodValidationPipe(payslipAdjustmentSchema)) body: PayslipAdjustmentInput,
+  ) {
+    return this.svc.addAdjustment(id, body);
+  }
+
+  @Roles(Role.OWNER, Role.ADMIN)
+  @Delete('payslips/:id/adjustments/:idx')
+  removeAdjustment(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('idx', ParseIntPipe) idx: number,
+  ) {
+    return this.svc.removeAdjustment(id, idx);
+  }
+
+  // -- PDF download (OWNER+ADMIN, or self) -----------------------------------
+
+  @Get('payslips/:id/pdf')
+  async pdf(
+    @Param('id', ObjectIdPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Res() res: Response,
+  ) {
+    const slips = await this.svc.payslipsByIds([id]);
+    const slip = slips[0];
+    if (!slip) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Payslip not found' } });
+      return;
+    }
+    const allowed = user.role === Role.OWNER || user.role === Role.ADMIN || slip.userId.toString() === user.sub;
+    if (!allowed) throw new ForbiddenException();
+    const { buffer, filename } = await this.svc.payslipPdf(id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buffer);
   }
 }

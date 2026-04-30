@@ -33,6 +33,12 @@ export class ProjectsController {
     return this.svc.list(q, user);
   }
 
+  @Roles(Role.OWNER, Role.ADMIN, Role.LEAD)
+  @Get('availability')
+  availability() {
+    return this.svc.availability();
+  }
+
   @Get(':id')
   byId(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.byId(id, user);

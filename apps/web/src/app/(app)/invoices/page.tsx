@@ -8,9 +8,11 @@ import { InvoiceStatus, Role } from '@agency/shared';
 import { RoleGate } from '@/components/auth/role-gate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import { env } from '@/lib/env';
 import { formatPaise } from '@/lib/formatters';
 
 import { useInvoices } from '@/features/invoices/invoices.hooks';
+import { useInvoiceAging, useInvoiceDashboard } from '@/features/invoices/invoices.hooks';
 
 export default function InvoicesPage() {
   return (
@@ -22,9 +24,73 @@ export default function InvoicesPage() {
 
 function Inner() {
   const list = useInvoices();
+  const dash = useInvoiceDashboard();
+  const aging = useInvoiceAging();
+  const d = dash.data;
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Invoices</h1>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Billed</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-semibold">
+            {d ? formatPaise(d.billedPaise, 'INR') : '—'}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Collected</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-semibold text-green-600">
+            {d ? formatPaise(d.collectedPaise, 'INR') : '—'}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Outstanding</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-semibold">
+            {d ? formatPaise(d.outstandingPaise, 'INR') : '—'}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Overdue</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-semibold text-red-600">
+            {d ? formatPaise(d.overduePaise, 'INR') : '—'}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Aging</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <THead>
+              <TR>
+                <TH>Bucket</TH>
+                <TH>Invoices</TH>
+                <TH>Open amount</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {(aging.data ?? []).map((b) => (
+                <TR key={b.range}>
+                  <TD>{b.range}</TD>
+                  <TD>{b.countInvoices}</TD>
+                  <TD>{formatPaise(b.openPaise, 'INR')}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>All invoices</CardTitle>
@@ -39,6 +105,7 @@ function Inner() {
                 <TH>Total</TH>
                 <TH>Paid</TH>
                 <TH>Due</TH>
+                <TH>PDF</TH>
               </TR>
             </THead>
             <TBody>
@@ -66,6 +133,16 @@ function Inner() {
                   <TD>{formatPaise(inv.totalPaise, inv.currency)}</TD>
                   <TD>{formatPaise(inv.paidPaise, inv.currency)}</TD>
                   <TD>{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}</TD>
+                  <TD>
+                    <a
+                      href={`${env.apiBaseUrl}/invoices/${inv._id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary underline"
+                    >
+                      Download
+                    </a>
+                  </TD>
                 </TR>
               ))}
             </TBody>

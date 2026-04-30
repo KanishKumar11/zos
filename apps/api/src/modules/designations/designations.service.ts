@@ -38,9 +38,10 @@ export class DesignationsService {
 
   async update(id: string, patch: UpdateDesignationInput) {
     if (patch.departmentId) await this.departments.findOrThrow(patch.departmentId);
+    const { departmentId, ...rest } = patch;
     const updated = await this.repo.update(id, {
-      ...patch,
-      ...(patch.departmentId ? { departmentId: new Types.ObjectId(patch.departmentId) } : {}),
+      ...rest,
+      ...(departmentId ? { departmentId: new Types.ObjectId(departmentId) } : {}),
     });
     if (!updated) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Designation not found' });
     return updated;

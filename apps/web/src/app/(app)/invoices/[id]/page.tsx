@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import { env } from '@/lib/env';
 import { formatPaise } from '@/lib/formatters';
 
 import {
@@ -62,6 +63,17 @@ function Inner({ id }: { id: string }) {
             {send.isPending ? 'Sending…' : 'Mark as sent'}
           </Button>
         )}
+      </div>
+
+      <div>
+        <a
+          href={`${env.apiBaseUrl}/invoices/${id}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+        >
+          Download PDF
+        </a>
       </div>
 
       <Card>

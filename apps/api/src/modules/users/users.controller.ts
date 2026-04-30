@@ -1,16 +1,20 @@
 // Users controller — profile self-service + admin team management.
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 
 import {
   Role,
   adminUpdateUserSchema,
   bankDetailsSchema,
   listUsersQuerySchema,
+  onboardingPatchSchema,
   updateProfileSchema,
+  userDocumentInputSchema,
   type AdminUpdateUserInput,
   type BankDetailsInput,
   type ListUsersQuery,
+  type OnboardingPatchInput,
   type UpdateProfileInput,
+  type UserDocumentInput,
 } from '@agency/shared';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -95,5 +99,63 @@ export class UsersController {
   @Delete(':id')
   remove(@Param('id', ObjectIdPipe) id: string) {
     return this.svc.softDelete(id);
+  }
+
+  // -- Member documents (OWNER+ADMIN, or self-read for own docs) -----------
+
+  @Roles(Role.OWNER, Role.ADMIN)
+  @Post(':id/documents')
+  addDocument(
+    @Param('id', ObjectIdPipe) id: string,
+    @CurrentUser() actor: JwtPayload,
+    @Body(new ZodValidationPipe(userDocumentInputSchema)) body: UserDocumentInput,
+  ) {
+    return this.svc.addDocument(id, body, actor.sub);
+  }
+
+  @Roles(Role.OWNER, Role.ADMIN)
+  @Delete(':id/documents/:docId')
+  removeDocument(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('docId') docId: string,
+  ) {
+    return this.svc.removeDocument(id, docId);
+  }
+
+  /** Self or OWNER/ADMIN can fetch a presigned URL for a doc. */
+  @Get(':id/documents/:docId/url')
+  docUrl(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('docId') docId: string,
+    @CurrentUser() actor: JwtPayload,
+  ) {
+    if (id !== actor.sub && actor.role !== Role.OWNER && actor.role !== Role.ADMIN) {
+      throw new ForbiddenException();
+    }
+    return this.svc.signedDocumentUrl(id, docId);
+  }
+
+  // -- Onboarding checklist -------------------------------------------------
+
+  @Roles(Role.OWNER, Role.ADMIN)
+  @Patch(':id/onboarding')
+  setOnboarding(
+    @Param('id', ObjectIdPipe) id: string,
+    @Body(new ZodValidationPipe(onboardingPatchSchema)) body: OnboardingPatchInput,
+  ) {
+    return this.svc.setOnboarding(id, body);
+  }
+
+  /** Self may toggle their own onboarding items. */
+  @Post(':id/onboarding/:idx/toggle')
+  toggleOnboarding(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('idx', ParseIntPipe) idx: number,
+    @CurrentUser() actor: JwtPayload,
+  ) {
+    if (id !== actor.sub && actor.role !== Role.OWNER && actor.role !== Role.ADMIN) {
+      throw new ForbiddenException();
+    }
+    return this.svc.toggleOnboardingItem(id, idx);
   }
 }

@@ -1,6 +1,7 @@
 // [SHARED] CRM pipeline stage for a client/lead.
 export enum CrmStage {
   LEAD = 'LEAD',
+  QUALIFIED = 'QUALIFIED',
   PROPOSAL = 'PROPOSAL',
   NEGOTIATION = 'NEGOTIATION',
   WON = 'WON',
@@ -9,6 +10,7 @@ export enum CrmStage {
 
 export const CRM_STAGE_ORDER: readonly CrmStage[] = [
   CrmStage.LEAD,
+  CrmStage.QUALIFIED,
   CrmStage.PROPOSAL,
   CrmStage.NEGOTIATION,
   CrmStage.WON,

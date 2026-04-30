@@ -53,7 +53,22 @@ export const invoicesApi = {
   send: (id: string) => unwrap<InvoiceRow>(api.post(`/invoices/${id}/send`)),
   pay: (id: string, body: RecordPaymentInput) =>
     unwrap<InvoiceRow>(api.post(`/invoices/${id}/payments`, body)),
+  dashboard: () => unwrap<InvoiceDashboard>(api.get('/invoices/dashboard')),
+  aging: () => unwrap<InvoiceAgingBucket[]>(api.get('/invoices/aging')),
 };
+
+export interface InvoiceDashboard {
+  billedPaise: number;
+  collectedPaise: number;
+  outstandingPaise: number;
+  overduePaise: number;
+  counts: Partial<Record<InvoiceStatus, number>>;
+}
+export interface InvoiceAgingBucket {
+  range: string;
+  countInvoices: number;
+  openPaise: number;
+}
 
 export function useInvoices(params: { status?: InvoiceStatus; clientId?: string } = {}) {
   return useQuery({
@@ -101,4 +116,11 @@ export function useRecordPayment() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+}
+
+export function useInvoiceDashboard() {
+  return useQuery({ queryKey: ['invoices', 'dashboard'], queryFn: invoicesApi.dashboard });
+}
+export function useInvoiceAging() {
+  return useQuery({ queryKey: ['invoices', 'aging'], queryFn: invoicesApi.aging });
 }

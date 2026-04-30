@@ -3,7 +3,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
-import type { CreateSowInput, UpdateSowInput } from '@agency/shared';
+import type {
+  CreateSowInput,
+  SowBriefInput,
+  SowDocumentInput,
+  UpdateSowInput,
+} from '@agency/shared';
 
 import { ErrorCodes } from '@/common/constants/error-codes';
 
@@ -45,5 +50,35 @@ export class SowService {
     const doc = await this.byId(id);
     doc.deletedAt = new Date();
     await doc.save();
+  }
+
+  async setBrief(id: string, input: SowBriefInput, actorId: string): Promise<SowDocument> {
+    const doc = await this.byId(id);
+    doc.brief = {
+      scopeSummary: input.scopeSummary,
+      deliverables: input.deliverables,
+      timelineStart: input.timelineStart ? new Date(input.timelineStart) : undefined,
+      timelineEnd: input.timelineEnd ? new Date(input.timelineEnd) : undefined,
+      revisionRounds: input.revisionRounds ?? 0,
+      publishedAt: new Date(),
+      publishedBy: new Types.ObjectId(actorId),
+    } as never;
+    await doc.save();
+    return doc;
+  }
+
+  async getBrief(id: string): Promise<SowDocument['brief']> {
+    const doc = await this.byId(id);
+    if (!doc.brief) {
+      throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Brief not published yet' });
+    }
+    return doc.brief;
+  }
+
+  async setDocument(id: string, input: SowDocumentInput): Promise<SowDocument> {
+    const doc = await this.byId(id);
+    doc.documentKey = input.key;
+    await doc.save();
+    return doc;
   }
 }

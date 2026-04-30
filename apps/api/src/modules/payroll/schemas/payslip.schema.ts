@@ -11,8 +11,19 @@ export class PayslipBreakdown {
   @Prop({ type: Number, default: 0 }) providentFundEmployee!: number;
   @Prop({ type: Number, default: 0 }) professionalTax!: number;
   @Prop({ type: Number, default: 0 }) tdsMonthly!: number;
+  @Prop({ type: Number, default: 0 }) lateDeduction!: number;
+  @Prop({ type: Number, default: 0 }) bonusPaise!: number;
+  @Prop({ type: Number, default: 0 }) manualDeductionPaise!: number;
 }
 export const PayslipBreakdownSchema = SchemaFactory.createForClass(PayslipBreakdown);
+
+@Schema({ _id: false })
+export class PayslipAdjustment {
+  @Prop({ required: true, enum: ['BONUS', 'DEDUCTION'] }) kind!: 'BONUS' | 'DEDUCTION';
+  @Prop({ required: true }) reason!: string;
+  @Prop({ required: true, type: Number }) amountPaise!: number;
+}
+export const PayslipAdjustmentSchema = SchemaFactory.createForClass(PayslipAdjustment);
 
 @Schema({ timestamps: true, collection: 'payslips' })
 export class Payslip {
@@ -31,6 +42,7 @@ export class Payslip {
   @Prop({ type: Number, required: true }) lopDays!: number;
   @Prop() pdfKey?: string;
   @Prop({ default: 'INR' }) currency!: string;
+  @Prop({ type: [PayslipAdjustmentSchema], default: [] }) adjustments!: PayslipAdjustment[];
 }
 
 export type PayslipDocument = HydratedDocument<Payslip>;

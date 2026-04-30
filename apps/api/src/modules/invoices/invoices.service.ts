@@ -1,4 +1,4 @@
-// InvoicesService — financial CRUD + payment + overdue cron.
+// InvoicesService — financial CRUD + payment + overdue cron + PDF + dashboard.
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -15,13 +15,22 @@ import {
 
 import { ErrorCodes } from '@/common/constants/error-codes';
 
+import { Client, type ClientDocument } from '../clients/schemas/client.schema';
+import { PdfService } from '../pdf/pdf.service';
+import { SettingsService } from '../settings/settings.service';
+import { StorageService } from '../storage/storage.service';
 import { Invoice, type InvoiceDocument } from './schemas/invoice.schema';
+import { renderInvoiceHtml } from './templates/invoice.template';
 
 @Injectable()
 export class InvoicesService {
   constructor(
     @InjectModel(Invoice.name) private readonly model: Model<InvoiceDocument>,
+    @InjectModel(Client.name) private readonly clients: Model<ClientDocument>,
     private readonly events: EventEmitter2,
+    private readonly pdf: PdfService,
+    private readonly storage: StorageService,
+    private readonly settings: SettingsService,
   ) {}
 
   list(filter: { status?: InvoiceStatus; clientId?: string } = {}): Promise<InvoiceDocument[]> {
@@ -133,5 +142,106 @@ export class InvoicesService {
         totalPaise: inv.totalPaise,
       });
     }
+  }
+
+  // -- PDF -----------------------------------------------------------------
+
+  async invoicePdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
+    const inv = await this.byId(id);
+    const client = await this.clients.findById(inv.clientId).exec();
+    const settings = await this.settings.get();
+    const html = renderInvoiceHtml({
+      agency: {
+        name: settings.workspaceName,
+        address: [settings.addressLine1, settings.city, settings.state].filter(Boolean).join(', ') || undefined,
+        gstin: settings.gstin,
+        pan: settings.pan,
+      },
+      client: {
+        name: client?.name ?? 'Client',
+        gstin: client?.gstin || undefined,
+        address: client?.address || undefined,
+      },
+      number: inv.number,
+      issueDate: inv.issueDate,
+      dueDate: inv.dueDate,
+      currency: inv.currency,
+      lineItems: inv.lineItems.map((li) => ({
+        description: li.description,
+        qty: li.qty,
+        unitPaise: li.unitPaise,
+      })),
+      subTotalPaise: inv.subTotalPaise,
+      gstPercent: inv.gstPercent,
+      gstPaise: inv.gstPaise,
+      totalPaise: inv.totalPaise,
+      paidPaise: inv.paidPaise,
+      notes: inv.notes,
+    });
+    const buffer = await this.pdf.renderPdf(html);
+    try {
+      const key = `invoices/${inv.number}.pdf`;
+      await this.storage.putBuffer(key, buffer, 'application/pdf');
+      inv.pdfKey = key;
+      await inv.save();
+    } catch {
+      // ignore upload failures
+    }
+    return { buffer, filename: `${inv.number}.pdf` };
+  }
+
+  // -- Dashboard / aging ---------------------------------------------------
+
+  async dashboard(): Promise<{
+    billedPaise: number;
+    collectedPaise: number;
+    outstandingPaise: number;
+    overduePaise: number;
+    counts: Record<string, number>;
+  }> {
+    const all = await this.model.find({ deletedAt: { $exists: false } }).exec();
+    let billed = 0;
+    let collected = 0;
+    let outstanding = 0;
+    let overdue = 0;
+    const counts: Record<string, number> = {};
+    for (const inv of all) {
+      counts[inv.status] = (counts[inv.status] ?? 0) + 1;
+      if (inv.status === InvoiceStatus.DRAFT) continue;
+      billed += inv.totalPaise;
+      collected += inv.paidPaise;
+      const open = inv.totalPaise - inv.paidPaise;
+      outstanding += open;
+      if (inv.status === InvoiceStatus.OVERDUE) overdue += open;
+    }
+    return { billedPaise: billed, collectedPaise: collected, outstandingPaise: outstanding, overduePaise: overdue, counts };
+  }
+
+  async aging(): Promise<{
+    buckets: { range: string; countInvoices: number; openPaise: number }[];
+  }> {
+    const now = Date.now();
+    const open = await this.model
+      .find({
+        deletedAt: { $exists: false },
+        status: { $in: [InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE] },
+      })
+      .exec();
+    const buckets = [
+      { range: '0-30', max: 30, count: 0, paise: 0 },
+      { range: '31-60', max: 60, count: 0, paise: 0 },
+      { range: '61-90', max: 90, count: 0, paise: 0 },
+      { range: '90+', max: Infinity, count: 0, paise: 0 },
+    ];
+    for (const inv of open) {
+      if (!inv.dueDate) continue;
+      const days = Math.max(0, Math.floor((now - new Date(inv.dueDate).getTime()) / 86_400_000));
+      const bucket = buckets.find((b) => days <= b.max)!;
+      bucket.count++;
+      bucket.paise += inv.totalPaise - inv.paidPaise;
+    }
+    return {
+      buckets: buckets.map((b) => ({ range: b.range, countInvoices: b.count, openPaise: b.paise })),
+    };
   }
 }

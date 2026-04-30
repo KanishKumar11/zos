@@ -8,6 +8,8 @@ export const formatMoney = (paise: number, currency = 'INR'): string => {
   }).format(major);
 };
 
+export const formatPaise = formatMoney;
+
 export const formatDate = (input: string | Date, opts?: Intl.DateTimeFormatOptions): string => {
   const d = typeof input === 'string' ? new Date(input) : input;
   return new Intl.DateTimeFormat('en-IN', opts ?? { dateStyle: 'medium' }).format(d);

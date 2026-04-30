@@ -1,5 +1,6 @@
 // DepartmentsService — domain logic + duplicate-name protection.
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Types } from 'mongoose';
 
 import { ErrorCodes } from '@/common/constants/error-codes';
 
@@ -24,7 +25,10 @@ export class DepartmentsService {
   async create(input: CreateDepartmentInput) {
     const dup = await this.repo.byName(input.name);
     if (dup) throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'Department name in use' });
-    return this.repo.create(input);
+    return this.repo.create({
+      ...input,
+      headUserId: input.headUserId ? new Types.ObjectId(input.headUserId) : undefined,
+    });
   }
 
   async update(id: string, patch: UpdateDepartmentInput) {
@@ -34,7 +38,10 @@ export class DepartmentsService {
         throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'Department name in use' });
       }
     }
-    const doc = await this.repo.update(id, patch);
+    const doc = await this.repo.update(id, {
+      ...patch,
+      headUserId: patch.headUserId ? new Types.ObjectId(patch.headUserId) : undefined,
+    });
     if (!doc) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Department not found' });
     return doc;
   }

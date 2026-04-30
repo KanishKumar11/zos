@@ -3,11 +3,8 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  Logger,
-  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
@@ -45,8 +42,6 @@ export interface IssuedTokens {
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
-
   constructor(
     private readonly users: UsersService,
     private readonly tokens: TokenService,
@@ -54,7 +49,6 @@ export class AuthService {
     @InjectModel(Invite.name) private readonly inviteModel: Model<InviteDocument>,
     @InjectModel(PasswordResetToken.name)
     private readonly resetModel: Model<PasswordResetTokenDocument>,
-    private readonly config: ConfigService,
   ) {}
 
   // ── Login ────────────────────────────────────────────────────────────────────────

@@ -5,4 +5,5 @@ export enum LeaveType {
   CASUAL = 'CASUAL',
   COMP_OFF = 'COMP_OFF',
   LWP = 'LWP',
+  ANNUAL = 'ANNUAL',
 }

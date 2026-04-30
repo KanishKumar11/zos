@@ -14,7 +14,7 @@
     "noEmit": true,
     "plugins": [{ "name": "next" }],
     "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
+    "ignoreDeprecations": "5.0",
     "paths": {
       "@/*": ["src/*"]
     }

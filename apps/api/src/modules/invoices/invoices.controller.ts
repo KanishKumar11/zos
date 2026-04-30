@@ -1,5 +1,6 @@
 // Invoices controller (OWNER only).
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 
 import {
   InvoiceStatus,
@@ -31,9 +32,27 @@ export class InvoicesController {
     return this.svc.list({ status, clientId });
   }
 
+  @Get('dashboard')
+  dashboard() {
+    return this.svc.dashboard();
+  }
+
+  @Get('aging')
+  aging() {
+    return this.svc.aging();
+  }
+
   @Get(':id')
   byId(@Param('id', ObjectIdPipe) id: string) {
     return this.svc.byId(id);
+  }
+
+  @Get(':id/pdf')
+  async pdf(@Param('id', ObjectIdPipe) id: string, @Res() res: Response) {
+    const { buffer, filename } = await this.svc.invoicePdf(id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buffer);
   }
 
   @Post()

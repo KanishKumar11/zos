@@ -19,6 +19,27 @@ export class BankDetails {
 }
 const BankDetailsSchema = SchemaFactory.createForClass(BankDetails);
 
+@Schema({ timestamps: true, _id: true })
+export class UserDocumentItem {
+  /** e.g. OFFER_LETTER, NDA, CONTRACT, ID_PROOF, OTHER */
+  @Prop({ required: true }) kind!: string;
+  @Prop({ required: true }) name!: string;
+  /** S3 key — accessed via presigned GET. */
+  @Prop({ required: true }) key!: string;
+  @Prop() contentType?: string;
+  @Prop({ type: Number }) sizeBytes?: number;
+  @Prop({ type: MS.Types.ObjectId, ref: 'User' }) uploadedBy?: Types.ObjectId;
+}
+const UserDocumentSchema = SchemaFactory.createForClass(UserDocumentItem);
+
+@Schema({ _id: false })
+export class OnboardingItem {
+  @Prop({ required: true }) item!: string;
+  @Prop({ default: false }) completed!: boolean;
+  @Prop({ type: Date }) completedAt?: Date;
+}
+const OnboardingItemSchema = SchemaFactory.createForClass(OnboardingItem);
+
 @Schema({ timestamps: true, collection: 'users' })
 export class User {
   @Prop({ required: true, unique: true, lowercase: true, index: true }) email!: string;
@@ -38,6 +59,11 @@ export class User {
   @Prop() dateOfBirth?: Date;
 
   @Prop({ type: BankDetailsSchema }) bankDetails?: BankDetails;
+
+  @Prop({ type: [UserDocumentSchema], default: [] }) documents!: UserDocumentItem[];
+  @Prop({ type: [OnboardingItemSchema], default: [] }) onboardingChecklist!: OnboardingItem[];
+  @Prop({ default: '' }) bio!: string;
+  @Prop({ type: [String], default: [] }) skills!: string[];
 
   @Prop({ default: 0 }) tokenVersion!: number;
   @Prop() lastLoginAt?: Date;

@@ -150,4 +150,31 @@ export class ProjectsService {
     const res = await this.model.findByIdAndUpdate(id, { deletedAt: new Date() }).exec();
     if (!res) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
   }
+
+  /**
+   * Resource availability: list users with the projects they're allocated to.
+   * OWNER+ADMIN+LEAD only (enforced at controller). Returns one row per user.
+   */
+  async availability(): Promise<
+    { userId: string; projects: { projectId: string; name: string; code: string; role: string }[] }[]
+  > {
+    const projects = await this.model
+      .find({ deletedAt: { $exists: false }, status: { $ne: 'COMPLETED' } })
+      .select('name code members')
+      .exec();
+    const map = new Map<string, { userId: string; projects: any[] }>();
+    for (const p of projects) {
+      for (const m of p.members) {
+        const uid = m.userId.toString();
+        if (!map.has(uid)) map.set(uid, { userId: uid, projects: [] });
+        map.get(uid)!.projects.push({
+          projectId: p.id,
+          name: p.name,
+          code: p.code,
+          role: m.role,
+        });
+      }
+    }
+    return [...map.values()];
+  }
 }

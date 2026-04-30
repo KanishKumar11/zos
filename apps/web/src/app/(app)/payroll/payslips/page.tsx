@@ -3,6 +3,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import { env } from '@/lib/env';
 import { formatPaise } from '@/lib/formatters';
 
 import { useMyPayslips } from '@/features/payroll/payroll.hooks';
@@ -28,6 +29,7 @@ export default function MyPayslipsPage() {
                   <TH>Gross</TH>
                   <TH>Deductions</TH>
                   <TH>Net</TH>
+                  <TH>PDF</TH>
                 </TR>
               </THead>
               <TBody>
@@ -39,6 +41,16 @@ export default function MyPayslipsPage() {
                     <TD>{formatPaise(s.grossPaise, s.currency)}</TD>
                     <TD>{formatPaise(s.deductionsPaise, s.currency)}</TD>
                     <TD className="font-semibold">{formatPaise(s.netPaise, s.currency)}</TD>
+                    <TD>
+                      <a
+                        href={`${env.apiBaseUrl}/payroll/payslips/${s._id}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary underline"
+                      >
+                        Download
+                      </a>
+                    </TD>
                   </TR>
                 ))}
               </TBody>

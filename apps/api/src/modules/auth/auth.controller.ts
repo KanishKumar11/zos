@@ -8,7 +8,6 @@ import {
   Get,
   Req,
   Res,
-  UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
@@ -26,7 +25,6 @@ import { REFRESH_COOKIE_NAME } from '@/common/constants/app.constants';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
-import type { AuthedRequest } from '@/common/interfaces/authed-request.interface';
 import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe';
 
@@ -36,9 +34,9 @@ import type {
   LoginInput,
   PerformPasswordResetInput,
   RequestPasswordResetInput,
-} from '../dto/auth.dto';
-import { AuthService } from '../services/auth.service';
-import { MailService } from '../../mail/mail.service';
+} from './dto/auth.dto';
+import { AuthService } from './services/auth.service';
+import { MailService } from '../mail/mail.service';
 
 @Controller('auth')
 export class AuthController {

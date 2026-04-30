@@ -4,6 +4,13 @@ import { type HydratedDocument, Schema as MS, Types } from 'mongoose';
 
 import { AudienceType } from '@agency/shared';
 
+@Schema({ _id: false, timestamps: false })
+export class AnnouncementReadReceipt {
+  @Prop({ type: MS.Types.ObjectId, ref: 'User', required: true }) userId!: Types.ObjectId;
+  @Prop({ type: Date, required: true }) readAt!: Date;
+}
+const AnnouncementReadReceiptSchema = SchemaFactory.createForClass(AnnouncementReadReceipt);
+
 @Schema({ timestamps: true, collection: 'announcements' })
 export class Announcement {
   @Prop({ required: true }) title!: string;
@@ -14,6 +21,7 @@ export class Announcement {
   @Prop({ default: false }) pinned!: boolean;
   @Prop({ type: MS.Types.ObjectId, ref: 'User', required: true }) createdBy!: Types.ObjectId;
   @Prop({ type: Date }) publishedAt?: Date;
+  @Prop({ type: [AnnouncementReadReceiptSchema], default: [] }) readBy!: AnnouncementReadReceipt[];
 }
 
 export type AnnouncementDocument = HydratedDocument<Announcement>;

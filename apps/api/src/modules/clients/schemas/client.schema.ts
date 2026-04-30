@@ -1,6 +1,6 @@
 // Client schema — OWNER-only resource.
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { type HydratedDocument, Schema as MS } from 'mongoose';
+import { type HydratedDocument } from 'mongoose';
 
 @Schema({ _id: false })
 export class ClientContact {

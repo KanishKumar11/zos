@@ -66,6 +66,7 @@ export class AttendanceService {
 
   monthFor(userId: string, monthYYYYMM: string): Promise<AttendanceEntryDocument[]> {
     const [y, m] = monthYYYYMM.split('-').map(Number);
+    if (!y || !m) throw new Error(`Invalid month: ${monthYYYYMM}`);
     const start = `${monthYYYYMM}-01`;
     const endMonth = m === 12 ? 1 : m + 1;
     const endYear = m === 12 ? y + 1 : y;

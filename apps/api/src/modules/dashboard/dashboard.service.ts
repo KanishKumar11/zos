@@ -60,7 +60,7 @@ export class DashboardService {
           count: number;
         }>
       ).map((r) => [r._id, r]),
-    ) as Record<InvoiceStatus, { total: number; paid: number; count: number }>;
+    ) as unknown as Partial<Record<InvoiceStatus, { total: number; paid: number; count: number }>>;
 
     const overdue = byStatus[InvoiceStatus.OVERDUE]?.total ?? 0;
     const outstanding =

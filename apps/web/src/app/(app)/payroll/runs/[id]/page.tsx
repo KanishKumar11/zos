@@ -8,6 +8,7 @@ import { Role } from '@agency/shared';
 import { RoleGate } from '@/components/auth/role-gate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import { env } from '@/lib/env';
 import { formatPaise } from '@/lib/formatters';
 
 import { usePayrollRun, useRunPayslips } from '@/features/payroll/payroll.hooks';
@@ -50,6 +51,7 @@ function Inner({ id }: { id: string }) {
                 <TH>Gross</TH>
                 <TH>Deductions</TH>
                 <TH>Net</TH>
+                <TH>PDF</TH>
               </TR>
             </THead>
             <TBody>
@@ -62,6 +64,16 @@ function Inner({ id }: { id: string }) {
                   <TD>{formatPaise(s.grossPaise, s.currency)}</TD>
                   <TD>{formatPaise(s.deductionsPaise, s.currency)}</TD>
                   <TD className="font-semibold">{formatPaise(s.netPaise, s.currency)}</TD>
+                  <TD>
+                    <a
+                      href={`${env.apiBaseUrl}/payroll/payslips/${s._id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary underline"
+                    >
+                      Download
+                    </a>
+                  </TD>
                 </TR>
               ))}
             </TBody>

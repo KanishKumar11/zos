@@ -63,6 +63,18 @@ export class AnnouncementsService {
     if (!res) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Announcement not found' });
   }
 
+  /** Mark announcement as read by user (idempotent). Returns updated readBy length. */
+  async markRead(id: string, userId: string): Promise<{ ok: true; readCount: number }> {
+    const doc = await this.byId(id);
+    const uid = new Types.ObjectId(userId);
+    const exists = doc.readBy.some((r) => r.userId.toString() === userId);
+    if (!exists) {
+      doc.readBy.push({ userId: uid, readAt: new Date() } as never);
+      await doc.save();
+    }
+    return { ok: true, readCount: doc.readBy.length };
+  }
+
   // --- audience resolution -------------------------------------------------
 
   private async resolveRecipients(doc: AnnouncementDocument): Promise<string[]> {
@@ -98,7 +110,7 @@ export class AnnouncementsService {
     await this.notifications.createMany(
       recipients.map((userId) => ({
         userId,
-        type: NotificationType.ANNOUNCEMENT,
+        type: NotificationType.ANNOUNCEMENT_POSTED,
         title: doc.title,
         body: doc.body.slice(0, 280),
         data: { announcementId: doc.id },

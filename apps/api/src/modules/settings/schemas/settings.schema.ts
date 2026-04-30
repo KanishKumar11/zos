@@ -21,6 +21,8 @@ export class Settings {
   @Prop() country?: string;
   @Prop() gstin?: string;
   @Prop() pan?: string;
+  /** Per-day late deduction in paise (used by payroll). 0 disables. */
+  @Prop({ type: Number, default: 0 }) lateDeductionPaisePerDay!: number;
 }
 
 export type SettingsDocument = HydratedDocument<Settings>;

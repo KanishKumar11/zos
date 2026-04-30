@@ -3,4 +3,5 @@ export enum AudienceType {
   ALL = 'ALL',
   DEPARTMENT = 'DEPARTMENT',
   ROLE = 'ROLE',
+  USERS = 'USERS',
 }

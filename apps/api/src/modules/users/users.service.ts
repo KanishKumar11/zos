@@ -7,18 +7,24 @@ import {
   UserStatus,
   type AdminUpdateUserInput,
   type ListUsersQuery,
+  type OnboardingPatchInput,
   type UpdateProfileInput,
+  type UserDocumentInput,
 } from '@agency/shared';
 
 import { ErrorCodes } from '@/common/constants/error-codes';
 import { Paginated, paginate } from '@/common/utils/pagination.util';
 
+import { StorageService } from '../storage/storage.service';
 import { User, type UserDocument } from './schemas/user.schema';
 import { UsersRepository } from './users.repository';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly repo: UsersRepository) {}
+  constructor(
+    private readonly repo: UsersRepository,
+    private readonly storage: StorageService,
+  ) {}
 
   findByEmail(email: string) {
     return this.repo.byEmail(email);
@@ -105,5 +111,67 @@ export class UsersService {
     const u = await this.repo.softDelete(id);
     if (!u) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'User not found' });
     return { ok: true };
+  }
+
+  // -- Documents -----------------------------------------------------------
+
+  async addDocument(
+    userId: string,
+    input: UserDocumentInput,
+    actorId: string,
+  ): Promise<UserDocument> {
+    const u = await this.findByIdOrThrow(userId);
+    u.documents.push({ ...input, uploadedBy: new Types.ObjectId(actorId) } as never);
+    await u.save();
+    return u;
+  }
+
+  async removeDocument(userId: string, docId: string): Promise<UserDocument> {
+    const u = await this.findByIdOrThrow(userId);
+    const idx = u.documents.findIndex((d: any) => d._id?.toString() === docId);
+    if (idx === -1) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Document not found' });
+    const removed = u.documents[idx];
+    u.documents.splice(idx, 1);
+    await u.save();
+    if (removed?.key) {
+      try {
+        await this.storage.delete(removed.key);
+      } catch {
+        // best effort
+      }
+    }
+    return u;
+  }
+
+  async signedDocumentUrl(userId: string, docId: string): Promise<{ url: string; expiresIn: number }> {
+    const u = await this.findByIdOrThrow(userId);
+    const doc = u.documents.find((d: any) => d._id?.toString() === docId);
+    if (!doc) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Document not found' });
+    return this.storage.presignGet(doc.key);
+  }
+
+  // -- Onboarding checklist ------------------------------------------------
+
+  async setOnboarding(userId: string, input: OnboardingPatchInput): Promise<UserDocument> {
+    const u = await this.findByIdOrThrow(userId);
+    u.onboardingChecklist = input.items.map((i) => ({
+      item: i.item,
+      completed: i.completed ?? false,
+      completedAt: i.completed ? new Date() : undefined,
+    })) as never;
+    await u.save();
+    return u;
+  }
+
+  async toggleOnboardingItem(userId: string, idx: number): Promise<UserDocument> {
+    const u = await this.findByIdOrThrow(userId);
+    const item = u.onboardingChecklist[idx];
+    if (!item) {
+      throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Onboarding item not found' });
+    }
+    item.completed = !item.completed;
+    item.completedAt = item.completed ? new Date() : undefined;
+    await u.save();
+    return u;
   }
 }

@@ -35,6 +35,7 @@ import { LeavesModule } from './modules/leaves/leaves.module';
 import { MailModule } from './modules/mail/mail.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PayrollModule } from './modules/payroll/payroll.module';
+import { PdfModule } from './modules/pdf/pdf.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
@@ -75,6 +76,7 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
     AuthModule,
     StorageModule,
+    PdfModule,
     DepartmentsModule,
     DesignationsModule,
     SettingsModule,

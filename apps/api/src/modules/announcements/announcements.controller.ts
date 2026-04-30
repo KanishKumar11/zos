@@ -31,6 +31,11 @@ export class AnnouncementsController {
     return this.svc.byId(id);
   }
 
+  @Post(':id/read')
+  markRead(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.markRead(id, user.sub);
+  }
+
   @Roles(Role.OWNER, Role.ADMIN)
   @Post()
   create(

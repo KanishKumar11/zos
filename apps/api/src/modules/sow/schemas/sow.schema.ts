@@ -14,6 +14,18 @@ export class SowMilestone {
 }
 const SowMilestoneSchema = SchemaFactory.createForClass(SowMilestone);
 
+@Schema({ _id: false })
+export class SowBrief {
+  @Prop({ required: true }) scopeSummary!: string;
+  @Prop({ type: [String], default: [] }) deliverables!: string[];
+  @Prop({ type: Date }) timelineStart?: Date;
+  @Prop({ type: Date }) timelineEnd?: Date;
+  @Prop({ type: Number, default: 0 }) revisionRounds!: number;
+  @Prop({ type: Date }) publishedAt?: Date;
+  @Prop({ type: MS.Types.ObjectId, ref: 'User' }) publishedBy?: Types.ObjectId;
+}
+const SowBriefSchema = SchemaFactory.createForClass(SowBrief);
+
 @Schema({ timestamps: true, collection: 'sows' })
 export class Sow {
   @Prop({ type: MS.Types.ObjectId, ref: 'Client', required: true, index: true })
@@ -25,6 +37,7 @@ export class Sow {
   @Prop({ required: true, type: Number }) totalValuePaise!: number;
   @Prop({ default: 'INR' }) currency!: string;
   @Prop({ type: String }) documentKey?: string;
+  @Prop({ type: SowBriefSchema }) brief?: SowBrief;
   @Prop({ type: Date }) signedAt?: Date;
   @Prop({ type: Date }) deletedAt?: Date;
 }

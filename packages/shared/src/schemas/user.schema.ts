@@ -41,3 +41,23 @@ export const listUsersQuerySchema = z.object({
   departmentId: objectIdSchema.optional(),
 });
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
+
+export const userDocumentInputSchema = z.object({
+  kind: z.enum(['OFFER_LETTER', 'NDA', 'CONTRACT', 'ID_PROOF', 'OTHER']),
+  name: z.string().min(1).max(200),
+  key: z.string().min(1).max(500),
+  contentType: z.string().max(120).optional(),
+  sizeBytes: z.number().int().min(0).optional(),
+});
+export type UserDocumentInput = z.infer<typeof userDocumentInputSchema>;
+
+export const onboardingItemSchema = z.object({
+  item: z.string().min(1).max(200),
+  completed: z.boolean().optional(),
+});
+export type OnboardingItemInput = z.infer<typeof onboardingItemSchema>;
+
+export const onboardingPatchSchema = z.object({
+  items: z.array(onboardingItemSchema).min(1),
+});
+export type OnboardingPatchInput = z.infer<typeof onboardingPatchSchema>;

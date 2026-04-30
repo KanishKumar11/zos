@@ -2,6 +2,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { SettingsModule } from '../settings/settings.module';
 import { UsersModule } from '../users/users.module';
 import { PayrollController } from './payroll.controller';
 import { PayrollService } from './payroll.service';
@@ -15,6 +16,7 @@ import { Payslip, PayslipSchema } from './schemas/payslip.schema';
       { name: Payslip.name, schema: PayslipSchema },
     ]),
     UsersModule,
+    SettingsModule,
   ],
   controllers: [PayrollController],
   providers: [PayrollService],
