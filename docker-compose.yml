@@ -1,6 +1,17 @@
 version: '3.9'
 
 services:
+  minio:
+    image: minio/minio:latest
+    container_name: agency-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio-data:/data
+
   api:
     build:
       context: .
@@ -9,6 +20,8 @@ services:
     restart: unless-stopped
     ports:
       - '4000:4000'
+    depends_on:
+      - minio
 
   web:
     build:
@@ -20,3 +33,6 @@ services:
       - '3000:3000'
     depends_on:
       - api
+
+volumes:
+  minio-data:
