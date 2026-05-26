@@ -77,8 +77,10 @@ export class AuthController {
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = (req as Request & { cookies?: Record<string, string> }).cookies?.[REFRESH_COOKIE_NAME];
     await this.auth.logout(token);
-    res.clearCookie('access_token', { path: '/' });
-    res.clearCookie(REFRESH_COOKIE_NAME, { path: '/' });
+    const domain = this.config.get<string | undefined>('app.cookieDomain');
+    const cookieOpts = { path: '/', ...(domain ? { domain } : {}) };
+    res.clearCookie('access_token', cookieOpts);
+    res.clearCookie(REFRESH_COOKIE_NAME, cookieOpts);
   }
 
   @Public()
@@ -142,12 +144,14 @@ export class AuthController {
     refreshExpiresAt: Date,
   ): void {
     const isProd = this.config.get('app.nodeEnv') === 'production';
+    const domain = this.config.get<string | undefined>('app.cookieDomain');
     res.cookie('access_token', accessToken, {
       httpOnly: false, // middleware decodes it for UX gating
       secure: isProd,
       sameSite: 'lax',
       path: '/',
       maxAge: 15 * 60 * 1000,
+      ...(domain ? { domain } : {}),
     });
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
       httpOnly: true,
@@ -155,6 +159,7 @@ export class AuthController {
       sameSite: 'lax',
       path: '/',
       expires: refreshExpiresAt,
+      ...(domain ? { domain } : {}),
     });
   }
 }

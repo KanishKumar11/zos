@@ -6,6 +6,7 @@ export interface AppConfig {
   port: number;
   appUrl: string;
   webUrl: string;
+  cookieDomain: string | undefined;
 }
 
 export default registerAs<AppConfig>('app', () => ({
@@ -13,4 +14,5 @@ export default registerAs<AppConfig>('app', () => ({
   port: Number(process.env.PORT ?? 4000),
   appUrl: process.env.APP_URL ?? 'http://localhost:4000',
   webUrl: process.env.WEB_URL ?? 'http://localhost:3000',
+  cookieDomain: process.env.COOKIE_DOMAIN || undefined,
 }));
