@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { AuditAction, Role } from '@agency/shared';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { RoleGate } from '@/components/auth/role-gate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -48,7 +49,7 @@ function Inner() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Audit log</h1>
+      <PageHeader title="Audit log" description="All workspace activity, immutable." />
       <Card>
         <CardHeader>
           <CardTitle>Recent activity</CardTitle>

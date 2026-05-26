@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useDepartments } from '@/features/org/org.hooks';
 import { useInviteMember, useTeamList } from '@/features/team/team.hooks';
 
@@ -53,10 +54,11 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Team</h1>
-        <Button onClick={() => setOpen(true)}>Invite member</Button>
-      </div>
+      <PageHeader
+        title="Team"
+        description="Manage members, roles, and departments."
+        action={<Button onClick={() => setOpen(true)}>Invite member</Button>}
+      />
 
       <div className="grid gap-3 md:grid-cols-4">
         <Input

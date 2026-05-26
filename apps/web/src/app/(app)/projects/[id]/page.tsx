@@ -10,6 +10,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatPaise } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useProject } from '@/features/projects/projects.hooks';
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,12 +25,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{p.name}</h1>
-        <p className="text-sm text-muted-foreground">
-          {p.code} · {p.status}
-        </p>
-      </div>
+      <PageHeader title={p.name} description={`${p.code} · ${p.status}`} />
 
       <Card>
         <CardHeader>

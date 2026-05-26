@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatPaise } from '@/lib/formatters';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useSows } from '@/features/sow/sow.hooks';
 
 export default function SowsPage() {
@@ -24,7 +25,7 @@ function SowsInner() {
   const list = useSows();
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Statements of Work</h1>
+      <PageHeader title="Statements of Work" description="Client SOWs and milestone tracking." />
       <Card>
         <CardHeader>
           <CardTitle>All SOWs</CardTitle>

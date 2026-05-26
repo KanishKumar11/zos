@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { AudienceType, Role } from '@agency/shared';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { RoleGate } from '@/components/auth/role-gate';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,7 +42,7 @@ export default function AnnouncementsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Announcements</h1>
+      <PageHeader title="Announcements" description="Company-wide posts and updates." />
 
       <RoleGate allow={[Role.OWNER, Role.ADMIN]}>
         <ComposeCard />

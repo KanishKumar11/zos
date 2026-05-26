@@ -48,7 +48,7 @@ export default function HolidaysPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Holidays</h1>
+        <PageHeader title="Holidays" description="Annual public holiday calendar." />
         <div className="flex items-center gap-2">
           <Input
             type="number"

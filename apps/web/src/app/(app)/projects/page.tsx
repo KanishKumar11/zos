@@ -30,6 +30,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatPaise } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useCreateProject, useProjects } from '@/features/projects/projects.hooks';
 
 export default function ProjectsPage() {
@@ -55,13 +56,15 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Projects</h1>
-        <RoleGate allow={[Role.OWNER, Role.ADMIN, Role.LEAD]}>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button>New project</Button>
-            </DialogTrigger>
+      <PageHeader
+        title="Projects"
+        description="Track deliverables, budgets, and team assignments."
+        action={
+          <RoleGate allow={[Role.OWNER, Role.ADMIN, Role.LEAD]}>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button>New project</Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create project</DialogTitle>
@@ -101,9 +104,10 @@ export default function ProjectsPage() {
                 </DialogFooter>
               </form>
             </DialogContent>
-          </Dialog>
-        </RoleGate>
-      </div>
+            </Dialog>
+          </RoleGate>
+        }
+      />
 
       <Card>
         <CardHeader>

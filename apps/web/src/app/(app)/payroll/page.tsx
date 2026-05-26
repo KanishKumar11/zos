@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatPaise } from '@/lib/formatters';
+import { PageHeader } from '@/components/layout/page-header';
 
 import {
   useCreatePayrollRun,
@@ -39,7 +40,7 @@ function Inner() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Payroll</h1>
+      <PageHeader title="Payroll" description="Manage monthly payroll runs." />
 
       <Card>
         <CardHeader>

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { RoleGate } from '@/components/auth/role-gate';
 import { formatPaise } from '@/lib/formatters';
 
@@ -76,14 +77,10 @@ function Inner({ id }: { id: string }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Compensation</h1>
-        {member.data && (
-          <p className="text-sm text-muted-foreground">
-            For {member.data.name} ({member.data.email})
-          </p>
-        )}
-      </div>
+      <PageHeader
+        title="Compensation"
+        description={member.data ? `For ${member.data.name} (${member.data.email})` : undefined}
+      />
 
       <Card>
         <CardHeader>

@@ -21,12 +21,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useClients, useCreateClient } from '@/features/clients/clients.hooks';
 
 export default function ClientsPage() {
@@ -49,12 +49,15 @@ function Inner() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Clients</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>New client</Button>
-          </DialogTrigger>
+      <PageHeader
+        title="Clients"
+        description="Manage client accounts and contacts."
+        action={
+          <Button onClick={() => setOpen(true)}>New client</Button>
+        }
+      />
+
+      <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create client</DialogTitle>
@@ -90,7 +93,6 @@ function Inner() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
 
       <Card>
         <CardHeader>

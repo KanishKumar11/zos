@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { FileUploader } from '@/components/file-uploader';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { isOwner } from '@/lib/roles';
 import { useAuthStore } from '@/store/auth.store';
 
@@ -62,10 +63,7 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{u.name}</h1>
-        <p className="text-sm text-muted-foreground">{u.email}</p>
-      </div>
+      <PageHeader title={u.name} description={u.email} />
 
       <Card>
         <CardHeader>

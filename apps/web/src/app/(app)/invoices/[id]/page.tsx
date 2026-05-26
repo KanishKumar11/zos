@@ -55,17 +55,17 @@ function Inner({ id }: { id: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{i.number}</h1>
-          <p className="text-sm text-muted-foreground">{i.status}</p>
-        </div>
-        {i.status === InvoiceStatus.DRAFT && (
-          <Button onClick={() => send.mutate(id)} disabled={send.isPending}>
-            {send.isPending ? 'Sending…' : 'Mark as sent'}
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title={i.number}
+        description={i.status}
+        action={
+          i.status === InvoiceStatus.DRAFT ? (
+            <Button onClick={() => send.mutate(id)} disabled={send.isPending}>
+              {send.isPending ? 'Sending…' : 'Mark as sent'}
+            </Button>
+          ) : undefined
+        }
+      />
 
       <div>
         <a

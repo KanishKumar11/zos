@@ -11,6 +11,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { env } from '@/lib/env';
 import { formatPaise } from '@/lib/formatters';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { usePayrollRun, useRunPayslips } from '@/features/payroll/payroll.hooks';
 
 export default function PayrollRunPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,13 +29,10 @@ function Inner({ id }: { id: string }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Payroll run {run.data?.month}</h1>
-        <p className="text-sm text-muted-foreground">
-          Status: {run.data?.status} · {run.data?.employeeCount} employees ·{' '}
-          {run.data && formatPaise(run.data.totalNetPaise, 'INR')} total net
-        </p>
-      </div>
+      <PageHeader
+        title={`Payroll run ${run.data?.month ?? '…'}`}
+        description={run.data ? `${run.data.status} · ${run.data.employeeCount} employees · ${formatPaise(run.data.totalNetPaise, 'INR')} total net` : undefined}
+      />
 
       <Card>
         <CardHeader>

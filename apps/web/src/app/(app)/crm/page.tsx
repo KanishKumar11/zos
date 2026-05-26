@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatPaise } from '@/lib/formatters';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useClients } from '@/features/clients/clients.hooks';
 import {
   useCreateOpportunity,
@@ -71,12 +72,14 @@ function Inner() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">CRM Pipeline</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>New opportunity</Button>
-          </DialogTrigger>
+      <PageHeader
+        title="CRM Pipeline"
+        description="Manage leads and opportunities by stage."
+        action={
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button>New opportunity</Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add opportunity</DialogTitle>
@@ -121,8 +124,9 @@ function Inner() {
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
-      </div>
+          </Dialog>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         {STAGES.map((stage) => {

@@ -5,12 +5,14 @@ import { useMemo, useState } from 'react';
 
 import { AttendanceStatus, Role } from '@agency/shared';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import { PageHeader } from '@/components/layout/page-header';
 
 import {
   useAdminMarkAttendance,
@@ -39,9 +41,11 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Attendance</h1>
-        <div className="flex gap-2">
+      <PageHeader
+        title="Attendance"
+        description="Track check-in / check-out and team presence."
+        action={
+          <div className="flex gap-2">
           <Button onClick={() => checkIn.mutate(undefined)} disabled={!!todayEntry?.checkInAt || checkIn.isPending}>
             Check in
           </Button>
@@ -53,7 +57,8 @@ export default function AttendancePage() {
             Check out
           </Button>
         </div>
-      </div>
+        }
+      />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -209,13 +214,9 @@ function AdminMarkCard() {
 }
 
 function StatusPill({ status }: { status: AttendanceStatus }) {
-  const cls =
-    status === AttendanceStatus.PRESENT
-      ? 'bg-emerald-100 text-emerald-800'
-      : status === AttendanceStatus.HALF_DAY
-        ? 'bg-amber-100 text-amber-800'
-        : status === AttendanceStatus.ABSENT
-          ? 'bg-red-100 text-red-800'
-          : 'bg-slate-100 text-slate-800';
-  return <span className={`inline-block rounded px-2 py-0.5 text-xs ${cls}`}>{status}</span>;
+  const variant =
+    status === AttendanceStatus.PRESENT ? 'success' :
+    status === AttendanceStatus.HALF_DAY ? 'warning' :
+    status === AttendanceStatus.ABSENT ? 'destructive' : 'muted';
+  return <Badge variant={variant as never}>{status}</Badge>;
 }

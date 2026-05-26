@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 
 import { createDepartmentSchema, type CreateDepartmentInput } from '@agency/shared';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -46,7 +47,7 @@ export default function DepartmentsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Departments</h1>
+        <PageHeader title="Departments" description="Org-level team groupings." />
         <Button onClick={() => setOpen(true)}>Add department</Button>
       </div>
       <Card>

@@ -39,12 +39,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{t.title}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t.priority} · {t.status}
-        </p>
-      </div>
+      <PageHeader title={t.title} description={`${t.priority} · ${t.status}`} />
 
       <Card>
         <CardHeader>

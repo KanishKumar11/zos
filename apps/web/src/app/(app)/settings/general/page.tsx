@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useSettings, useUpdateSettings } from '@/features/settings/settings.hooks';
 
 export default function GeneralSettingsPage() {
@@ -48,7 +49,7 @@ export default function GeneralSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">General settings</h1>
+      <PageHeader title="General settings" description="Workspace name, currency, and locale." />
       <form onSubmit={onSubmit} className="space-y-6">
         <Card>
           <CardHeader>

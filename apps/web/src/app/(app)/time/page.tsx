@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useLogTime, useMyTime } from '@/features/tasks/tasks.hooks';
 import { useProjects } from '@/features/projects/projects.hooks';
 
@@ -30,7 +31,7 @@ export default function TimePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Time tracking</h1>
+      <PageHeader title="Time tracking" description={`Total: ${(total / 60).toFixed(1)} h logged`} />
 
       <Card>
         <CardHeader>

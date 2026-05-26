@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useDepartments } from '@/features/org/org.hooks';
 import {
   useCreateDesignation,
@@ -48,7 +49,7 @@ export default function DesignationsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Designations</h1>
+        <PageHeader title="Designations" description="Job roles grouped by department." />
         <Button onClick={() => setOpen(true)} disabled={!departments.data?.length}>
           Add designation
         </Button>

@@ -6,6 +6,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { env } from '@/lib/env';
 import { formatPaise } from '@/lib/formatters';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useMyPayslips } from '@/features/payroll/payroll.hooks';
 
 export default function MyPayslipsPage() {
@@ -13,7 +14,7 @@ export default function MyPayslipsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">My payslips</h1>
+      <PageHeader title="My payslips" description="Download your monthly pay stubs." />
       <Card>
         <CardHeader>
           <CardTitle>History</CardTitle>

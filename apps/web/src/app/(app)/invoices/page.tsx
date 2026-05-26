@@ -11,6 +11,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { env } from '@/lib/env';
 import { formatPaise } from '@/lib/formatters';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useInvoices } from '@/features/invoices/invoices.hooks';
 import { useInvoiceAging, useInvoiceDashboard } from '@/features/invoices/invoices.hooks';
 
@@ -29,38 +30,38 @@ function Inner() {
   const d = dash.data;
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Invoices</h1>
+      <PageHeader title="Invoices" description="Billing and collections overview." />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Billed</CardTitle>
+            <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Billed</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold">
+          <CardContent className="text-xl font-semibold tabular-nums">
             {d ? formatPaise(d.billedPaise, 'INR') : '—'}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Collected</CardTitle>
+            <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Collected</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold text-green-600">
+          <CardContent className="text-xl font-semibold tabular-nums text-[hsl(var(--success))]">
             {d ? formatPaise(d.collectedPaise, 'INR') : '—'}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Outstanding</CardTitle>
+            <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Outstanding</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold">
+          <CardContent className="text-xl font-semibold tabular-nums text-amber-600">
             {d ? formatPaise(d.outstandingPaise, 'INR') : '—'}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Overdue</CardTitle>
+            <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Overdue</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold text-red-600">
+          <CardContent className="text-xl font-semibold tabular-nums text-destructive">
             {d ? formatPaise(d.overduePaise, 'INR') : '—'}
           </CardContent>
         </Card>

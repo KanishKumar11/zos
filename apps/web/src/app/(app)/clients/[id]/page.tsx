@@ -9,6 +9,7 @@ import { RoleGate } from '@/components/auth/role-gate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { useClient } from '@/features/clients/clients.hooks';
 
 export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,10 +28,7 @@ function Inner({ id }: { id: string }) {
   const client = c.data;
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{client.name}</h1>
-        <p className="text-sm text-muted-foreground">{client.gstin || 'No GSTIN'}</p>
-      </div>
+      <PageHeader title={client.name} description={client.gstin || 'No GSTIN'} />
 
       <Card>
         <CardHeader>

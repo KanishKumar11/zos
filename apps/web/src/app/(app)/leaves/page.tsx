@@ -22,6 +22,7 @@ import {
   usePendingLeaves,
   useRequestLeave,
 } from '@/features/attendance/attendance.hooks';
+import { PageHeader } from '@/components/layout/page-header';
 import { useAuthStore } from '@/store/auth.store';
 
 export default function LeavesPage() {
@@ -47,7 +48,7 @@ export default function LeavesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Leaves</h1>
+      <PageHeader title="Leaves" description="Apply for time off and view your balance." />
 
       {balance.data && (
         <Card>

@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { FileUploader } from '@/components/file-uploader';
+import { PageHeader } from '@/components/layout/page-header';
 import { formatPaise } from '@/lib/formatters';
 
 import {
@@ -57,12 +58,7 @@ function SowDetailInner({ id }: { id: string }) {
   const s = sow.data;
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{s.title}</h1>
-        <p className="text-sm text-muted-foreground">
-          {formatPaise(s.totalValuePaise, s.currency)} · {s.milestones.length} milestones
-        </p>
-      </div>
+      <PageHeader title={s.title} description={`${formatPaise(s.totalValuePaise, s.currency)} · ${s.milestones.length} milestones`} />
 
       <Card>
         <CardHeader>
