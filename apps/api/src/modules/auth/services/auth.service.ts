@@ -61,8 +61,8 @@ export class AuthService {
     if (!ok) {
       throw new UnauthorizedException({ code: ErrorCodes.INVALID_CREDENTIALS, message: 'Invalid credentials' });
     }
-    user.lastLoginAt = new Date();
-    await user.save();
+    // Use updateOne to avoid triggering Mongoose validators on potentially stale enum values.
+    await user.updateOne({ lastLoginAt: new Date() });
     return this.issueTokens(user.id, user.email, user.role, meta);
   }
 

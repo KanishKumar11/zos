@@ -12,7 +12,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed": "ts-node -r tsconfig-paths/register src/database/seeds/seed.ts",
+    "seed": "npx ts-node --transpile-only -r tsconfig-paths/register src/seed/seed.ts",
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {

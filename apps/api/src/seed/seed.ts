@@ -19,12 +19,13 @@ async function run(): Promise<void> {
     const name = config.getOrThrow<string>('seed.seedOwnerName');
 
     const existing = await users.findByEmail(email);
+    const passwordHash = await hashPassword(password);
     if (existing) {
+      await users.update(existing.id as string, { passwordHash, status: UserStatus.ACTIVE, role: Role.OWNER });
       // eslint-disable-next-line no-console
-      console.log(`[seed] owner already exists: ${email}`);
+      console.log(`[seed] owner already exists — role, password and status updated: ${email}`);
       return;
     }
-    const passwordHash = await hashPassword(password);
     await users.create({
       email,
       name,
