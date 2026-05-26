@@ -25,31 +25,31 @@ export default function LoginPage() {
   const onSubmit = (data: LoginInput) => login.mutate(data);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Sign in</CardTitle>
-        <CardDescription>Welcome back to the agency panel.</CardDescription>
+    <Card className="shadow-md">
+      <CardHeader className="pb-4 pt-6">
+        <CardTitle className="text-[18px]">Sign in</CardTitle>
+        <CardDescription>Enter your credentials to continue.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-6">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" autoComplete="email" {...register('email')} />
-            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+            <Input id="email" type="email" autoComplete="email" placeholder="you@company.com" {...register('email')} />
+            {errors.email && <p className="text-[11px] text-destructive">{errors.email.message}</p>}
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link className="text-[12px] text-muted-foreground hover:text-foreground transition-colors" href="/forgot-password">
+                Forgot password?
+              </Link>
+            </div>
             <Input id="password" type="password" autoComplete="current-password" {...register('password')} />
-            {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+            {errors.password && <p className="text-[11px] text-destructive">{errors.password.message}</p>}
           </div>
-          <Button type="submit" className="w-full" disabled={isSubmitting || login.isPending}>
+          <Button type="submit" className="mt-1 w-full" disabled={isSubmitting || login.isPending}>
             {login.isPending ? 'Signing in…' : 'Sign in'}
           </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            <Link className="underline" href="/forgot-password">
-              Forgot your password?
-            </Link>
-          </p>
         </form>
       </CardContent>
     </Card>

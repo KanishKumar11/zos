@@ -24,7 +24,7 @@ export class TokenService {
   private readConfig(kind: TokenKind): TokenConfig {
     return {
       secret: this.config.getOrThrow<string>(`jwt.${kind}Secret`),
-      ttl: this.config.getOrThrow<string>(`jwt.${kind}Expiry`),
+      ttl: this.config.getOrThrow<string>(`jwt.${kind}ExpiresIn`),
     };
   }
 

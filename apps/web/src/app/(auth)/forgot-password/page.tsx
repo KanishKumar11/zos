@@ -20,19 +20,19 @@ export default function ForgotPasswordPage() {
     defaultValues: { email: '' },
   });
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Forgot password</CardTitle>
-        <CardDescription>We'll email you a link to reset.</CardDescription>
+    <Card className="shadow-md">
+      <CardHeader className="pb-4 pt-6">
+        <CardTitle className="text-[18px]">Forgot password</CardTitle>
+        <CardDescription>Enter your work email and we&apos;ll send a reset link.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-6">
         <form onSubmit={handleSubmit((d) => m.mutate(d))} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" {...register('email')} />
-            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Work email</Label>
+            <Input id="email" type="email" placeholder="you@company.com" {...register('email')} />
+            {errors.email && <p className="text-[11px] text-destructive">{errors.email.message}</p>}
           </div>
-          <Button type="submit" className="w-full" disabled={isSubmitting || m.isPending}>
+          <Button type="submit" className="mt-1 w-full" disabled={isSubmitting || m.isPending}>
             {m.isPending ? 'Sending…' : 'Send reset link'}
           </Button>
         </form>

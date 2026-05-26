@@ -5,7 +5,7 @@ import type { HTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors',
+  'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-colors',
   {
     variants: {
       variant: {
@@ -13,8 +13,9 @@ const badgeVariants = cva(
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
         destructive: 'border-transparent bg-destructive text-destructive-foreground',
         outline: 'text-foreground',
-        success: 'border-transparent bg-[hsl(var(--success))] text-white',
-        warning: 'border-transparent bg-[hsl(var(--warning))] text-white',
+        success: 'border-transparent bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]',
+        warning: 'border-transparent bg-[hsl(var(--warning))]/15 text-amber-600',
+        muted: 'border-transparent bg-muted text-muted-foreground',
       },
     },
     defaultVariants: { variant: 'default' },

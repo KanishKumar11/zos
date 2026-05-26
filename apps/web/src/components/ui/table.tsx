@@ -18,14 +18,14 @@ export const TBody = ({ className, ...props }: React.HTMLAttributes<HTMLTableSec
   <tbody className={cn('[&_tr:last-child]:border-0', className)} {...props} />
 );
 export const TR = ({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) => (
-  <tr className={cn('border-b transition hover:bg-muted/50', className)} {...props} />
+  <tr className={cn('border-b transition-colors hover:bg-muted/40', className)} {...props} />
 );
 export const TH = ({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
   <th
-    className={cn('h-10 px-3 text-left align-middle font-medium text-muted-foreground', className)}
+    className={cn('h-9 bg-muted/40 px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground first:rounded-tl-md last:rounded-tr-md', className)}
     {...props}
   />
 );
 export const TD = ({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
-  <td className={cn('p-3 align-middle', className)} {...props} />
+  <td className={cn('px-3 py-2.5 align-middle text-[13px]', className)} {...props} />
 );

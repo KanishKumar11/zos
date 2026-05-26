@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/store/auth.store';
@@ -20,55 +20,79 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'sticky top-0 flex h-screen flex-col border-r bg-card transition-all',
-        collapsed ? 'w-16' : 'w-64',
+        'sticky top-0 flex h-screen flex-col border-r bg-card transition-[width] duration-200',
+        collapsed ? 'w-[60px]' : 'w-[240px]',
       )}
     >
-      <div className="flex h-14 items-center justify-between border-b px-3">
-        {!collapsed && <span className="text-sm font-semibold">Agency</span>}
+      {/* Brand header */}
+      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b px-3">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-[11px] font-bold tracking-tight text-primary-foreground">
+          Z
+        </div>
+        {!collapsed && (
+          <span className="text-[13px] font-semibold tracking-tight text-foreground">ZOS</span>
+        )}
         <button
           type="button"
           onClick={toggle}
-          className="rounded p-1 hover:bg-accent"
+          className="ml-auto rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label="Toggle sidebar"
         >
-          <ChevronLeft className={cn('h-4 w-4 transition-transform', collapsed && 'rotate-180')} />
+          {collapsed
+            ? <PanelLeftOpen className="h-3.5 w-3.5" />
+            : <PanelLeftClose className="h-3.5 w-3.5" />}
         </button>
       </div>
-      <nav className="flex-1 space-y-4 overflow-y-auto p-2">
-        {NAV.map((section) => {
-          const visible = section.items.filter((i) => role && i.allow.includes(role));
-          if (visible.length === 0) return null;
-          return (
-            <div key={section.label}>
-              {!collapsed && (
-                <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {section.label}
-                </p>
-              )}
-              <ul className="space-y-1">
-                {visible.map((item) => {
-                  const Icon = item.icon;
-                  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={cn(
-                          'flex items-center gap-3 rounded-md px-2 py-2 text-sm',
-                          active ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60',
+
+      {/* Nav sections */}
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2 pt-3">
+        <div className="space-y-4">
+          {NAV.map((section) => {
+            const visible = section.items.filter((i) => role && i.allow.includes(role));
+            if (visible.length === 0) return null;
+            return (
+              <div key={section.label}>
+                {!collapsed && (
+                  <p className="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground/60">
+                    {section.label}
+                  </p>
+                )}
+                <ul className="space-y-0.5">
+                  {visible.map((item) => {
+                    const Icon = item.icon;
+                    const active =
+                      pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    return (
+                      <li key={item.href} className="relative">
+                        {active && (
+                          <span className="absolute inset-y-1 left-0 w-0.5 rounded-r-full bg-primary" />
                         )}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        {!collapsed && <span>{item.label}</span>}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          );
-        })}
+                        <Link
+                          href={item.href}
+                          title={collapsed ? item.label : undefined}
+                          className={cn(
+                            'flex items-center gap-3 rounded-md px-2.5 py-2 text-[13px] transition-colors',
+                            active
+                              ? 'bg-primary/[0.08] font-medium text-primary'
+                              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                          )}
+                        >
+                          <Icon
+                            className={cn(
+                              'h-4 w-4 shrink-0',
+                              active ? 'text-primary' : 'text-muted-foreground',
+                            )}
+                          />
+                          {!collapsed && <span className="truncate">{item.label}</span>}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
       </nav>
     </aside>
   );

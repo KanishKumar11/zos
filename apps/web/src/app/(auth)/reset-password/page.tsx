@@ -24,23 +24,26 @@ function Inner() {
     defaultValues: { token, password: '', confirmPassword: '' },
   });
   return (
-    <Card>
-      <CardHeader><CardTitle>Reset password</CardTitle></CardHeader>
-      <CardContent>
+    <Card className="shadow-md">
+      <CardHeader className="pb-4 pt-6">
+        <CardTitle className="text-[18px]">Reset password</CardTitle>
+        <p className="text-[13px] text-muted-foreground">Choose a strong new password for your account.</p>
+      </CardHeader>
+      <CardContent className="pb-6">
         <form onSubmit={handleSubmit((d) => m.mutate(d))} className="space-y-4">
           <input type="hidden" {...register('token')} />
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="password">New password</Label>
-            <Input id="password" type="password" {...register('password')} />
-            {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+            <Input id="password" type="password" autoComplete="new-password" {...register('password')} />
+            {errors.password && <p className="text-[11px] text-destructive">{errors.password.message}</p>}
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="confirmPassword">Confirm password</Label>
-            <Input id="confirmPassword" type="password" {...register('confirmPassword')} />
-            {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
+            <Input id="confirmPassword" type="password" autoComplete="new-password" {...register('confirmPassword')} />
+            {errors.confirmPassword && <p className="text-[11px] text-destructive">{errors.confirmPassword.message}</p>}
           </div>
-          <Button type="submit" className="w-full" disabled={isSubmitting || m.isPending || !token}>
-            {m.isPending ? 'Resetting…' : 'Reset password'}
+          <Button type="submit" className="mt-1 w-full" disabled={isSubmitting || m.isPending || !token}>
+            {m.isPending ? 'Resetting…' : 'Set new password'}
           </Button>
         </form>
       </CardContent>

@@ -19,7 +19,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [me.isError, router]);
 
   if (!user && me.isLoading) {
-    return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Loading…</div>;
+    return (
+      <div className="grid min-h-screen place-items-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-primary" />
+          <p className="text-[13px] text-muted-foreground">Loading…</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -27,8 +34,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );
 }
+

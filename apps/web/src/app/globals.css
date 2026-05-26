@@ -5,52 +5,74 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    /* canvas — cool off-white so white cards feel elevated */
+    --background: 220 18% 97%;
+    --foreground: 224 28% 9%;
+
+    /* cards / popovers float above canvas */
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 224 28% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 240 80% 56%;
+    --popover-foreground: 224 28% 9%;
+
+    /* brand accent — professional desaturated indigo */
+    --primary: 243 54% 52%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
+
+    /* secondary / muted surfaces */
+    --secondary: 220 16% 93%;
+    --secondary-foreground: 224 28% 9%;
+    --muted: 220 16% 93%;
+    --muted-foreground: 220 10% 48%;
+    --accent: 220 16% 93%;
+    --accent-foreground: 224 28% 9%;
+
+    /* semantic */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --success: 142 71% 45%;
+    --success: 142 58% 42%;
     --warning: 38 92% 50%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 240 80% 56%;
-    --radius: 0.6rem;
+
+    /* chrome */
+    --border: 220 16% 88%;
+    --input: 220 16% 88%;
+    --ring: 243 54% 52%;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 240 80% 66%;
-    --primary-foreground: 222 47% 6%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 50%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142 71% 45%;
+    /* true near-black canvas */
+    --background: 224 24% 6%;
+    --foreground: 218 30% 94%;
+
+    /* cards sit one step above the dark canvas */
+    --card: 224 22% 9%;
+    --card-foreground: 218 30% 94%;
+    --popover: 224 22% 9%;
+    --popover-foreground: 218 30% 94%;
+
+    /* brand accent — brighter indigo for dark surfaces */
+    --primary: 243 70% 66%;
+    --primary-foreground: 224 24% 6%;
+
+    /* secondary / muted */
+    --secondary: 224 20% 14%;
+    --secondary-foreground: 218 30% 94%;
+    --muted: 224 20% 14%;
+    --muted-foreground: 220 14% 57%;
+    --accent: 224 20% 14%;
+    --accent-foreground: 218 30% 94%;
+
+    /* semantic */
+    --destructive: 0 63% 55%;
+    --destructive-foreground: 218 30% 94%;
+    --success: 142 58% 48%;
     --warning: 38 92% 50%;
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 240 80% 66%;
+
+    /* chrome */
+    --border: 224 22% 16%;
+    --input: 224 22% 16%;
+    --ring: 243 70% 66%;
   }
 
   * {
