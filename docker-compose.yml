@@ -18,6 +18,8 @@ services:
       dockerfile: apps/api/Dockerfile
     container_name: agency-api
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - '4000:4000'
     depends_on:
