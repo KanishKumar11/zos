@@ -12,7 +12,7 @@ import { DEFAULT_REQUEST_TIMEOUT_MS } from '../constants/app.constants';
 
 @Injectable()
 export class TimeoutInterceptor implements NestInterceptor {
-  constructor(private readonly ms: number = DEFAULT_REQUEST_TIMEOUT_MS) {}
+  private readonly ms = DEFAULT_REQUEST_TIMEOUT_MS;
 
   intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
     return next.handle().pipe(

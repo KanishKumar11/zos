@@ -42,7 +42,7 @@ const OnboardingItemSchema = SchemaFactory.createForClass(OnboardingItem);
 
 @Schema({ timestamps: true, collection: 'users' })
 export class User {
-  @Prop({ required: true, unique: true, lowercase: true, index: true }) email!: string;
+  @Prop({ required: true, lowercase: true }) email!: string;
   @Prop({ required: true }) passwordHash!: string;
   @Prop({ required: true }) name!: string;
   @Prop() phone?: string;
