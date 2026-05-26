@@ -51,7 +51,7 @@ export interface UserRow {
 
 export const teamApi = {
   list: (q: ListUsersQuery) =>
-    unwrap<{ items: UserRow[]; meta: Paginated<UserRow>['meta'] }>(api.get('/users', { params: q })),
+    unwrap<UserRow[]>(api.get('/users', { params: q })),
   byId: (id: string) => unwrap<UserRow>(api.get(`/users/${id}`)),
   me: () => unwrap<UserRow>(api.get('/users/me')),
   updateMe: (body: UpdateProfileInput) => unwrap<UserRow>(api.patch('/users/me', body)),

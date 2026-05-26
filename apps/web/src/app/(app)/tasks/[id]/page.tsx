@@ -21,6 +21,7 @@ import {
   useTaskComments,
   useUpdateTask,
 } from '@/features/tasks/tasks.hooks';
+import { PageHeader } from '@/components/layout/page-header';
 
 export default function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

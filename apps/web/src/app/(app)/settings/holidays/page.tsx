@@ -25,6 +25,7 @@ import {
   useDeleteHoliday,
   useHolidays,
 } from '@/features/settings/settings.hooks';
+import { PageHeader } from '@/components/layout/page-header';
 
 export default function HolidaysPage() {
   const currentYear = new Date().getFullYear();

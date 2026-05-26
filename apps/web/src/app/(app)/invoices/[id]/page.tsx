@@ -27,6 +27,7 @@ import {
   useRecordPayment,
   useSendInvoice,
 } from '@/features/invoices/invoices.hooks';
+import { PageHeader } from '@/components/layout/page-header';
 
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

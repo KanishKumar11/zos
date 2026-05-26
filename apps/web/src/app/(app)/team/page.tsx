@@ -127,8 +127,8 @@ export default function TeamPage() {
               <TR>
                 <TD colSpan={5}>Loading…</TD>
               </TR>
-            ) : list.data?.items.length ? (
-              list.data.items.map((u) => (
+            ) : list.data?.length ? (
+              list.data.map((u) => (
                 <TR key={u._id}>
                   <TD className="font-medium">{u.name}</TD>
                   <TD>{u.email}</TD>
