@@ -19,7 +19,8 @@ services:
     container_name: agency-api
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false   # local dev only; Coolify injects vars directly
     ports:
       - '4000:4000'
     depends_on:
