@@ -26,6 +26,7 @@ function usePageTitle() {
   const segments = pathname.split('/').filter(Boolean);
   if (segments.length === 0) return 'Dashboard';
   const last = segments[segments.length - 1];
+  if (!last) return 'Dashboard';
   return last.charAt(0).toUpperCase() + last.slice(1).replace(/-/g, ' ');
 }
 

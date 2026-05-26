@@ -169,7 +169,7 @@ function AdminMarkCard() {
             <Label>User</Label>
             <Select value={userId} onChange={(e) => setUserId(e.target.value)}>
               <option value="">Select…</option>
-              {(list.data?.items ?? []).map((u) => (
+              {(list.data ?? []).map((u) => (
                 <option key={u._id} value={u._id}>
                   {u.name}
                 </option>

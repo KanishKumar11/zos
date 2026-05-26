@@ -6,7 +6,6 @@ import type {
   BankDetailsInput,
   ListUsersQuery,
   OnboardingPatchInput,
-  Paginated,
   UpdateProfileInput,
   UserDocumentInput,
 } from '@agency/shared';
