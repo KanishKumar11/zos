@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,6 @@ import {
   type FreelancerPaymentRow,
   useAddFreelancerPayment,
   useCreateFreelancerPayment,
-  useDeleteFreelancerPayment,
   useFreelancerPayments,
 } from '@/features/freelancer-payments/freelancer-payments.hooks';
 
@@ -147,7 +146,6 @@ function ContractCard({ row }: { row: FreelancerPaymentRow }) {
   const [expanded, setExpanded] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const addPayment = useAddFreelancerPayment();
-  const del = useDeleteFreelancerPayment();
 
   const form = useForm<AddPaymentEntryInput>({
     defaultValues: { date: new Date().toISOString().slice(0, 10), amountPaise: 0 },
