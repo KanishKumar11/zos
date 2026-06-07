@@ -217,9 +217,7 @@ export class InvoicesService {
     return { billedPaise: billed, collectedPaise: collected, outstandingPaise: outstanding, overduePaise: overdue, counts };
   }
 
-  async aging(): Promise<{
-    buckets: { range: string; countInvoices: number; openPaise: number }[];
-  }> {
+  async aging(): Promise<{ range: string; countInvoices: number; openPaise: number }[]> {
     const now = Date.now();
     const open = await this.model
       .find({
@@ -240,8 +238,6 @@ export class InvoicesService {
       bucket.count++;
       bucket.paise += inv.totalPaise - inv.paidPaise;
     }
-    return {
-      buckets: buckets.map((b) => ({ range: b.range, countInvoices: b.count, openPaise: b.paise })),
-    };
+    return buckets.map((b) => ({ range: b.range, countInvoices: b.count, openPaise: b.paise }));
   }
 }
