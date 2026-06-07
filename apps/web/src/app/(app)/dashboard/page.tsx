@@ -39,7 +39,7 @@ import {
 } from '@/features/dashboard/dashboard.hooks';
 
 const shortMonth = (m: string) => {
-  const [, mo] = m.split('-');
+  const mo = m.split('-')[1] ?? '';
   return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo - 1] ?? m;
 };
 const toINR = (paise: number) => paise / 100;
