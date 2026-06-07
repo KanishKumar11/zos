@@ -221,10 +221,10 @@ export class DashboardService {
     const profitByMonth = months.map((m, i) => ({
       month: m,
       profitPaise:
-        revenueByMonth[i].collectedPaise -
-        payrollByMonth[i].totalNetPaise -
-        expensesByMonth[i].totalPaise -
-        freelancerByMonth[i].totalPaise,
+        (revenueByMonth[i]?.collectedPaise ?? 0) -
+        (payrollByMonth[i]?.totalNetPaise ?? 0) -
+        (expensesByMonth[i]?.totalPaise ?? 0) -
+        (freelancerByMonth[i]?.totalPaise ?? 0),
     }));
 
     return { revenueByMonth, payrollByMonth, expensesByMonth, freelancerByMonth, profitByMonth };
