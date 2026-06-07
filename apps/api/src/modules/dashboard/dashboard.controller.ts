@@ -1,5 +1,5 @@
 // Dashboard controller — owner / member endpoints.
-import { Controller, ForbiddenException, Get } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Query } from '@nestjs/common';
 
 import { Role } from '@agency/shared';
 
@@ -19,8 +19,20 @@ export class DashboardController {
     return this.svc.owner();
   }
 
+  @Get('owner/charts')
+  @Roles(Role.OWNER)
+  ownerCharts() {
+    return this.svc.ownerCharts();
+  }
+
+  @Get('owner/team-earnings')
+  @Roles(Role.OWNER)
+  teamEarnings(@Query('month') month?: string) {
+    return this.svc.teamEarnings(month);
+  }
+
   @Get('me')
-  member(@CurrentUser() user: JwtPayload) {
+  memberDashboard(@CurrentUser() user: JwtPayload) {
     if (!user) throw new ForbiddenException();
     return this.svc.member(user.sub);
   }

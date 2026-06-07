@@ -47,7 +47,7 @@ export function renderPayslipHtml(data: PayslipPdfData): string {
   <div class="muted">${data.agency.address ?? ''}${data.agency.gstin ? ' · GSTIN ' + data.agency.gstin : ''}</div>
   <div class="grid">
     <div class="card">
-      <h3>Employee</h3>
+      <h3>Team Member</h3>
       <div><strong>${data.employee.name}</strong></div>
       <div class="muted">${data.employee.designation ?? ''}${data.employee.department ? ' · ' + data.employee.department : ''}</div>
       <div class="muted">${data.employee.email}</div>

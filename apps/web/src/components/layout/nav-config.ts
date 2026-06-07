@@ -13,6 +13,8 @@ import {
   Receipt,
   Settings,
   ShieldCheck,
+  TrendingDown,
+  UserCheck,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -60,6 +62,8 @@ export const NAV: readonly NavSection[] = [
       { label: 'Pipeline', href: '/crm', icon: BarChart3, allow: [Role.OWNER] },
       { label: 'Invoices', href: '/invoices', icon: Receipt, allow: [Role.OWNER] },
       { label: 'Statements of Work', href: '/sows', icon: Briefcase, allow: [Role.OWNER] },
+      { label: 'Expenses', href: '/expenses', icon: TrendingDown, allow: [Role.OWNER] },
+      { label: 'Freelancers', href: '/freelancer-payments', icon: UserCheck, allow: [Role.OWNER] },
     ],
   },
   {

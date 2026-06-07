@@ -125,7 +125,9 @@ function Inner() {
                           ? 'text-red-600'
                           : inv.status === InvoiceStatus.PAID
                             ? 'text-green-600'
-                            : ''
+                            : inv.status === InvoiceStatus.WRITTEN_OFF
+                              ? 'text-muted-foreground line-through'
+                              : ''
                       }
                     >
                       {inv.status}

@@ -31,7 +31,7 @@ function Inner({ id }: { id: string }) {
     <div className="space-y-6">
       <PageHeader
         title={`Payroll run ${run.data?.month ?? '…'}`}
-        description={run.data ? `${run.data.status} · ${run.data.employeeCount} employees · ${formatPaise(run.data.totalNetPaise, 'INR')} total net` : undefined}
+        description={run.data ? `${run.data.status} · ${run.data.employeeCount} team members · ${formatPaise(run.data.totalNetPaise, 'INR')} total net` : undefined}
       />
 
       <Card>

@@ -135,7 +135,7 @@ export default function ProjectsPage() {
                   </TD>
                   <TD>{p.name}</TD>
                   <TD>{p.status}</TD>
-                  <TD>{p.members.length}</TD>
+                  <TD>{(p.members ?? []).length}</TD>
                   {isOwner && <TD>{p.clientBudgetPaise ? formatPaise(p.clientBudgetPaise, p.currency ?? 'INR') : '—'}</TD>}
                   {isOwner && <TD>{p.agencyMarginPaise ? formatPaise(p.agencyMarginPaise, p.currency ?? 'INR') : '—'}</TD>}
                 </TR>

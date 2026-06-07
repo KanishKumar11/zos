@@ -45,6 +45,8 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { UsersModule } from './modules/users/users.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
+import { FreelancerPaymentsModule } from './modules/freelancer-payments/freelancer-payments.module';
 
 @Module({
   imports: [
@@ -94,6 +96,8 @@ import { UsersModule } from './modules/users/users.module';
     ProjectsModule,
     SowModule,
     TasksModule,
+    ExpensesModule,
+    FreelancerPaymentsModule,
   ],
   providers: [
     { provide: APP_PIPE, useFactory: () => new ValidationPipe({ whitelist: true, transform: true }) },

@@ -69,7 +69,7 @@ function Inner() {
               <TR>
                 <TH>Month</TH>
                 <TH>Status</TH>
-                <TH>Employees</TH>
+                <TH>Team Members</TH>
                 <TH>Total net</TH>
                 <TH>Finalized</TH>
                 <TH />
