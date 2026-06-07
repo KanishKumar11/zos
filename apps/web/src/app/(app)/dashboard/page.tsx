@@ -14,15 +14,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import {
-  Briefcase,
-  FileText,
-  TrendingUp,
-  Clock,
-  CreditCard,
-  IndianRupee,
-  Users,
-} from 'lucide-react';
+import { Users } from 'lucide-react';
 import { Role } from '@agency/shared';
 
 import { Skeleton } from '@/components/ui/skeleton';
