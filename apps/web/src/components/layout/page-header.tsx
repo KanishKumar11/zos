@@ -16,10 +16,10 @@ export function PageHeader({
 }) {
   return (
     <div className={cn('flex items-start justify-between gap-4', className)}>
-      <div className="space-y-0.5">
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight uppercase">{title}</h1>
         {description && (
-          <p className="text-[13px] text-muted-foreground">{description}</p>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{description}</p>
         )}
       </div>
       {action && <div className="shrink-0">{action}</div>}

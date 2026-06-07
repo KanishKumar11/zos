@@ -18,7 +18,6 @@ import {
   Briefcase,
   FileText,
   TrendingUp,
-  CheckSquare,
   Clock,
   CreditCard,
   IndianRupee,
@@ -26,7 +25,6 @@ import {
 } from 'lucide-react';
 import { Role } from '@agency/shared';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatPaise } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
@@ -69,14 +67,14 @@ export default function DashboardPage() {
   }));
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-12 pb-12">
       {/* Greeting */}
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Hi, {user?.name?.split(' ')[0] ?? 'there'}
+        <h1 className="text-3xl font-bold tracking-tight uppercase">
+          AGENCY TERMINAL // {user?.name?.split(' ')[0] ?? 'SYSTEM'}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Here&apos;s what&apos;s happening across your workspace.
+        <p className="text-sm font-mono tracking-tight text-muted-foreground uppercase">
+          OVERVIEW AND SYSTEM METRICS
         </p>
       </div>
 
@@ -84,8 +82,8 @@ export default function DashboardPage() {
       {isOwner && (
         <>
           <section className="space-y-4">
-            <SectionHeader title="Agency overview" />
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <SectionHeader title="AGENCY METRICS" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border">
               {owner.isLoading ? (
                 <StatSkeletons count={4} />
               ) : owner.data ? (
@@ -93,19 +91,16 @@ export default function DashboardPage() {
                   <Stat
                     title="Active projects"
                     value={owner.data.activeProjects.toString()}
-                    icon={Briefcase}
                   />
                   <Stat
                     title="Active SOWs"
                     value={owner.data.activeSows.toString()}
-                    icon={FileText}
                   />
                   <Stat
                     title="Outstanding"
                     value={formatPaise(owner.data.invoices.outstanding, 'INR')}
                     description={`Overdue ${formatPaise(owner.data.invoices.overdue, 'INR')}`}
-                    icon={TrendingUp}
-                    iconClassName="text-warning"
+                    valueClassName="text-warning"
                   />
                   <Stat
                     title="Collected"
@@ -115,8 +110,6 @@ export default function DashboardPage() {
                         ? `Last payroll · ${owner.data.lastPayrollRun.month}`
                         : 'No payroll runs yet'
                     }
-                    icon={IndianRupee}
-                    iconClassName="text-success"
                   />
                 </>
               ) : null}
@@ -125,141 +118,126 @@ export default function DashboardPage() {
 
           {/* Revenue vs Cost chart */}
           <section className="space-y-4">
-            <SectionHeader title="Revenue & cost — last 12 months" />
+            <SectionHeader title="FINANCIAL PERFORMANCE // LAST 12M" />
             {charts.isLoading ? (
-              <Card><CardContent className="h-64 p-5"><Skeleton className="h-full w-full" /></CardContent></Card>
+              <div className="h-64 border border-border p-5 bg-background"><Skeleton className="h-full w-full rounded-none" /></div>
             ) : (
-              <Card>
-                <CardContent className="p-5">
-                  <ResponsiveContainer width="100%" height={280}>
-                    <AreaChart data={chartData} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
-                      <defs>
-                        <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
-                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                        </linearGradient>
-                        <linearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#22c55e" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.08} />
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                      <YAxis
-                        tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={56}
-                      />
-                      <Tooltip
-                        formatter={(v: number, name: string) => [fmtINR(v), name]}
-                        contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                      />
-                      <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-                      <Area type="monotone" dataKey="Revenue" stroke="#6366f1" fill="url(#revGrad)" strokeWidth={2} dot={false} />
-                      <Area type="monotone" dataKey="Profit" stroke="#22c55e" fill="url(#profitGrad)" strokeWidth={2} dot={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+              <div className="border border-border bg-background p-6">
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart data={chartData} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fontFamily: 'monospace' }} tickLine={false} axisLine={false} />
+                    <YAxis
+                      tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
+                      tick={{ fontSize: 11, fontFamily: 'monospace' }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={60}
+                    />
+                    <Tooltip
+                      formatter={(v: number, name: string) => [fmtINR(v), name]}
+                      contentStyle={{ fontSize: 12, borderRadius: 0, border: '1px solid var(--border)', background: 'var(--background)' }}
+                    />
+                    <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 12, fontFamily: 'monospace' }} />
+                    <Area type="step" dataKey="Revenue" stroke="currentColor" fill="currentColor" fillOpacity={0.05} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+                    <Area type="step" dataKey="Profit" stroke="#22c55e" fill="#22c55e" fillOpacity={0.05} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </section>
 
           {/* Payroll vs Expenses bar chart */}
           <section className="space-y-4">
-            <SectionHeader title="Cost breakdown — last 12 months" />
+            <SectionHeader title="COST BREAKDOWN // LAST 12M" />
             {charts.isLoading ? (
-              <Card><CardContent className="h-64 p-5"><Skeleton className="h-full w-full" /></CardContent></Card>
+              <div className="h-64 border border-border p-5 bg-background"><Skeleton className="h-full w-full rounded-none" /></div>
             ) : (
-              <Card>
-                <CardContent className="p-5">
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={chartData} margin={{ top: 4, right: 16, bottom: 0, left: 0 }} barSize={14}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.08} vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                      <YAxis
-                        tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={56}
-                      />
-                      <Tooltip
-                        formatter={(v: number, name: string) => [fmtINR(v), name]}
-                        contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                      />
-                      <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="Payroll" fill="#6366f1" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="Expenses" fill="#f97316" radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+              <div className="border border-border bg-background p-6">
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={chartData} margin={{ top: 4, right: 16, bottom: 0, left: 0 }} barSize={16}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fontFamily: 'monospace' }} tickLine={false} axisLine={false} />
+                    <YAxis
+                      tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
+                      tick={{ fontSize: 11, fontFamily: 'monospace' }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={60}
+                    />
+                    <Tooltip
+                      formatter={(v: number, name: string) => [fmtINR(v), name]}
+                      contentStyle={{ fontSize: 12, borderRadius: 0, border: '1px solid var(--border)', background: 'var(--background)' }}
+                      cursor={{ fill: 'currentColor', opacity: 0.05 }}
+                    />
+                    <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 12, fontFamily: 'monospace' }} />
+                    <Bar dataKey="Payroll" fill="currentColor" opacity={0.8} />
+                    <Bar dataKey="Expenses" fill="currentColor" opacity={0.3} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </section>
 
           {/* Team earnings */}
           <section className="space-y-4">
             <div className="flex items-center gap-4">
-              <SectionHeader title="Team earnings" />
+              <SectionHeader title="TEAM PAYROLL // DATA LOG" />
               <input
                 type="month"
                 value={earningsMonth}
                 onChange={(e) => setEarningsMonth(e.target.value)}
-                className="ml-auto rounded border bg-background px-2 py-1 text-sm"
+                className="ml-auto rounded-none border border-border bg-background px-3 py-1.5 text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <Users className="h-4 w-4" />
-                  {earningsMonth} · {teamEarnings.data?.members.length ?? 0} team members
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
+            <div className="border border-border bg-background">
+              <div className="flex items-center gap-2 p-4 border-b border-border text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                <Users className="h-3.5 w-3.5" />
+                <span>{earningsMonth} // {teamEarnings.data?.members.length ?? 0} ACTIVE MEMBERS</span>
+              </div>
+              <div>
                 {teamEarnings.isLoading ? (
-                  <div className="space-y-2 p-5">
-                    {[1,2,3].map((i) => <Skeleton key={i} className="h-8 w-full" />)}
+                  <div className="space-y-px bg-border p-4">
+                    {[1,2,3].map((i) => <Skeleton key={i} className="h-8 w-full rounded-none bg-background" />)}
                   </div>
                 ) : (teamEarnings.data?.members.length ?? 0) === 0 ? (
-                  <p className="p-5 text-sm text-muted-foreground">No payslips for this month.</p>
+                  <p className="p-6 text-sm font-mono text-muted-foreground uppercase">NO PAYSLIP RECORDS FOUND.</p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm font-mono">
                       <thead>
-                        <tr className="border-b text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                          <th className="px-5 py-2">Name</th>
-                          <th className="px-5 py-2 text-right">Gross</th>
-                          <th className="px-5 py-2 text-right">Deductions</th>
-                          <th className="px-5 py-2 text-right">Net Pay</th>
+                        <tr className="border-b border-border text-left text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/20">
+                          <th className="px-6 py-3">Identifier</th>
+                          <th className="px-6 py-3 text-right">Gross Pay</th>
+                          <th className="px-6 py-3 text-right">Deductions</th>
+                          <th className="px-6 py-3 text-right">Net Deposit</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-border">
                         {(teamEarnings.data?.members ?? []).map((m) => (
-                          <tr key={m.userId} className="border-b last:border-0 hover:bg-muted/30">
-                            <td className="px-5 py-2.5 font-medium">{m.name}</td>
-                            <td className="px-5 py-2.5 text-right tabular-nums">{formatPaise(m.grossPaise, 'INR')}</td>
-                            <td className="px-5 py-2.5 text-right tabular-nums text-destructive">
+                          <tr key={m.userId} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-6 py-3.5 font-medium">{m.name}</td>
+                            <td className="px-6 py-3.5 text-right">{formatPaise(m.grossPaise, 'INR')}</td>
+                            <td className="px-6 py-3.5 text-right text-destructive">
                               {m.deductionsPaise > 0 ? `−${formatPaise(m.deductionsPaise, 'INR')}` : '—'}
                             </td>
-                            <td className="px-5 py-2.5 text-right tabular-nums font-semibold">{formatPaise(m.netPaise, 'INR')}</td>
+                            <td className="px-6 py-3.5 text-right font-bold">{formatPaise(m.netPaise, 'INR')}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-muted/20 text-[12px] font-semibold">
-                          <td className="px-5 py-2.5">Total</td>
-                          <td className="px-5 py-2.5 text-right tabular-nums">
+                        <tr className="bg-primary text-primary-foreground text-[11px] font-bold uppercase tracking-widest">
+                          <td className="px-6 py-4">Total Aggregated</td>
+                          <td className="px-6 py-4 text-right">
                             {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.grossPaise, 0), 'INR')}
                           </td>
-                          <td className="px-5 py-2.5 text-right tabular-nums text-destructive">
+                          <td className="px-6 py-4 text-right">
                             {(() => {
                               const tot = (teamEarnings.data?.members ?? []).reduce((s, m) => s + m.deductionsPaise, 0);
                               return tot > 0 ? `−${formatPaise(tot, 'INR')}` : '—';
                             })()}
                           </td>
-                          <td className="px-5 py-2.5 text-right tabular-nums">
+                          <td className="px-6 py-4 text-right">
                             {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.netPaise, 0), 'INR')}
                           </td>
                         </tr>
@@ -267,38 +245,35 @@ export default function DashboardPage() {
                     </table>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </section>
         </>
       )}
 
       {/* All roles — personal snapshot */}
       <section className="space-y-4">
-        <SectionHeader title="My snapshot" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <SectionHeader title="PERSONAL SNAPSHOT // LOCAL" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border border border-border">
           {member.isLoading ? (
             <StatSkeletons count={3} />
           ) : (
             <>
               <Stat
-                title="Open tasks"
+                title="Active assignments"
                 value={(member.data?.openTasks ?? 0).toString()}
-                icon={CheckSquare}
               />
               <Stat
-                title="Pending leaves"
+                title="Pending time-off"
                 value={(member.data?.pendingLeaves ?? 0).toString()}
-                icon={Clock}
               />
               <Stat
-                title="Last payslip"
+                title="Latest deposit"
                 value={
                   member.data?.lastPayslip
                     ? formatPaise(member.data.lastPayslip.netPaise, 'INR')
                     : '—'
                 }
-                icon={CreditCard}
               />
             </>
           )}
@@ -312,8 +287,8 @@ export default function DashboardPage() {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="flex items-center gap-3">
-      <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+    <div className="flex items-center gap-4">
+      <h2 className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-foreground">
         {title}
       </h2>
       <div className="h-px flex-1 bg-border" />
@@ -325,38 +300,27 @@ function Stat({
   title,
   value,
   description,
-  icon: Icon,
-  iconClassName,
+  valueClassName,
 }: {
   title: string;
   value: string;
   description?: string;
-  icon: React.ElementType;
-  iconClassName?: string;
+  valueClassName?: string;
 }) {
   return (
-    <Card className="group transition-shadow hover:shadow-sm">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
-              {title}
-            </p>
-            <p className="mt-2.5 text-[26px] font-semibold leading-none tabular-nums tracking-tight">
-              {value}
-            </p>
-            {description && (
-              <p className="mt-2 text-[11px] text-muted-foreground">{description}</p>
-            )}
-          </div>
-          <div
-            className={`shrink-0 rounded-lg bg-primary/10 p-2.5 text-primary ${iconClassName ?? ''}`}
-          >
-            <Icon className="h-4 w-4" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="bg-background p-6 flex flex-col justify-between h-full group">
+      <p className="text-[10px] font-mono font-bold uppercase tracking-[0.1em] text-muted-foreground mb-4">
+        {title}
+      </p>
+      <div>
+        <p className={`text-4xl font-bold tracking-tighter ${valueClassName ?? ''}`}>
+          {value}
+        </p>
+        {description && (
+          <p className="mt-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">{description}</p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -364,13 +328,12 @@ function StatSkeletons({ count }: { count: number }) {
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
-        <Card key={i}>
-          <CardContent className="p-5 space-y-3">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-7 w-28" />
-          </CardContent>
-        </Card>
+        <div key={i} className="bg-background p-6 space-y-4">
+          <Skeleton className="h-3 w-24 rounded-none" />
+          <Skeleton className="h-10 w-28 rounded-none" />
+        </div>
       ))}
     </>
   );
 }
+
