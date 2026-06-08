@@ -7,11 +7,13 @@ import {
   listProjectsQuerySchema,
   projectMemberInputSchema,
   setMemberCostSchema,
+  setMemberPaidSchema,
   updateProjectSchema,
   type CreateProjectInput,
   type ListProjectsQuery,
   type ProjectMemberInput,
   type SetMemberCostInput,
+  type SetMemberPaidInput,
   type UpdateProjectInput,
 } from '@agency/shared';
 
@@ -91,6 +93,16 @@ export class ProjectsController {
     @Body(new ZodValidationPipe(setMemberCostSchema)) body: SetMemberCostInput,
   ) {
     return this.svc.setMemberCost(id, userId, body.amountPaise);
+  }
+
+  @Roles(Role.OWNER)
+  @Patch(':id/members/:userId/paid')
+  setMemberPaid(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('userId', ObjectIdPipe) userId: string,
+    @Body(new ZodValidationPipe(setMemberPaidSchema)) body: SetMemberPaidInput,
+  ) {
+    return this.svc.setMemberPaid(id, userId, body.paidPaise);
   }
 
   @Roles(Role.OWNER)

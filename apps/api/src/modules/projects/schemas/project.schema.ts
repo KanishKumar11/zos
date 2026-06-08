@@ -11,6 +11,7 @@ export class ProjectMember {
   role!: ProjectMemberRole;
   @Prop({ type: Date, default: () => new Date() }) addedAt!: Date;
   @Prop({ type: Number, default: 0 }) amountPaise!: number;
+  @Prop({ type: Number, default: 0 }) paidPaise!: number;
 }
 export const ProjectMemberSchema = SchemaFactory.createForClass(ProjectMember);
 

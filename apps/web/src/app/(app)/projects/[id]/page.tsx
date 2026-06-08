@@ -12,7 +12,7 @@ import { formatPaise } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { useProject, useSetMemberCost } from '@/features/projects/projects.hooks';
+import { useProject, useSetMemberCost, useSetMemberPaid } from '@/features/projects/projects.hooks';
 import { useTeamList } from '@/features/team/team.hooks';
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -81,7 +81,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <TH>Name</TH>
                 <TH>Role</TH>
                 <TH>Added</TH>
-                {isOwner && <TH>Paid (₹)</TH>}
+                {isOwner && <TH>Budgeted Pay</TH>}
+                {isOwner && <TH>Paid</TH>}
               </TR>
             </THead>
             <TBody>
@@ -95,6 +96,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   isOwner={isOwner}
                 />
               ))}
+              {isOwner && p.members.length > 0 && (
+                <TR>
+                  <TD colSpan={3} className="text-right text-xs text-muted-foreground">Total</TD>
+                  <TD className="font-semibold">{formatPaise(p.members.reduce((s, m) => s + (m.amountPaise ?? 0), 0), p.currency ?? 'INR')}</TD>
+                  <TD className="font-semibold text-green-700">{formatPaise(p.members.reduce((s, m) => s + (m.paidPaise ?? 0), 0), p.currency ?? 'INR')}</TD>
+                </TR>
+              )}
             </TBody>
           </Table>
         </CardContent>
@@ -103,27 +111,22 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   );
 }
 
-function MemberRow({
-  projectId,
-  member,
-  name,
+function EditableCell({
+  initialPaise,
   currency,
-  isOwner,
+  onSave,
 }: {
-  projectId: string;
-  member: { userId: string; role: string; addedAt: string; amountPaise: number };
-  name: string;
+  initialPaise: number;
   currency: string;
-  isOwner: boolean;
+  onSave: (paise: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [displayPaise, setDisplayPaise] = useState<number | null>(null);
   const committed = useRef(false);
   const dirty = useRef(false);
-  const setCost = useSetMemberCost();
 
-  const shownPaise = displayPaise ?? (member.amountPaise ?? 0);
+  const shownPaise = displayPaise ?? initialPaise;
 
   const startEdit = () => {
     committed.current = false;
@@ -141,14 +144,54 @@ function MemberRow({
     if (!isNaN(inr) && inr >= 0) {
       const paise = Math.round(inr * 100);
       setDisplayPaise(paise);
-      setCost.mutate({ id: projectId, userId: member.userId, amountPaise: paise });
+      onSave(paise);
     }
   };
 
-  const cancel = () => {
-    committed.current = true;
-    setEditing(false);
-  };
+  const cancel = () => { committed.current = true; setEditing(false); };
+
+  if (editing) {
+    return (
+      <Input
+        autoFocus
+        type="number"
+        min={0}
+        className="h-7 w-28 text-sm"
+        value={draft}
+        onChange={(e) => { dirty.current = true; setDraft(e.target.value); }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          if (e.key === 'Escape') cancel();
+        }}
+      />
+    );
+  }
+
+  return (
+    <button className="rounded px-1 text-left hover:bg-muted" onClick={startEdit} title="Click to edit">
+      {shownPaise > 0
+        ? formatPaise(shownPaise, currency)
+        : <span className="text-muted-foreground">— click to set</span>}
+    </button>
+  );
+}
+
+function MemberRow({
+  projectId,
+  member,
+  name,
+  currency,
+  isOwner,
+}: {
+  projectId: string;
+  member: { userId: string; role: string; addedAt: string; amountPaise: number; paidPaise: number };
+  name: string;
+  currency: string;
+  isOwner: boolean;
+}) {
+  const setCost = useSetMemberCost();
+  const setPaid = useSetMemberPaid();
 
   return (
     <TR>
@@ -157,31 +200,20 @@ function MemberRow({
       <TD>{new Date(member.addedAt).toLocaleDateString()}</TD>
       {isOwner && (
         <TD>
-          {editing ? (
-            <Input
-              autoFocus
-              type="number"
-              min={0}
-              className="h-7 w-28 text-sm"
-              value={draft}
-              onChange={(e) => { dirty.current = true; setDraft(e.target.value); }}
-              onBlur={commit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commit(); }
-                if (e.key === 'Escape') cancel();
-              }}
-            />
-          ) : (
-            <button
-              className="rounded px-1 text-left hover:bg-muted"
-              onClick={startEdit}
-              title="Click to edit"
-            >
-              {shownPaise > 0
-                ? formatPaise(shownPaise, currency)
-                : <span className="text-muted-foreground">— click to set</span>}
-            </button>
-          )}
+          <EditableCell
+            initialPaise={member.amountPaise ?? 0}
+            currency={currency}
+            onSave={(paise) => setCost.mutate({ id: projectId, userId: member.userId, amountPaise: paise })}
+          />
+        </TD>
+      )}
+      {isOwner && (
+        <TD>
+          <EditableCell
+            initialPaise={member.paidPaise ?? 0}
+            currency={currency}
+            onSave={(paise) => setPaid.mutate({ id: projectId, userId: member.userId, paidPaise: paise })}
+          />
         </TD>
       )}
     </TR>

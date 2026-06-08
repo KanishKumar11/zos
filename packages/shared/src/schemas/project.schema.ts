@@ -16,6 +16,11 @@ export const setMemberCostSchema = z.object({
 });
 export type SetMemberCostInput = z.infer<typeof setMemberCostSchema>;
 
+export const setMemberPaidSchema = z.object({
+  paidPaise: z.number().int().min(0),
+});
+export type SetMemberPaidInput = z.infer<typeof setMemberPaidSchema>;
+
 export const createProjectSchema = z.object({
   name: z.string().min(2).max(160),
   code: z.string().min(2).max(40),
