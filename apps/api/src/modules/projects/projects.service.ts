@@ -184,6 +184,16 @@ export class ProjectsService {
     return [...map.values()];
   }
 
+  /** OWNER-only: record how much was paid to a specific member for this project. */
+  async setMemberCost(projectId: string, userId: string, amountPaise: number): Promise<ProjectDocument> {
+    const doc = await this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec();
+    if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
+    const member = doc.members.find((m) => m.userId.toString() === userId);
+    if (!member) throw new NotFoundException({ code: ErrorCodes.MEMBER_NOT_FOUND, message: 'Member not found on project' });
+    member.amountPaise = amountPaise;
+    return doc.save();
+  }
+
   /** OWNER-only: payslip totals per member for this project's date range. */
   async memberCosts(id: string): Promise<{ userId: string; name: string; totalPaidPaise: number }[]> {
     const doc = await this.model.findOne({ _id: id, deletedAt: { $exists: false } }).exec();

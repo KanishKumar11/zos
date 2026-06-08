@@ -39,7 +39,7 @@ const ID = {
   // Projects
   pFenkmat: oid(), pSPFixes: oid(), pFoody: oid(),
   pSoftwareKadai: oid(), pTaxByAkram: oid(), pCityDental: oid(),
-  pSellercircle: oid(), pBallBoundary: oid(), pMendingMindPlatform: oid(), pMendingMindQuiz: oid(),
+  pSellercircle: oid(), pSellercircle2: oid(), pBallBoundary: oid(), pMendingMindPlatform: oid(), pMendingMindQuiz: oid(),
   pAllWheel: oid(), pSocialSecurity: oid(), pInterioDecor: oid(),
   pUnextdoor: oid(), pPNJFitness: oid(), pBestDiet: oid(),
   pSourcingScreen: oid(), pElectricMarshmallow: oid(), pGessure: oid(),
@@ -94,14 +94,14 @@ function invoice(
 function project(
   id: Types.ObjectId, name: string, code: string, clientId: Types.ObjectId | undefined,
   status: string, startDate: string, endDate: string | null,
-  membersList: { uid: Types.ObjectId; role: string }[],
+  membersList: { uid: Types.ObjectId; role: string; amountINR?: number }[],
   budgetINR = 0, marginINR = 0, desc = '',
 ) {
   return {
     _id: id, name, code, clientId, status, description: desc, brief: '',
     startDate: d(startDate), endDate: endDate ? d(endDate) : undefined,
     clientBudgetPaise: p(budgetINR), agencyMarginPaise: p(marginINR), currency: 'INR',
-    members: membersList.map((m) => ({ userId: m.uid, role: m.role, addedAt: d(startDate) })),
+    members: membersList.map((m) => ({ userId: m.uid, role: m.role, addedAt: d(startDate), amountPaise: p(m.amountINR ?? 0) })),
     createdAt: d(startDate), updatedAt: new Date(),
   };
 }
@@ -297,7 +297,8 @@ async function main() {
     project(ID.pSoftwareKadai, 'SoftwareKadai.com Development', 'SWKADAI', ID.cBluehutch, 'COMPLETED', '2025-02-06', '2025-02-28', [{ uid: ID.uShabd, role: L }], 4000, 1500, 'Full website development'),
     project(ID.pTaxByAkram, 'TaxBy Akram Website', 'TAXBYAKRAM', ID.cSculpt, 'COMPLETED', '2025-02-01', '2025-03-01', [{ uid: ID.uKanish, role: L }], 4000, 4000, 'Website done by Kanish for Sculpt Agency (Sampreet)'),
     project(ID.pCityDental, 'City Dental WordPress Website', 'CITYDENTAL', ID.cSP, 'COMPLETED', '2025-03-01', '2025-03-17', [{ uid: ID.uSidhak, role: L }], 5500, 3500, 'WordPress website for dental clinic'),
-    project(ID.pSellercircle, 'Sellercircle Website & Blog', 'SELLERCIRCLE', ID.cSellercircle, 'COMPLETED', '2025-03-01', '2026-01-31', [{ uid: ID.uShabd, role: L }, { uid: ID.uSidhak, role: C }], 27810, 19310, 'Website updates, blog section & virus removal'),
+    project(ID.pSellercircle, 'Sellercircle Website & Blog', 'SELLERCIRCLE', ID.cSellercircle, 'COMPLETED', '2025-03-01', '2025-05-31', [{ uid: ID.uShabd, role: L, amountINR: 4500 }], 18810, 14310, 'Website + blog page creation — Shabd'),
+    project(ID.pSellercircle2, 'Sellercircle Virus Removal & Updates', 'SELLERCIRCLE-V', ID.cSellercircle, 'COMPLETED', '2026-01-01', '2026-01-31', [{ uid: ID.uSidhak, role: L, amountINR: 4000 }], 9000, 5000, 'Virus removal & minor website updates — Sidhak'),
     project(ID.pBallBoundary, 'BallBoundary Website Updates', 'BALLBOUNDARY', ID.cBallBoundary, 'COMPLETED', '2025-04-03', '2025-04-03', [{ uid: ID.uKanish, role: L }], 1000, 1000, 'Website updates done by Kanish'),
     project(ID.pMendingMindQuiz, 'Mending Mind Quiz Website', 'MM-QUIZ', ID.cMendingMind, 'COMPLETED', '2025-04-01', '2025-07-20', [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }], 11700, 7700, 'Quiz website — fully paid (₹11.7k received Apr–Jul 2025)'),
     project(ID.pMendingMindPlatform, 'Mending Mind Platform', 'MM-PLATFORM', ID.cMendingMind, 'ACTIVE', '2025-10-01', null, [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }, { uid: ID.uGeetanjali, role: C }], 38000, 22500, 'Platform development — ₹18k pending from client'),
@@ -408,9 +409,12 @@ async function main() {
   inv(ID.cSP, ID.pCityDental, 'City Dental WordPress Website', 5500,
     [payment('2025-03-17', 5500)], '2025-03-17', 'PAID');
 
-  // Sellercircle (27810 total, PAID)
-  inv(ID.cSellercircle, ID.pSellercircle, 'Sellercircle Website, Blog & Virus Removal', 27810,
-    [payment('2025-03-31', 10000), payment('2025-04-30', 8810), payment('2026-01-17', 9000)], '2025-03-31', 'PAID');
+  // Sellercircle — Website & Blog (Shabd, 2 payments totalling 18810)
+  inv(ID.cSellercircle, ID.pSellercircle, 'Sellercircle Website & Blog Development', 18810,
+    [payment('2025-03-31', 10000), payment('2025-04-30', 8810)], '2025-03-31', 'PAID');
+  // Sellercircle — Virus Removal & Updates (Sidhak, Jan 2026)
+  inv(ID.cSellercircle, ID.pSellercircle2, 'Sellercircle Virus Removal & Updates', 9000,
+    [payment('2026-01-17', 9000)], '2026-01-01', 'PAID');
 
   // TaxBy Akram (4000, PAID — done by Kanish for Sculpt/Sampreet)
   inv(ID.cSculpt, ID.pTaxByAkram, 'TaxBy Akram Website Development', 4000,

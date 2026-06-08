@@ -6,10 +6,12 @@ import {
   createProjectSchema,
   listProjectsQuerySchema,
   projectMemberInputSchema,
+  setMemberCostSchema,
   updateProjectSchema,
   type CreateProjectInput,
   type ListProjectsQuery,
   type ProjectMemberInput,
+  type SetMemberCostInput,
   type UpdateProjectInput,
 } from '@agency/shared';
 
@@ -79,6 +81,16 @@ export class ProjectsController {
     @Param('userId', ObjectIdPipe) userId: string,
   ) {
     return this.svc.removeMember(id, userId);
+  }
+
+  @Roles(Role.OWNER)
+  @Patch(':id/members/:userId/cost')
+  setMemberCost(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('userId', ObjectIdPipe) userId: string,
+    @Body(new ZodValidationPipe(setMemberCostSchema)) body: SetMemberCostInput,
+  ) {
+    return this.svc.setMemberCost(id, userId, body.amountPaise);
   }
 
   @Roles(Role.OWNER)

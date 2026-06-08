@@ -10,6 +10,7 @@ import {
   type ProjectMemberInput,
   type UpdateProjectInput,
 } from '@agency/shared';
+import type { SetMemberCostInput } from '@agency/shared';
 
 import { api, unwrap, unwrapPaginated } from '@/lib/api-client';
 import { qk } from '@/lib/query-keys';
@@ -18,6 +19,7 @@ export interface ProjectMemberRow {
   userId: string;
   role: ProjectMemberRole;
   addedAt: string;
+  amountPaise: number;
 }
 export interface ProjectRow {
   _id: string;
@@ -55,6 +57,8 @@ const projectsApi = {
     unwrap<ProjectRow>(api.delete(`/projects/${id}/members/${userId}`)),
   remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/projects/${id}`)),
   memberCosts: (id: string) => unwrap<MemberCostRow[]>(api.get(`/projects/${id}/member-costs`)),
+  setMemberCost: (id: string, userId: string, body: SetMemberCostInput) =>
+    unwrap<ProjectRow>(api.patch(`/projects/${id}/members/${userId}/cost`, body)),
 };
 
 export function useProjects(q: ListProjectsQuery = {}) {
@@ -97,6 +101,18 @@ export function useAddProjectMember() {
     onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) }),
   });
 }
+export function useSetMemberCost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; userId: string; amountPaise: number }) =>
+      projectsApi.setMemberCost(vars.id, vars.userId, { amountPaise: vars.amountPaise }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
 export function useProjectMemberCosts(id: string | undefined) {
   return useQuery({
     queryKey: id ? ['projects', id, 'member-costs'] : ['projects', 'undefined', 'member-costs'],

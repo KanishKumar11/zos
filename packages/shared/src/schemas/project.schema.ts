@@ -7,8 +7,14 @@ import { objectIdSchema, isoDateSchema } from './common.schema';
 export const projectMemberInputSchema = z.object({
   userId: objectIdSchema,
   role: z.nativeEnum(ProjectMemberRole),
+  amountPaise: z.number().int().min(0).optional(),
 });
 export type ProjectMemberInput = z.infer<typeof projectMemberInputSchema>;
+
+export const setMemberCostSchema = z.object({
+  amountPaise: z.number().int().min(0),
+});
+export type SetMemberCostInput = z.infer<typeof setMemberCostSchema>;
 
 export const createProjectSchema = z.object({
   name: z.string().min(2).max(160),

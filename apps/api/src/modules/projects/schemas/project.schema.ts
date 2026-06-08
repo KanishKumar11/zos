@@ -10,6 +10,7 @@ export class ProjectMember {
   @Prop({ type: String, enum: Object.values(ProjectMemberRole), required: true })
   role!: ProjectMemberRole;
   @Prop({ type: Date, default: () => new Date() }) addedAt!: Date;
+  @Prop({ type: Number, default: 0 }) amountPaise!: number;
 }
 export const ProjectMemberSchema = SchemaFactory.createForClass(ProjectMember);
 
