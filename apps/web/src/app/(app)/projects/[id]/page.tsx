@@ -22,12 +22,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const role = useAuthStore((s) => s.user?.role);
   const isOwner = role === Role.OWNER;
   const team = useTeamList({ pageSize: 100 });
+  const invoices = useInvoices({ projectId: id });
 
   if (project.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!project.data) return <p className="text-sm text-muted-foreground">Not found.</p>;
   const p = project.data;
 
-  const invoices = useInvoices({ projectId: id });
   const nameMap = new Map((team.data ?? []).map((u) => [u._id, u.name]));
   const totalDevCost = (p.clientBudgetPaise ?? 0) - (p.agencyMarginPaise ?? 0);
 
