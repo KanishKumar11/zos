@@ -18,7 +18,7 @@ export type SetMemberCostInput = z.infer<typeof setMemberCostSchema>;
 
 export const addMemberPaymentSchema = z.object({
   amountPaise: z.number().int().min(1),
-  paidAt: isoDateSchema,
+  paidAt: z.string(),
   note: z.string().max(200).optional(),
 });
 export type AddMemberPaymentInput = z.infer<typeof addMemberPaymentSchema>;
