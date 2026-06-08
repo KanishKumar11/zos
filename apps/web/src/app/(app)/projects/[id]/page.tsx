@@ -29,7 +29,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const p = project.data;
 
   const nameMap = new Map((team.data ?? []).map((u) => [u._id, u.name]));
+  const cur = p.currency ?? 'INR';
   const totalDevCost = (p.clientBudgetPaise ?? 0) - (p.agencyMarginPaise ?? 0);
+  const invList = invoices.data ?? [];
+  const invoiceTotal = invList.reduce((s, i) => s + i.totalPaise, 0);
+  const clientReceived = invList.reduce((s, i) => s + i.paidPaise, 0);
+  const memberBudgeted = p.members.reduce((s, m) => s + (m.amountPaise ?? 0), 0);
+  const memberPaid = p.members.reduce((s, m) => s + (m.paidPaise ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -52,24 +58,30 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <CardContent className="grid gap-4 sm:grid-cols-3">
             <div className="rounded border p-3">
               <p className="text-xs text-muted-foreground">Client budget</p>
-              <p className="text-lg font-semibold">
-                {formatPaise(p.clientBudgetPaise ?? 0, p.currency ?? 'INR')}
-              </p>
+              <p className="text-lg font-semibold">{formatPaise(p.clientBudgetPaise ?? 0, cur)}</p>
             </div>
             <div className="rounded border p-3">
               <p className="text-xs text-muted-foreground">Dev cost</p>
-              <p className="text-lg font-semibold text-amber-600">
-                {formatPaise(totalDevCost, p.currency ?? 'INR')}
-              </p>
+              <p className="text-lg font-semibold text-amber-600">{formatPaise(totalDevCost, cur)}</p>
             </div>
             <div className="rounded border p-3">
               <p className="text-xs text-muted-foreground">Agency margin</p>
-              <p className="text-lg font-semibold text-green-600">
-                {formatPaise(p.agencyMarginPaise ?? 0, p.currency ?? 'INR')}
-              </p>
+              <p className="text-lg font-semibold text-green-600">{formatPaise(p.agencyMarginPaise ?? 0, cur)}</p>
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {isOwner && (
+        <SyncCard
+          currency={cur}
+          clientBudgetPaise={p.clientBudgetPaise ?? 0}
+          devCostPaise={totalDevCost}
+          invoiceTotal={invoiceTotal}
+          clientReceived={clientReceived}
+          memberBudgeted={memberBudgeted}
+          memberPaid={memberPaid}
+        />
       )}
 
       {isOwner && (invoices.data ?? []).length > 0 && (
@@ -148,8 +160,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               {isOwner && p.members.length > 0 && (
                 <TR>
                   <TD colSpan={3} className="text-right text-xs text-muted-foreground">Total</TD>
-                  <TD className="font-semibold">{formatPaise(p.members.reduce((s, m) => s + (m.amountPaise ?? 0), 0), p.currency ?? 'INR')}</TD>
-                  <TD className="font-semibold text-green-700">{formatPaise(p.members.reduce((s, m) => s + (m.paidPaise ?? 0), 0), p.currency ?? 'INR')}</TD>
+                  <TD className="font-semibold">{formatPaise(memberBudgeted, cur)}</TD>
+                  <TD className="font-semibold text-green-700">{formatPaise(memberPaid, cur)}</TD>
                 </TR>
               )}
             </TBody>
@@ -157,6 +169,78 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function SyncRow({
+  label, leftLabel, leftValue, rightLabel, rightValue, currency, invert = false,
+}: {
+  label: string; leftLabel: string; leftValue: number;
+  rightLabel: string; rightValue: number; currency: string; invert?: boolean;
+}) {
+  const diff = leftValue - rightValue;
+  const ok = diff === 0;
+  // invert: flag when left > right (e.g. team paid more than client paid us)
+  const warn = invert ? leftValue > rightValue : Math.abs(diff) > 0;
+  return (
+    <div className={`rounded border p-3 space-y-1 ${warn && !ok ? 'border-red-200 bg-red-50' : ok ? 'border-green-200 bg-green-50' : ''}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</span>
+        <span className={`text-xs font-semibold ${ok ? 'text-green-700' : warn ? 'text-red-600' : 'text-amber-600'}`}>
+          {ok ? '✓ Match' : warn ? `⚠ ${formatPaise(Math.abs(diff), currency)} gap` : `${formatPaise(Math.abs(diff), currency)} gap`}
+        </span>
+      </div>
+      <div className="flex justify-between text-sm">
+        <span className="text-muted-foreground">{leftLabel}</span>
+        <span className="font-medium">{formatPaise(leftValue, currency)}</span>
+      </div>
+      <div className="flex justify-between text-sm">
+        <span className="text-muted-foreground">{rightLabel}</span>
+        <span className="font-medium">{formatPaise(rightValue, currency)}</span>
+      </div>
+    </div>
+  );
+}
+
+function SyncCard({
+  currency, clientBudgetPaise, devCostPaise, invoiceTotal, clientReceived, memberBudgeted, memberPaid,
+}: {
+  currency: string; clientBudgetPaise: number; devCostPaise: number;
+  invoiceTotal: number; clientReceived: number; memberBudgeted: number; memberPaid: number;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sync Check</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 sm:grid-cols-3">
+        <SyncRow
+          label="Budget vs Invoice"
+          leftLabel="Project budget"
+          leftValue={clientBudgetPaise}
+          rightLabel="Invoice total"
+          rightValue={invoiceTotal}
+          currency={currency}
+        />
+        <SyncRow
+          label="Dev cost vs Member budgets"
+          leftLabel="Dev cost (budget − margin)"
+          leftValue={devCostPaise}
+          rightLabel="Total member budgets"
+          rightValue={memberBudgeted}
+          currency={currency}
+        />
+        <SyncRow
+          label="Cash flow"
+          leftLabel="Team paid out"
+          leftValue={memberPaid}
+          rightLabel="Client received"
+          rightValue={clientReceived}
+          currency={currency}
+          invert
+        />
+      </CardContent>
+    </Card>
   );
 }
 
