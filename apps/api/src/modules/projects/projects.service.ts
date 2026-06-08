@@ -191,6 +191,7 @@ export class ProjectsService {
     const member = doc.members.find((m) => m.userId.toString() === userId);
     if (!member) throw new NotFoundException({ code: ErrorCodes.MEMBER_NOT_FOUND, message: 'Member not found on project' });
     member.amountPaise = amountPaise;
+    doc.markModified('members');
     return doc.save();
   }
 

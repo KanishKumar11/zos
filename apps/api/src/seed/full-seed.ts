@@ -339,7 +339,7 @@ async function main() {
     project(ID.pVelotra, 'Velotra Website', 'VELOTRA', ID.cVelotra, 'ACTIVE', '2026-02-20', null, [{ uid: ID.uShivam, role: L }], 20000, 15000, 'Website development — ongoing, 20k total received so far; 15k balance to pay Shivam'),
     project(ID.pArowai, 'Arowai Website', 'AROWAI', ID.cArowai, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L }], 3000, 1500, 'Website development'),
     project(ID.pBitaminNaturals, 'Bitamin Naturals Website', 'BITAMINNATURALS', ID.cBitaminNaturals, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L }], 0, -1500, 'Client had payment issues — agency covered 1.5k cost from Arowai payment'),
-    project(ID.pDhawadaNGO, 'Dhawada NGO Website', 'DHAWADA-NGO', ID.cDhawada, 'ACTIVE', '2026-05-01', null, [{ uid: ID.uSidhak, role: L }], 14000, 12000, 'NGO website — 6k Hiristan pending from client'),
+    project(ID.pDhawadaNGO, 'Dhawada NGO Website', 'DHAWADA-NGO', ID.cDhawada, 'ACTIVE', '2026-05-01', null, [{ uid: ID.uSidhak, role: L, amountINR: 2000 }], 8000, 6000, 'NGO website — fully paid'),
     project(ID.pHiristan, 'Hiristan Website', 'HIRISTAN', ID.cDhawada, 'ACTIVE', '2026-05-01', null, [{ uid: ID.uKanish, role: L }], 8000, 2000, 'Part of Dhawada group — 6k pending from client'),
     project(ID.pSoulSurf, 'SoulSurf Website', 'NJG-SOULSURF', ID.cNJG, 'COMPLETED', '2026-02-15', '2026-03-06', [{ uid: ID.uShivam, role: L }], 12000, 7500, 'Website for NJ Graphica'),
     project(ID.pResto, 'Resto Shopify Website', 'NJG-RESTO', ID.cNJG, 'COMPLETED', '2026-04-01', '2026-04-21', [{ uid: ID.uGeetanjali, role: L }], 12000, 7000, 'Shopify website for NJ Graphica'),
@@ -598,9 +598,9 @@ async function main() {
   inv(ID.cArowai, ID.pArowai, 'Arowai Website', 3000,
     [payment('2026-05-18', 3000)], '2026-05-18', 'PAID');
 
-  // Dhawada NGO + Hiristan (10000 received, 6000 pending)
-  inv(ID.cDhawada, ID.pDhawadaNGO, 'Dhawada NGO Website', 14000,
-    [payment('2026-05-22', 8000)], '2026-05-22', 'PARTIALLY_PAID');
+  // Dhawada NGO
+  inv(ID.cDhawada, ID.pDhawadaNGO, 'Dhawada NGO Website', 8000,
+    [payment('2026-05-22', 8000)], '2026-05-22', 'PAID');
   inv(ID.cDhawada, ID.pHiristan, 'Hiristan Website', 8000,
     [payment('2026-05-22', 2000)], '2026-05-22', 'PARTIALLY_PAID');
 

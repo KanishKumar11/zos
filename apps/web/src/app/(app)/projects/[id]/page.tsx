@@ -1,7 +1,7 @@
 // Project detail.
 'use client';
 
-import { use, useState } from 'react';
+import { use, useRef, useState } from 'react';
 
 import { Role } from '@agency/shared';
 
@@ -117,16 +117,32 @@ function MemberRow({
   isOwner: boolean;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(String(Math.round((member.amountPaise ?? 0) / 100)));
+  const [draft, setDraft] = useState('');
+  const committed = useRef(false);
   const setCost = useSetMemberCost();
 
-  const save = () => {
+  const startEdit = () => {
+    committed.current = false;
+    setDraft(String(Math.round((member.amountPaise ?? 0) / 100)));
+    setEditing(true);
+  };
+
+  const commit = () => {
+    if (committed.current) return;
+    committed.current = true;
     setEditing(false);
     const inr = parseFloat(draft);
-    if (isNaN(inr) || inr < 0) return;
-    const paise = Math.round(inr * 100);
-    if (paise === member.amountPaise) return;
-    setCost.mutate({ id: projectId, userId: member.userId, amountPaise: paise });
+    if (!isNaN(inr) && inr >= 0) {
+      const paise = Math.round(inr * 100);
+      if (paise !== (member.amountPaise ?? 0)) {
+        setCost.mutate({ id: projectId, userId: member.userId, amountPaise: paise });
+      }
+    }
+  };
+
+  const cancel = () => {
+    committed.current = true;
+    setEditing(false);
   };
 
   return (
@@ -144,19 +160,21 @@ function MemberRow({
               className="h-7 w-28 text-sm"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onBlur={save}
+              onBlur={commit}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') save();
-                if (e.key === 'Escape') { setEditing(false); setDraft(String(Math.round((member.amountPaise ?? 0) / 100))); }
+                if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                if (e.key === 'Escape') cancel();
               }}
             />
           ) : (
             <button
               className="rounded px-1 text-left hover:bg-muted"
-              onClick={() => setEditing(true)}
+              onClick={startEdit}
               title="Click to edit"
             >
-              {member.amountPaise ? formatPaise(member.amountPaise, currency) : <span className="text-muted-foreground">— click to set</span>}
+              {(member.amountPaise ?? 0) > 0
+                ? formatPaise(member.amountPaise, currency)
+                : <span className="text-muted-foreground">— click to set</span>}
             </button>
           )}
         </TD>
