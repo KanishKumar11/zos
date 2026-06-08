@@ -33,10 +33,11 @@ export class InvoicesService {
     private readonly settings: SettingsService,
   ) {}
 
-  list(filter: { status?: InvoiceStatus; clientId?: string } = {}): Promise<InvoiceDocument[]> {
+  list(filter: { status?: InvoiceStatus; clientId?: string; projectId?: string } = {}): Promise<InvoiceDocument[]> {
     const q: Record<string, unknown> = { deletedAt: { $exists: false } };
     if (filter.status) q.status = filter.status;
     if (filter.clientId) q.clientId = new Types.ObjectId(filter.clientId);
+    if (filter.projectId) q.projectId = new Types.ObjectId(filter.projectId);
     return this.model.find(q).sort({ createdAt: -1 }).limit(500).exec();
   }
 

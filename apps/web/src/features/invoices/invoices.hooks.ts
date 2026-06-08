@@ -45,7 +45,7 @@ export interface InvoiceRow {
 }
 
 export const invoicesApi = {
-  list: (params: { status?: InvoiceStatus; clientId?: string } = {}) =>
+  list: (params: { status?: InvoiceStatus; clientId?: string; projectId?: string } = {}) =>
     unwrap<InvoiceRow[]>(api.get('/invoices', { params })),
   byId: (id: string) => unwrap<InvoiceRow>(api.get(`/invoices/${id}`)),
   create: (body: CreateInvoiceInput) => unwrap<InvoiceRow>(api.post('/invoices', body)),
@@ -71,7 +71,7 @@ export interface InvoiceAgingBucket {
   openPaise: number;
 }
 
-export function useInvoices(params: { status?: InvoiceStatus; clientId?: string } = {}) {
+export function useInvoices(params: { status?: InvoiceStatus; clientId?: string; projectId?: string } = {}) {
   return useQuery({
     queryKey: [...qk.invoices.all(), params],
     queryFn: () => invoicesApi.list(params),

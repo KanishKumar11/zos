@@ -94,14 +94,14 @@ function invoice(
 function project(
   id: Types.ObjectId, name: string, code: string, clientId: Types.ObjectId | undefined,
   status: string, startDate: string, endDate: string | null,
-  membersList: { uid: Types.ObjectId; role: string; amountINR?: number }[],
+  membersList: { uid: Types.ObjectId; role: string; amountINR?: number; paidINR?: number }[],
   budgetINR = 0, marginINR = 0, desc = '',
 ) {
   return {
     _id: id, name, code, clientId, status, description: desc, brief: '',
     startDate: d(startDate), endDate: endDate ? d(endDate) : undefined,
     clientBudgetPaise: p(budgetINR), agencyMarginPaise: p(marginINR), currency: 'INR',
-    members: membersList.map((m) => ({ userId: m.uid, role: m.role, addedAt: d(startDate), amountPaise: p(m.amountINR ?? 0) })),
+    members: membersList.map((m) => ({ userId: m.uid, role: m.role, addedAt: d(startDate), amountPaise: p(m.amountINR ?? 0), paidPaise: p(m.paidINR ?? 0) })),
     createdAt: d(startDate), updatedAt: new Date(),
   };
 }
@@ -328,13 +328,13 @@ async function main() {
     project(ID.pJouelcube, 'Jouelcube Website', 'JOUELCUBE', ID.cNamit, 'ACTIVE', '2026-02-12', null, [{ uid: ID.uSidhak, role: L }, { uid: ID.uHarshika, role: C }], 22000, 17000, 'Website development — part of 20k pending (G-Power + Jouelcube); 1k to Harshika pending'),
     project(ID.pDigitalMandir, 'Digital Mandir App', 'DIGITALMANDIR', ID.cDigitalMandir, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uGeetanjali, role: L }], 9000, 2000, 'App development — all received from client, agency owes 6k more to team'),
     project(ID.pHRBook, 'HR Book HRMS', 'HRBOOK', ID.cHorizon, 'ACTIVE', '2026-02-23', null, [{ uid: ID.uJaya, role: L }, { uid: ID.uSidhak, role: C }], 240000, 82500, 'HRMS platform — 172.5k pending from client; 52.5k to Jyoti (freelancer), 10k to Jaya, 20k to Sidhak pending'),
-    project(ID.pFirstrank, 'Firstrank Website & Platform', 'FIRSTRANK', ID.cFirstrank, 'ACTIVE', '2026-03-06', null, [{ uid: ID.uJaya, role: L }, { uid: ID.uKanish, role: C }], 85000, 57500, 'Website & platform development'),
-    project(ID.pRewardzy, 'Rewardzy Platform', 'REWARDZY', ID.cAnshulGlobal, 'ACTIVE', '2026-03-13', null, [{ uid: ID.uSidhak, role: L }], 30000, 9000, '9k pending from client; 12k to Sidhak pending'),
-    project(ID.pOnebox, 'Onebox Project', 'ONEBOX', ID.cOnebox, 'ACTIVE', '2026-03-14', null, [{ uid: ID.uKanish, role: L }], 40001, 12001, 'Platform development — 28k pending from client'),
-    project(ID.pRealEstate, 'Inno Transventive Real Estate App', 'INNO-REALESTATE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 30000 }], 88000, 58000, 'Real estate app — ₹56.95k pending from client; ₹30k to Shivam'),
+    project(ID.pFirstrank, 'Firstrank Website & Platform', 'FIRSTRANK', ID.cFirstrank, 'ACTIVE', '2026-03-06', null, [{ uid: ID.uJaya, role: L, amountINR: 45000, paidINR: 10000 }, { uid: ID.uSidhak, role: C, amountINR: 45000, paidINR: 0 }, { uid: ID.uKanish, role: C, amountINR: 0 }], 530000, 440000, 'Website & platform — 85k received of 530k; 10k of 45k paid to Jaya; 0 of 45k paid to Sidhak'),
+    project(ID.pRewardzy, 'Rewardzy Platform', 'REWARDZY', ID.cAnshulGlobal, 'ACTIVE', '2026-03-13', null, [{ uid: ID.uSidhak, role: L, amountINR: 12000, paidINR: 0 }], 30000, 18000, '9k pending from client; 12k to Sidhak (not paid yet)'),
+    project(ID.pOnebox, 'Onebox Project', 'ONEBOX', ID.cOnebox, 'ACTIVE', '2026-03-14', null, [{ uid: ID.uKanish, role: L, amountINR: 0 }, { uid: ID.uGeetanjali, role: C, amountINR: 10000 }], 40000, 30000, 'Platform development — 28k pending from client'),
+    project(ID.pRealEstate, 'Inno Transventive Real Estate App', 'INNO-REALESTATE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 30000 }], 87000, 57000, 'Real estate app — ₹60.95k pending from client; ₹30k to Shivam'),
     project(ID.pInnoWebsite, 'Inno Transventive Website', 'INNO-WEBSITE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 11000 }], 30000, 19000, 'Website development — ₹30k pending from client; ₹11k to Shivam'),
     project(ID.pNavisha, 'Navisha Website', 'SP-NAVISHA', ID.cSP, 'COMPLETED', '2026-03-15', '2026-03-27', [{ uid: ID.uJaya, role: L }], 12000, 7000, 'Website development'),
-    project(ID.pAvcoEnergy, 'Avco Energy Website', 'AVCO-ENERGY', ID.cStartiffy, 'COMPLETED', '2026-04-01', '2026-04-30', [{ uid: ID.uJaya, role: L }, { uid: ID.uSidhak, role: C }], 8000, 5000, 'Website development'),
+    project(ID.pAvcoEnergy, 'Avco Energy Website', 'AVCO-ENERGY', ID.cStartiffy, 'COMPLETED', '2026-04-01', '2026-04-30', [{ uid: ID.uJaya, role: L, amountINR: 2000, paidINR: 2000 }, { uid: ID.uSidhak, role: C, amountINR: 2000, paidINR: 2000 }], 8000, 4000, 'Website development'),
     project(ID.pEldeco, 'Eldeco Website', 'ELDECO', ID.cEldeco, 'ACTIVE', '2026-04-28', null, [{ uid: ID.uShivam, role: L, amountINR: 1000 }], 3500, 2500, 'Website development — more pending'),
     project(ID.pBroBuzz, 'Bro Buzz App', 'BROBUZZ', ID.cBroBuzz, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L }, { uid: ID.uJaya, role: C }], 60000, 42000, 'App development — 30k pending from client'),
     project(ID.pVelotra, 'Velotra Website', 'VELOTRA', ID.cVelotra, 'ACTIVE', '2026-02-20', null, [{ uid: ID.uShivam, role: L }], 20000, 15000, 'Website development — ongoing, 20k total received so far; 15k balance to pay Shivam'),
@@ -344,7 +344,7 @@ async function main() {
     project(ID.pHiristan, 'Hiristan Website', 'HIRISTAN', ID.cDhawada, 'ACTIVE', '2026-05-01', null, [{ uid: ID.uKanish, role: L }], 8000, 2000, 'Part of Dhawada group — 6k pending from client'),
     project(ID.pSoulSurf, 'SoulSurf Website', 'NJG-SOULSURF', ID.cNJG, 'COMPLETED', '2026-02-15', '2026-03-06', [{ uid: ID.uShivam, role: L }], 12000, 7500, 'Website for NJ Graphica'),
     project(ID.pResto, 'Resto Shopify Website', 'NJG-RESTO', ID.cNJG, 'COMPLETED', '2026-04-01', '2026-04-21', [{ uid: ID.uGeetanjali, role: L }], 12000, 7000, 'Shopify website for NJ Graphica'),
-    project(ID.pGPower, 'G-Power Website', 'GPOWER', ID.cNamit, 'ACTIVE', '2026-04-01', null, [{ uid: ID.uJaya, role: L }, { uid: ID.uHarshika, role: C }], 20000, 18500, 'Website development under Namit (same client as Jouelcube) — part of ₹20k combined G-Power+Jouelcube pending; ₹1k to Harshika pending'),
+    project(ID.pGPower, 'G-Power Website', 'GPOWER', ID.cNamit, 'ACTIVE', '2026-04-01', null, [{ uid: ID.uJaya, role: L, amountINR: 4000, paidINR: 4000 }, { uid: ID.uSidhak, role: C, amountINR: 2500, paidINR: 2500 }, { uid: ID.uHarshika, role: C, amountINR: 1000, paidINR: 1000 }], 20000, 12500, 'Website development under Namit (same client as Jouelcube); Jaya 4k, Sidhak 2.5k, Harshika 1k'),
   ]);
 
   // ── INVOICES (client → agency) ───────────────────────────────────────────────
@@ -559,20 +559,20 @@ async function main() {
   inv(ID.cHorizon, ID.pHRBook, 'HR Book HRMS Development', 240000,
     [payment('2026-02-23', 10000, 'Bank Transfer', 'Advance'), payment('2026-05-01', 57500, 'Bank Transfer', 'Milestone 2')], '2026-02-23', 'PARTIALLY_PAID');
 
-  // Firstrank (85000 received so far)
-  inv(ID.cFirstrank, ID.pFirstrank, 'Firstrank Website & Platform Development', 85000,
-    [payment('2026-03-06', 10000), payment('2026-04-04', 25000), payment('2026-06-02', 50000)], '2026-03-06', 'PAID');
+  // Firstrank (530000 total, 85000 received, 445000 pending)
+  inv(ID.cFirstrank, ID.pFirstrank, 'Firstrank Website & Platform Development', 530000,
+    [payment('2026-03-06', 10000, 'Bank Transfer', 'Advance'), payment('2026-04-04', 25000, 'Bank Transfer', 'Milestone 2'), payment('2026-06-02', 50000, 'Bank Transfer', 'Milestone 3')], '2026-03-06', 'PARTIALLY_PAID');
 
   // Rewardzy (30000 total, 21000 received, 9000 pending)
   inv(ID.cAnshulGlobal, ID.pRewardzy, 'Rewardzy Platform Development', 30000,
     [payment('2026-03-13', 9000, 'Bank Transfer', 'Advance'), payment('2026-04-19', 12000, 'Bank Transfer', 'Milestone 2')], '2026-03-13', 'PARTIALLY_PAID');
 
-  // Onebox (40001 total, 12001 received, 28000 pending)
-  inv(ID.cOnebox, ID.pOnebox, 'Onebox Project Development', 40001,
-    [payment('2026-03-14', 12001, 'Bank Transfer', 'Advance')], '2026-03-14', 'PARTIALLY_PAID');
+  // Onebox (40000 total, 12000 received, 28000 pending)
+  inv(ID.cOnebox, ID.pOnebox, 'Onebox Project Development', 40000,
+    [payment('2026-03-14', 12000, 'Bank Transfer', 'Advance')], '2026-03-14', 'PARTIALLY_PAID');
 
-  // Inno Transventive Real Estate App (88000 total, 26050 received, 61950 pending)
-  inv(ID.cInnoTrans, ID.pRealEstate, 'Real Estate App Development', 88000,
+  // Inno Transventive Real Estate App (87000 total, 26050 received, 60950 pending)
+  inv(ID.cInnoTrans, ID.pRealEstate, 'Real Estate App Development', 87000,
     [payment('2026-04-06', 13050, 'Bank Transfer', 'Advance'), payment('2026-05-21', 13000, 'Bank Transfer', 'Milestone 2')], '2026-04-06', 'PARTIALLY_PAID');
   // Inno Transventive Website (30000 total, 5000 received, 25000 pending)
   inv(ID.cInnoTrans, ID.pInnoWebsite, 'Website Development', 30000,
@@ -616,8 +616,9 @@ async function main() {
   inv(ID.cNJG, ID.pResto, 'Resto Shopify Website', 12000,
     [payment('2026-04-21', 12000)], '2026-04-21', 'PAID');
 
-  // G-Power (pending — no payment received yet from client)
-  // No invoice created; project exists as placeholder
+  // G-Power (20000 total — 2k advance was combined with Jouelcube advance, tracked there)
+  inv(ID.cNamit, ID.pGPower, 'G-Power Website Development', 20000,
+    [], '2026-04-01', 'UNPAID');
 
   // Hostinger Affiliate / Referral Income (agency income — kept as agency not personal)
   inv(ID.cHostinger, undefined, 'Hostinger Referral Affiliate Income Nov 2025', 4992.94,

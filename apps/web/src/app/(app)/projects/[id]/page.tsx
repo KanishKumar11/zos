@@ -12,6 +12,7 @@ import { formatPaise } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
 
 import { PageHeader } from '@/components/layout/page-header';
+import { useInvoices } from '@/features/invoices/invoices.hooks';
 import { useProject, useSetMemberCost, useSetMemberPaid } from '@/features/projects/projects.hooks';
 import { useTeamList } from '@/features/team/team.hooks';
 
@@ -26,6 +27,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   if (!project.data) return <p className="text-sm text-muted-foreground">Not found.</p>;
   const p = project.data;
 
+  const invoices = useInvoices({ projectId: id });
   const nameMap = new Map((team.data ?? []).map((u) => [u._id, u.name]));
   const totalDevCost = (p.clientBudgetPaise ?? 0) - (p.agencyMarginPaise ?? 0);
 
@@ -70,6 +72,53 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         </Card>
       )}
 
+      {isOwner && (invoices.data ?? []).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Client Payments</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(invoices.data ?? []).map((inv) => {
+              const outstanding = inv.totalPaise - inv.paidPaise;
+              return (
+                <div key={inv._id} className="rounded border p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{inv.number}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">
+                        Total: {formatPaise(inv.totalPaise, inv.currency)}
+                      </span>
+                      <InvoiceStatusBadge status={inv.status} />
+                    </div>
+                  </div>
+                  {inv.payments.length > 0 ? (
+                    <div className="space-y-1">
+                      {inv.payments.map((pay) => (
+                        <div key={pay._id} className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            {new Date(pay.paidAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            {pay.reference ? ` · ${pay.reference}` : ''}
+                          </span>
+                          <span className="font-medium text-green-700">+{formatPaise(pay.amountPaise, inv.currency)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No payments received yet</p>
+                  )}
+                  {outstanding > 0 && (
+                    <div className="flex justify-between text-sm border-t pt-2">
+                      <span className="text-muted-foreground">Outstanding</span>
+                      <span className="font-semibold text-amber-600">{formatPaise(outstanding, inv.currency)}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Members ({p.members.length})</CardTitle>
@@ -108,6 +157,21 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function InvoiceStatusBadge({ status }: { status: string }) {
+  const variants: Record<string, string> = {
+    PAID: 'bg-green-100 text-green-800',
+    PARTIALLY_PAID: 'bg-amber-100 text-amber-800',
+    UNPAID: 'bg-slate-100 text-slate-700',
+    OVERDUE: 'bg-red-100 text-red-800',
+    WRITTEN_OFF: 'bg-gray-100 text-gray-500',
+  };
+  return (
+    <span className={`rounded px-2 py-0.5 text-xs font-medium ${variants[status] ?? 'bg-slate-100 text-slate-700'}`}>
+      {status.replace('_', ' ')}
+    </span>
   );
 }
 
