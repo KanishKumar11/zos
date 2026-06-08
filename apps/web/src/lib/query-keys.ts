@@ -75,6 +75,10 @@ export const queryKeys = {
     pipeline: () => ['crm', 'pipeline'] as const,
     opp: (id: string) => ['crm', 'opp', id] as const,
   },
+  contracts: {
+    all: (params?: Record<string, unknown>) => ['contracts', params] as const,
+    byId: (id: string) => ['contracts', id] as const,
+  },
   invoices: {
     all: (params?: Record<string, unknown>) => ['invoices', params] as const,
     byId: (id: string) => ['invoices', id] as const,

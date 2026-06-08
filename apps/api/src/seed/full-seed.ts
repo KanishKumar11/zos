@@ -34,6 +34,8 @@ const ID = {
   cSellercircle: oid(), cSWBuild: oid(), cShivAiTelerad: oid(),
   cEldeco: oid(), cArowai: oid(), cBroBuzz: oid(),
   cBitaminNaturals: oid(), cOnebox: oid(), cHostinger: oid(),
+  // Contracts
+  cFoodyContract: oid(),
   // Projects
   pFenkmat: oid(), pSPFixes: oid(), pFoody: oid(),
   pSoftwareKadai: oid(), pTaxByAkram: oid(), pCityDental: oid(),
@@ -72,14 +74,15 @@ const lineItem = (desc: string, qty: number, unitINR: number) => ({
 });
 
 function invoice(
-  num: string, clientId: Types.ObjectId, projectId: Types.ObjectId | undefined,
+  num: string, clientId: Types.ObjectId,
+  projectId: Types.ObjectId | undefined, contractId: Types.ObjectId | undefined,
   desc: string, totalINR: number, payments_arr: ReturnType<typeof payment>[],
   issueDate: string, status: string, currency = 'INR',
 ) {
   const paidINR = payments_arr.reduce((s, x) => s + x.amountPaise / 100, 0);
   const subTotal = p(totalINR);
   return {
-    number: num, clientId, projectId,
+    number: num, clientId, projectId, contractId,
     lineItems: [lineItem(desc, 1, totalINR)],
     subTotalPaise: subTotal, gstPercent: 0, gstPaise: 0, totalPaise: subTotal,
     paidPaise: Math.round(paidINR * 100),
@@ -127,7 +130,7 @@ async function main() {
 
   for (const col of [
     'departments','designations','users','compensation_profiles','compensation_history',
-    'clients','projects','invoices','payroll_runs','payslips','settings',
+    'clients','contracts','projects','invoices','payroll_runs','payslips','settings',
   ]) { try { await db.collection(col).drop(); } catch {} }
   console.log('[full-seed] Collections cleared');
 
@@ -268,31 +271,47 @@ async function main() {
     mkClient(ID.cHostinger,      'Hostinger',               'Affiliate/referral income from Hostinger partnership'),
   ]);
 
+  // ── CONTRACTS ───────────────────────────────────────────────────────────────
+  await db.collection('contracts').insertMany([
+    {
+      _id: ID.cFoodyContract,
+      name: 'Foodyqueen Monthly Development Retainer',
+      clientId: ID.cFoody,
+      description: 'Ongoing monthly development contract — maintained by Kanish',
+      monthlyAmountPaise: p(22000),
+      currency: 'INR',
+      status: 'ACTIVE',
+      startDate: d('2025-01-01'),
+      notes: 'Month-to-month retainer. No fixed end date. Kanish handles all development.',
+      createdAt: d('2025-01-01'), updatedAt: new Date(),
+    },
+  ]);
+  console.log('[full-seed] Inserted contracts');
+
   // ── PROJECTS ────────────────────────────────────────────────────────────────
   const L = 'LEAD', C = 'CONTRIBUTOR';
 
   await db.collection('projects').insertMany([
-    project(ID.pFenkmat, 'Fenkmat WordPress News Website', 'FENKMAT', ID.cLalit, 'COMPLETED', '2024-12-19', '2025-01-01', [{ uid: ID.uSidhak, role: L }], 5500, 2600, 'WordPress news website design & development'),
+    project(ID.pFenkmat, 'Fenkmat WordPress News Website', 'FENKMAT', ID.cLalit, 'COMPLETED', '2024-12-19', '2025-01-01', [{ uid: ID.uSidhak, role: L }], 5500, 3100, 'WordPress news website design & development'),
     project(ID.pSPFixes, 'Social Parindee Website Fixes', 'SP-FIXES', ID.cSP, 'COMPLETED', '2025-01-10', '2025-01-20', [{ uid: ID.uKanish, role: L }], 1200, 1200, 'General website fixes done by owner'),
-    project(ID.pFoody, 'Foodyqueen Monthly Contract', 'FOODY-DEV', ID.cFoody, 'ACTIVE', '2025-01-15', null, [{ uid: ID.uKanish, role: L }], 0, 0, 'Ongoing monthly development contract — done by Kanish'),
     project(ID.pSoftwareKadai, 'SoftwareKadai.com Development', 'SWKADAI', ID.cBluehutch, 'COMPLETED', '2025-02-06', '2025-02-28', [{ uid: ID.uShabd, role: L }], 4000, 1500, 'Full website development'),
     project(ID.pTaxByAkram, 'TaxBy Akram Website', 'TAXBYAKRAM', ID.cSculpt, 'COMPLETED', '2025-02-01', '2025-03-01', [{ uid: ID.uKanish, role: L }], 4000, 4000, 'Website done by Kanish for Sculpt Agency (Sampreet)'),
     project(ID.pCityDental, 'City Dental WordPress Website', 'CITYDENTAL', ID.cSP, 'COMPLETED', '2025-03-01', '2025-03-17', [{ uid: ID.uSidhak, role: L }], 5500, 3500, 'WordPress website for dental clinic'),
-    project(ID.pSellercircle, 'Sellercircle Website & Blog', 'SELLERCIRCLE', ID.cSellercircle, 'COMPLETED', '2025-03-01', '2026-01-31', [{ uid: ID.uShabd, role: L }, { uid: ID.uSidhak, role: C }], 27810, 15310, 'Website updates, blog section & virus removal'),
+    project(ID.pSellercircle, 'Sellercircle Website & Blog', 'SELLERCIRCLE', ID.cSellercircle, 'COMPLETED', '2025-03-01', '2026-01-31', [{ uid: ID.uShabd, role: L }, { uid: ID.uSidhak, role: C }], 27810, 19310, 'Website updates, blog section & virus removal'),
     project(ID.pBallBoundary, 'BallBoundary Website Updates', 'BALLBOUNDARY', ID.cBallBoundary, 'COMPLETED', '2025-04-03', '2025-04-03', [{ uid: ID.uKanish, role: L }], 1000, 1000, 'Website updates done by Kanish'),
     project(ID.pMendingMindQuiz, 'Mending Mind Quiz Website', 'MM-QUIZ', ID.cMendingMind, 'COMPLETED', '2025-04-01', '2025-07-20', [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }], 11700, 7700, 'Quiz website — fully paid (₹11.7k received Apr–Jul 2025)'),
     project(ID.pMendingMindPlatform, 'Mending Mind Platform', 'MM-PLATFORM', ID.cMendingMind, 'ACTIVE', '2025-10-01', null, [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }, { uid: ID.uGeetanjali, role: C }], 38000, 22500, 'Platform development — ₹18k pending from client'),
     project(ID.pAllWheel, 'AllWheelDriving School Website', 'ALLWHEEL', ID.cAllWheel, 'COMPLETED', '2025-04-01', '2025-04-18', [{ uid: ID.uKanish, role: L }], 5500, 5500, 'WordPress website done by Kanish'),
     project(ID.pSocialSecurity, 'Social Security Website', 'SP-SECSEC', ID.cSP, 'COMPLETED', '2025-04-15', '2025-04-23', [{ uid: ID.uSidhak, role: L }], 5500, 3500, 'Social security website development'),
     project(ID.pInterioDecor, 'InterioDecor Website', 'SP-INTERIODECOR', ID.cSP, 'COMPLETED', '2025-05-15', '2025-05-26', [{ uid: ID.uSidhak, role: L }], 2600, 1600, 'Interior decoration website'),
-    project(ID.pUnextdoor, 'Unextdoor App & Website', 'UNEXTDOOR', ID.cUnextdoor, 'COMPLETED', '2025-06-19', '2025-09-24', [{ uid: ID.uKanish, role: L }, { uid: ID.uShivam, role: C }], 32500, 26500, 'Play store / App store deployment & website development'),
+    project(ID.pUnextdoor, 'Unextdoor App & Website', 'UNEXTDOOR', ID.cUnextdoor, 'COMPLETED', '2025-06-19', '2025-09-24', [{ uid: ID.uKanish, role: L }, { uid: ID.uShivam, role: C }], 32500, 29500, 'Play store / App store deployment & website development'),
     project(ID.pPNJFitness, 'PNJ Fitness Website', 'SP-PNJFITNESS', ID.cSP, 'COMPLETED', '2025-07-01', '2025-07-21', [{ uid: ID.uKanish, role: L }], 1200, 1200, 'Fitness website development'),
     project(ID.pBestDiet, 'Best Diet WordPress Website', 'SP-BESTDIET', ID.cSP, 'COMPLETED', '2025-07-15', '2025-07-29', [{ uid: ID.uShivam, role: L }], 5500, 3500, 'WordPress diet website'),
     project(ID.pSourcingScreen, 'Sourcing Screen Website', 'SOURCINGSCREEN', ID.cSourcingScreen, 'COMPLETED', '2025-07-29', '2026-01-30', [{ uid: ID.uSidhak, role: L }], 15100, 11100, 'Web development project'),
     project(ID.pElectricMarshmallow, 'Electric Marshmallow', 'ELECMARSH', ID.cNJG, 'COMPLETED', '2025-08-11', '2025-09-09', [{ uid: ID.uJaya, role: L }, { uid: ID.uSidhak, role: C }], 7500, 4000, 'Design & development for NJ Graphica'),
-    project(ID.pGessure, 'Gessure Platform & Maintenance', 'GESSURE', ID.cGessure, 'ACTIVE', '2025-09-17', null, [{ uid: ID.uSidhak, role: L }], 123001, 78001, 'Platform development + ongoing monthly maintenance — currently maintained by Sidhak only'),
+    project(ID.pGessure, 'Gessure Platform & Maintenance', 'GESSURE', ID.cGessure, 'ACTIVE', '2025-09-17', null, [{ uid: ID.uSidhak, role: L }], 123001, 78501, 'Platform development + ongoing monthly maintenance — currently maintained by Sidhak only'),
     project(ID.pShivmani, 'Shivmanicreations Website', 'SP-SHIVMANI', ID.cSP, 'COMPLETED', '2025-09-01', '2025-09-18', [{ uid: ID.uShivam, role: L }], 3500, 2500, 'Website development'),
-    project(ID.pShivAiTelerad, 'ShivAiTelerad Website', 'SHIVAI', ID.cShivAiTelerad, 'COMPLETED', '2025-09-19', '2025-11-22', [{ uid: ID.uGeetanjali, role: L }], 6500, 4000, 'Website development — total received 6.5k'),
+    project(ID.pShivAiTelerad, 'ShivAiTelerad Website', 'SHIVAI', ID.cShivAiTelerad, 'COMPLETED', '2025-09-19', '2025-11-22', [{ uid: ID.uGeetanjali, role: L }], 6500, 5500, 'Website development — total received 6.5k'),
     project(ID.pSWBuild, 'SW Build Website', 'SWBUILD', ID.cSWBuild, 'COMPLETED', '2025-09-27', '2025-09-27', [{ uid: ID.uSidhak, role: L }], 3500, 2000, 'Website development'),
     project(ID.pDhawada, 'Dhawada E-commerce Website', 'DHAWADA', ID.cDhawada, 'ACTIVE', '2025-10-06', null, [{ uid: ID.uJaya, role: L }], 56500, 36500, 'E-commerce website — 12.5k pending from client; logo by Shubham Jain (freelancer); Figma by Sampreet (freelancer)'),
     project(ID.pSkoal, 'Skoal Website', 'SKOAL', ID.cSkoal, 'ON_HOLD', '2025-11-22', null, [{ uid: ID.uSidhak, role: L }], 20000, 6000, 'Client ghosted after advance payment — total deal 20k, received 6k only. Work was delivered.'),
@@ -329,8 +348,14 @@ async function main() {
   // ── INVOICES (client → agency) ───────────────────────────────────────────────
   const invoices: object[] = [];
 
-  const inv = (cid: Types.ObjectId, pid: Types.ObjectId | undefined, desc: string, totalINR: number, pays: ReturnType<typeof payment>[], issueDate: string, status: string) => {
-    invoices.push(invoice(nextInv(), cid, pid, desc, totalINR, pays, issueDate, status));
+  const inv = (
+    cid: Types.ObjectId,
+    pid: Types.ObjectId | undefined,
+    desc: string, totalINR: number, pays: ReturnType<typeof payment>[],
+    issueDate: string, status: string,
+    contractId?: Types.ObjectId,
+  ) => {
+    invoices.push(invoice(nextInv(), cid, pid, contractId, desc, totalINR, pays, issueDate, status));
   };
 
   // Fenkmat (5500 total, PAID)
@@ -341,39 +366,39 @@ async function main() {
   inv(ID.cSP, ID.pSPFixes, 'Website Fixes', 1200,
     [payment('2025-01-15', 1200)], '2025-01-15', 'PAID');
 
-  // Foodyqueen — one invoice per month; multi-payment months combined into a single invoice
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-01', 22000,
+  // Foodyqueen — one invoice per month; all linked to the Foodyqueen retainer contract
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2025-01', 22000,
     [payment('2025-01-15', 3000), payment('2025-01-19', 3000), payment('2025-01-26', 3000), payment('2025-01-31', 13000)],
-    '2025-01-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-02', 3000,
-    [payment('2025-02-24', 3000)], '2025-02-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-03', 35000,
+    '2025-01-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2025-02', 3000,
+    [payment('2025-02-24', 3000)], '2025-02-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2025-03', 35000,
     [payment('2025-03-01', 16000), payment('2025-03-22', 6000), payment('2025-03-30', 13000)],
-    '2025-03-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-04', 22000,
-    [payment('2025-04-30', 22000)], '2025-04-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-06', 23000,
-    [payment('2025-06-09', 23000)], '2025-06-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-07', 44000,
-    [payment('2025-07-05', 22000), payment('2025-07-31', 22000)], '2025-07-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-09', 22000,
-    [payment('2025-09-07', 22000)], '2025-09-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-10', 22000,
-    [payment('2025-10-08', 2000), payment('2025-10-10', 20000)], '2025-10-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-11', 22000,
-    [payment('2025-11-17', 22000)], '2025-11-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-12', 22000,
-    [payment('2025-12-05', 22000)], '2025-12-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2026-01', 22000,
-    [payment('2026-01-31', 22000)], '2026-01-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2026-02', 22000,
-    [payment('2026-02-20', 22000)], '2026-02-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2026-03', 22000,
-    [payment('2026-03-20', 22000)], '2026-03-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2026-04', 22000,
-    [payment('2026-04-21', 22000)], '2026-04-01', 'PAID');
-  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2026-05', 22000,
-    [payment('2026-05-13', 22000)], '2026-05-01', 'PAID');
+    '2025-03-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2025-04', 22000,
+    [payment('2025-04-30', 22000)], '2025-04-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2025-06', 23000,
+    [payment('2025-06-09', 23000)], '2025-06-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2025-07', 44000,
+    [payment('2025-07-05', 22000), payment('2025-07-31', 22000)], '2025-07-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2025-09', 22000,
+    [payment('2025-09-07', 22000)], '2025-09-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2025-10', 22000,
+    [payment('2025-10-08', 2000), payment('2025-10-10', 20000)], '2025-10-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2025-11', 22000,
+    [payment('2025-11-17', 22000)], '2025-11-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2025-12', 22000,
+    [payment('2025-12-05', 22000)], '2025-12-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2026-01', 22000,
+    [payment('2026-01-31', 22000)], '2026-01-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2026-02', 22000,
+    [payment('2026-02-20', 22000)], '2026-02-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2026-03', 22000,
+    [payment('2026-03-20', 22000)], '2026-03-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2026-04', 22000,
+    [payment('2026-04-21', 22000)], '2026-04-01', 'PAID', ID.cFoodyContract);
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2026-05', 22000,
+    [payment('2026-05-13', 22000)], '2026-05-01', 'PAID', ID.cFoodyContract);
 
   // SoftwareKadai (4000, PAID)
   inv(ID.cBluehutch, ID.pSoftwareKadai, 'SoftwareKadai.com Development', 4000,

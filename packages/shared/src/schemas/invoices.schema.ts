@@ -15,6 +15,7 @@ export const createInvoiceSchema = z.object({
   number: z.string().min(2).max(40),
   clientId: objectIdSchema,
   projectId: objectIdSchema.optional(),
+  contractId: objectIdSchema.optional(),
   lineItems: z.array(invoiceLineItemSchema).min(1),
   gstPercent: z.number().min(0).max(50).optional(),
   currency: z.string().length(3).optional(),

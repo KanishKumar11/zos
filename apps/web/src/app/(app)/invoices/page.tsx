@@ -13,6 +13,7 @@ import { formatPaise } from '@/lib/formatters';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { useClients } from '@/features/clients/clients.hooks';
+import { useContracts } from '@/features/contracts/contracts.hooks';
 import { useInvoices } from '@/features/invoices/invoices.hooks';
 import { useInvoiceAging, useInvoiceDashboard } from '@/features/invoices/invoices.hooks';
 import { useProjects } from '@/features/projects/projects.hooks';
@@ -31,10 +32,12 @@ function Inner() {
   const aging = useInvoiceAging();
   const clients = useClients();
   const projects = useProjects({ pageSize: 200 });
+  const contracts = useContracts();
   const d = dash.data;
 
   const clientMap = new Map((clients.data ?? []).map((c) => [c._id, c.name]));
   const projectMap = new Map((projects.data?.items ?? []).map((p) => [p._id, p.name]));
+  const contractMap = new Map((contracts.data ?? []).map((c) => [c._id, c.name]));
   return (
     <div className="space-y-6">
       <PageHeader title="Invoices" description="Billing and collections overview." />
@@ -110,7 +113,7 @@ function Inner() {
                 <TH>Number</TH>
                 <TH>Issued</TH>
                 <TH>Client</TH>
-                <TH>Project</TH>
+                <TH>Project / Contract</TH>
                 <TH>Status</TH>
                 <TH>Total</TH>
                 <TH>Paid</TH>
@@ -128,7 +131,13 @@ function Inner() {
                   </TD>
                   <TD>{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString() : '—'}</TD>
                   <TD>{clientMap.get(inv.clientId) ?? inv.clientId.slice(-6)}</TD>
-                  <TD>{inv.projectId ? (projectMap.get(inv.projectId) ?? '—') : '—'}</TD>
+                  <TD>
+                    {inv.projectId
+                      ? (projectMap.get(inv.projectId) ?? '—')
+                      : inv.contractId
+                        ? (contractMap.get(inv.contractId) ?? '—')
+                        : '—'}
+                  </TD>
                   <TD>
                     <span
                       className={

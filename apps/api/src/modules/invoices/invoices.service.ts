@@ -79,6 +79,7 @@ export class InvoicesService {
       ...input,
       clientId: new Types.ObjectId(input.clientId),
       projectId: input.projectId ? new Types.ObjectId(input.projectId) : undefined,
+      contractId: input.contractId ? new Types.ObjectId(input.contractId) : undefined,
       status: InvoiceStatus.DRAFT,
       currency: input.currency ?? 'INR',
     });
@@ -91,6 +92,7 @@ export class InvoicesService {
     Object.assign(doc, input);
     if (input.clientId) doc.clientId = new Types.ObjectId(input.clientId);
     if (input.projectId) doc.projectId = new Types.ObjectId(input.projectId);
+    if (input.contractId) doc.contractId = new Types.ObjectId(input.contractId);
     this.computeTotals(doc);
     this.updateStatusByPayments(doc);
     return doc.save();

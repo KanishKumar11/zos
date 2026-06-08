@@ -29,6 +29,7 @@ export interface InvoiceRow {
   number: string;
   clientId: string;
   projectId?: string;
+  contractId?: string;
   lineItems: InvoiceLineItemRow[];
   subTotalPaise: number;
   gstPercent: number;

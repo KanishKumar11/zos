@@ -14,3 +14,4 @@ export * from './tasks.schema';
 export * from './sow.schema';
 export * from './clients.schema';
 export * from './invoices.schema';
+export * from './contracts.schema';

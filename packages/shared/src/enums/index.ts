@@ -16,3 +16,4 @@ export * from './invoice-status.enum';
 export * from './notification-type.enum';
 export * from './audience-type.enum';
 export * from './audit-action.enum';
+export * from './contract-status.enum';

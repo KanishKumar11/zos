@@ -27,6 +27,7 @@ export class Invoice {
   @Prop({ type: MS.Types.ObjectId, ref: 'Client', required: true, index: true })
   clientId!: Types.ObjectId;
   @Prop({ type: MS.Types.ObjectId, ref: 'Project' }) projectId?: Types.ObjectId;
+  @Prop({ type: MS.Types.ObjectId, ref: 'Contract' }) contractId?: Types.ObjectId;
   @Prop({ type: [InvoiceLineItemSchema], default: [] }) lineItems!: InvoiceLineItem[];
   @Prop({ default: 0, type: Number }) subTotalPaise!: number;
   @Prop({ default: 0, type: Number }) gstPercent!: number;

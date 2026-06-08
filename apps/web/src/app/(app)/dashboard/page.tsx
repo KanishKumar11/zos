@@ -158,41 +158,41 @@ export default function DashboardPage() {
               ) : (teamEarnings.data?.members.length ?? 0) === 0 ? (
                 <p className="py-12 text-center text-sm font-mono uppercase tracking-[0.2em] text-muted-foreground">No ledger entries.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="overflow-x-auto -mx-4 md:-mx-8 px-4 md:px-8">
+                  <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead>
-                      <tr className="border-b border-foreground text-left text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground">
-                        <th className="pb-4 font-normal">Team Member</th>
-                        <th className="pb-4 text-right font-normal">Gross Pay</th>
-                        <th className="pb-4 text-right font-normal">Deductions</th>
-                        <th className="pb-4 text-right font-normal">Net Deposit</th>
+                      <tr>
+                        <th className="pb-4 pt-2 font-semibold text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap">Team Member</th>
+                        <th className="pb-4 pt-2 font-semibold text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Gross Pay</th>
+                        <th className="pb-4 pt-2 font-semibold text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Deductions</th>
+                        <th className="pb-4 pt-2 font-semibold text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Net Deposit</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border">
+                    <tbody>
                       {(teamEarnings.data?.members ?? []).map((m) => (
-                        <tr key={m.userId} className="group hover:bg-muted/10 transition-colors">
-                          <td className="py-6 text-xl md:text-2xl font-medium tracking-tight text-foreground">{m.name}</td>
-                          <td className="py-6 text-xl md:text-2xl text-right font-medium text-muted-foreground">{formatPaise(m.grossPaise, 'INR')}</td>
-                          <td className="py-6 text-xl md:text-2xl text-right font-medium text-destructive">
+                        <tr key={m.userId} className="group hover:bg-muted/5 transition-colors">
+                          <td className="py-5 text-sm font-medium text-foreground border-b border-border align-middle">{m.name}</td>
+                          <td className="py-5 text-sm text-foreground border-b border-border align-middle text-right">{formatPaise(m.grossPaise, 'INR')}</td>
+                          <td className="py-5 text-sm text-destructive border-b border-border align-middle text-right">
                             {m.deductionsPaise > 0 ? `−${formatPaise(m.deductionsPaise, 'INR')}` : '—'}
                           </td>
-                          <td className="py-6 text-xl md:text-2xl text-right font-medium text-foreground">{formatPaise(m.netPaise, 'INR')}</td>
+                          <td className="py-5 text-sm font-semibold text-foreground border-b border-border align-middle text-right">{formatPaise(m.netPaise, 'INR')}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="border-t border-foreground text-foreground">
-                        <td className="py-8 text-xl md:text-2xl font-medium tracking-tight">Total Aggregated</td>
-                        <td className="py-8 text-xl md:text-2xl text-right font-medium text-muted-foreground">
+                      <tr>
+                        <td className="py-5 text-sm font-semibold text-foreground border-b-0 align-middle">Total Aggregated</td>
+                        <td className="py-5 text-sm text-muted-foreground border-b-0 align-middle text-right">
                           {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.grossPaise, 0), 'INR')}
                         </td>
-                        <td className="py-8 text-xl md:text-2xl text-right font-medium text-destructive">
+                        <td className="py-5 text-sm text-destructive border-b-0 align-middle text-right">
                           {(() => {
                             const tot = (teamEarnings.data?.members ?? []).reduce((s, m) => s + m.deductionsPaise, 0);
                             return tot > 0 ? `−${formatPaise(tot, 'INR')}` : '—';
                           })()}
                         </td>
-                        <td className="py-8 text-xl md:text-2xl text-right font-medium text-foreground">
+                        <td className="py-5 text-sm font-semibold text-foreground border-b-0 align-middle text-right">
                           {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.netPaise, 0), 'INR')}
                         </td>
                       </tr>
