@@ -341,29 +341,39 @@ async function main() {
   inv(ID.cSP, ID.pSPFixes, 'Website Fixes', 1200,
     [payment('2025-01-15', 1200)], '2025-01-15', 'PAID');
 
-  // Foodyqueen — one invoice per payment (retainer, amounts vary)
-  const foodyPays = [
-    ['2025-01-15', 3000], ['2025-01-19', 3000], ['2025-01-26', 3000], ['2025-01-31', 13000],
-    ['2025-02-24', 3000],
-    ['2025-03-01', 16000], ['2025-03-22', 6000], ['2025-03-30', 13000],
-    ['2025-04-30', 22000],
-    ['2025-06-09', 23000],
-    ['2025-07-05', 22000], ['2025-07-31', 22000],
-    ['2025-09-07', 22000],
-    ['2025-10-08', 2000], ['2025-10-10', 20000],
-    ['2025-11-17', 22000],
-    ['2025-12-05', 22000],
-    ['2026-01-31', 22000],
-    ['2026-02-20', 22000],
-    ['2026-03-20', 22000],
-    ['2026-04-21', 22000],
-    ['2026-05-13', 22000],
-  ] as [string, number][];
-
-  for (const [dt, amt] of foodyPays) {
-    inv(ID.cFoody, ID.pFoody, `Monthly Development Contract — ${dt.slice(0, 7)}`, amt,
-      [payment(dt, amt)], dt, 'PAID');
-  }
+  // Foodyqueen — one invoice per month; multi-payment months combined into a single invoice
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-01', 22000,
+    [payment('2025-01-15', 3000), payment('2025-01-19', 3000), payment('2025-01-26', 3000), payment('2025-01-31', 13000)],
+    '2025-01-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-02', 3000,
+    [payment('2025-02-24', 3000)], '2025-02-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-03', 35000,
+    [payment('2025-03-01', 16000), payment('2025-03-22', 6000), payment('2025-03-30', 13000)],
+    '2025-03-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-04', 22000,
+    [payment('2025-04-30', 22000)], '2025-04-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-06', 23000,
+    [payment('2025-06-09', 23000)], '2025-06-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-07', 44000,
+    [payment('2025-07-05', 22000), payment('2025-07-31', 22000)], '2025-07-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-09', 22000,
+    [payment('2025-09-07', 22000)], '2025-09-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-10', 22000,
+    [payment('2025-10-08', 2000), payment('2025-10-10', 20000)], '2025-10-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-11', 22000,
+    [payment('2025-11-17', 22000)], '2025-11-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2025-12', 22000,
+    [payment('2025-12-05', 22000)], '2025-12-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2026-01', 22000,
+    [payment('2026-01-31', 22000)], '2026-01-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2026-02', 22000,
+    [payment('2026-02-20', 22000)], '2026-02-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2026-03', 22000,
+    [payment('2026-03-20', 22000)], '2026-03-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2026-04', 22000,
+    [payment('2026-04-21', 22000)], '2026-04-01', 'PAID');
+  inv(ID.cFoody, ID.pFoody, 'Monthly Development Contract — 2026-05', 22000,
+    [payment('2026-05-13', 22000)], '2026-05-01', 'PAID');
 
   // SoftwareKadai (4000, PAID)
   inv(ID.cBluehutch, ID.pSoftwareKadai, 'SoftwareKadai.com Development', 4000,

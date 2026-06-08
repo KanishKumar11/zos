@@ -108,6 +108,7 @@ function Inner() {
             <THead>
               <TR>
                 <TH>Number</TH>
+                <TH>Issued</TH>
                 <TH>Client</TH>
                 <TH>Project</TH>
                 <TH>Status</TH>
@@ -125,6 +126,7 @@ function Inner() {
                       {inv.number}
                     </Link>
                   </TD>
+                  <TD>{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString() : '—'}</TD>
                   <TD>{clientMap.get(inv.clientId) ?? inv.clientId.slice(-6)}</TD>
                   <TD>{inv.projectId ? (projectMap.get(inv.projectId) ?? '—') : '—'}</TD>
                   <TD>
