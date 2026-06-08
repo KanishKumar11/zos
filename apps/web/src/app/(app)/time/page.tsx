@@ -51,7 +51,7 @@ export default function TimePage() {
                 {...form.register('projectId')}
               >
                 <option value="">Select…</option>
-                {(projects.data?.items ?? []).map((p) => (
+                {(projects.data ?? []).map((p) => (
                   <option key={p._id} value={p._id}>
                     {p.code} — {p.name}
                   </option>

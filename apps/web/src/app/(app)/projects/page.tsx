@@ -126,7 +126,7 @@ export default function ProjectsPage() {
               </TR>
             </THead>
             <TBody>
-              {(list.data?.items ?? []).map((p) => (
+              {(list.data ?? []).map((p) => (
                 <TR key={p._id}>
                   <TD>
                     <Link className="underline" href={`/projects/${p._id}`}>

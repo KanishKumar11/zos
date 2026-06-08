@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import {
+  ProjectStatus,
   Role,
   createClientSchema,
   type CreateClientInput,
@@ -28,6 +29,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { useClients, useCreateClient } from '@/features/clients/clients.hooks';
+import { useProjects } from '@/features/projects/projects.hooks';
 
 export default function ClientsPage() {
   return (
@@ -42,6 +44,16 @@ function Inner() {
   const [search, setSearch] = useState('');
   const list = useClients(search || undefined);
   const create = useCreateClient();
+  const projects = useProjects();
+
+  const projectCountMap = new Map<string, { total: number; active: number }>();
+  for (const p of projects.data ?? []) {
+    if (!p.clientId) continue;
+    const entry = projectCountMap.get(p.clientId) ?? { total: 0, active: 0 };
+    entry.total += 1;
+    if (p.status === ProjectStatus.ACTIVE) entry.active += 1;
+    projectCountMap.set(p.clientId, entry);
+  }
   const form = useForm<CreateClientInput>({
     resolver: zodResolver(createClientSchema),
     defaultValues: { name: '' },
@@ -111,6 +123,8 @@ function Inner() {
                 <TH>Name</TH>
                 <TH>GSTIN</TH>
                 <TH>Contacts</TH>
+                <TH>Projects</TH>
+                <TH>Active</TH>
               </TR>
             </THead>
             <TBody>
@@ -123,6 +137,8 @@ function Inner() {
                   </TD>
                   <TD>{c.gstin || '—'}</TD>
                   <TD>{c.contacts.length}</TD>
+                  <TD>{projectCountMap.get(c._id)?.total ?? 0}</TD>
+                  <TD>{projectCountMap.get(c._id)?.active ?? 0}</TD>
                 </TR>
               ))}
             </TBody>

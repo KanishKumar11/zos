@@ -12,8 +12,10 @@ import { env } from '@/lib/env';
 import { formatPaise } from '@/lib/formatters';
 
 import { PageHeader } from '@/components/layout/page-header';
+import { useClients } from '@/features/clients/clients.hooks';
 import { useInvoices } from '@/features/invoices/invoices.hooks';
 import { useInvoiceAging, useInvoiceDashboard } from '@/features/invoices/invoices.hooks';
+import { useProjects } from '@/features/projects/projects.hooks';
 
 export default function InvoicesPage() {
   return (
@@ -27,7 +29,12 @@ function Inner() {
   const list = useInvoices();
   const dash = useInvoiceDashboard();
   const aging = useInvoiceAging();
+  const clients = useClients();
+  const projects = useProjects();
   const d = dash.data;
+
+  const clientMap = new Map((clients.data ?? []).map((c) => [c._id, c.name]));
+  const projectMap = new Map((projects.data ?? []).map((p) => [p._id, p.name]));
   return (
     <div className="space-y-6">
       <PageHeader title="Invoices" description="Billing and collections overview." />
@@ -102,6 +109,7 @@ function Inner() {
               <TR>
                 <TH>Number</TH>
                 <TH>Client</TH>
+                <TH>Project</TH>
                 <TH>Status</TH>
                 <TH>Total</TH>
                 <TH>Paid</TH>
@@ -117,7 +125,8 @@ function Inner() {
                       {inv.number}
                     </Link>
                   </TD>
-                  <TD>{inv.clientId.slice(-6)}</TD>
+                  <TD>{clientMap.get(inv.clientId) ?? inv.clientId.slice(-6)}</TD>
+                  <TD>{inv.projectId ? (projectMap.get(inv.projectId) ?? '—') : '—'}</TD>
                   <TD>
                     <span
                       className={
