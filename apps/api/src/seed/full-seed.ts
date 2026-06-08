@@ -237,7 +237,7 @@ async function main() {
   await db.collection('clients').insertMany([
     mkClient(ID.cLalit,          'Lalit Kumar Soni',       'Individual client — Fenkmat WordPress news website'),
     mkClient(ID.cSP,             'Social Parindee',         'Recurring agency client — multiple WordPress & web projects'),
-    mkClient(ID.cFoody,          'Foodyqueen',              'Regular monthly development retainer client'),
+    mkClient(ID.cFoody,          'Foodyqueen',              'Monthly development contract client — ongoing retainer'),
     mkClient(ID.cBluehutch,      'Blue Hutch Agency',       'Agency client — SoftwareKadai.com development'),
     mkClient(ID.cSculpt,         'Sculpt Agency',            'Agency owned by Sampreet — TaxBy Akram, Go Laundry, and originally BroBuzz projects'),
     mkClient(ID.cMendingMind,    'Mending Mind',            'Quiz platform & ongoing development'),
@@ -274,7 +274,7 @@ async function main() {
   await db.collection('projects').insertMany([
     project(ID.pFenkmat, 'Fenkmat WordPress News Website', 'FENKMAT', ID.cLalit, 'COMPLETED', '2024-12-19', '2025-01-01', [{ uid: ID.uSidhak, role: L }], 5500, 2600, 'WordPress news website design & development'),
     project(ID.pSPFixes, 'Social Parindee Website Fixes', 'SP-FIXES', ID.cSP, 'COMPLETED', '2025-01-10', '2025-01-20', [{ uid: ID.uKanish, role: L }], 1200, 1200, 'General website fixes done by owner'),
-    project(ID.pFoody, 'Foodyqueen Monthly Development', 'FOODY-DEV', ID.cFoody, 'ACTIVE', '2025-01-15', null, [{ uid: ID.uKanish, role: L }], 0, 0, 'Ongoing monthly development retainer — done by Kanish'),
+    project(ID.pFoody, 'Foodyqueen Monthly Contract', 'FOODY-DEV', ID.cFoody, 'ACTIVE', '2025-01-15', null, [{ uid: ID.uKanish, role: L }], 0, 0, 'Ongoing monthly development contract — done by Kanish'),
     project(ID.pSoftwareKadai, 'SoftwareKadai.com Development', 'SWKADAI', ID.cBluehutch, 'COMPLETED', '2025-02-06', '2025-02-28', [{ uid: ID.uShabd, role: L }], 4000, 1500, 'Full website development'),
     project(ID.pTaxByAkram, 'TaxBy Akram Website', 'TAXBYAKRAM', ID.cSculpt, 'COMPLETED', '2025-02-01', '2025-03-01', [{ uid: ID.uKanish, role: L }], 4000, 4000, 'Website done by Kanish for Sculpt Agency (Sampreet)'),
     project(ID.pCityDental, 'City Dental WordPress Website', 'CITYDENTAL', ID.cSP, 'COMPLETED', '2025-03-01', '2025-03-17', [{ uid: ID.uSidhak, role: L }], 5500, 3500, 'WordPress website for dental clinic'),
@@ -361,7 +361,7 @@ async function main() {
   ] as [string, number][];
 
   for (const [dt, amt] of foodyPays) {
-    inv(ID.cFoody, ID.pFoody, `Foodyqueen Monthly Development — ${dt.slice(0, 7)}`, amt,
+    inv(ID.cFoody, ID.pFoody, `Monthly Development Contract — ${dt.slice(0, 7)}`, amt,
       [payment(dt, amt)], dt, 'PAID');
   }
 
