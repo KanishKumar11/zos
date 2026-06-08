@@ -11,7 +11,7 @@ import {
   type UpdateProjectInput,
 } from '@agency/shared';
 
-import { api, unwrap } from '@/lib/api-client';
+import { api, unwrap, unwrapPaginated } from '@/lib/api-client';
 import { qk } from '@/lib/query-keys';
 
 export interface ProjectMemberRow {
@@ -38,7 +38,7 @@ export interface ProjectRow {
 
 const projectsApi = {
   list: (q: ListProjectsQuery = {}) =>
-    unwrap<ProjectRow[]>(api.get('/projects', { params: q })),
+    unwrapPaginated<ProjectRow>(api.get('/projects', { params: q })),
   byId: (id: string) => unwrap<ProjectRow>(api.get(`/projects/${id}`)),
   create: (body: CreateProjectInput) => unwrap<ProjectRow>(api.post('/projects', body)),
   update: (id: string, body: UpdateProjectInput) =>

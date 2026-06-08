@@ -34,7 +34,7 @@ function Inner() {
   const d = dash.data;
 
   const clientMap = new Map((clients.data ?? []).map((c) => [c._id, c.name]));
-  const projectMap = new Map((projects.data ?? []).map((p) => [p._id, p.name]));
+  const projectMap = new Map((projects.data?.items ?? []).map((p) => [p._id, p.name]));
   return (
     <div className="space-y-6">
       <PageHeader title="Invoices" description="Billing and collections overview." />

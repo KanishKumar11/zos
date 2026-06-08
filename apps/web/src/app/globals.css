@@ -5,74 +5,67 @@
 
 @layer base {
   :root {
-    /* canvas — pure crisp minimal */
-    --background: 0 0% 98%;
-    --foreground: 0 0% 4%;
+    /* Pure Minimal Editorial Light */
+    --background: 0 0% 98%; /* Very slightly off-white like premium paper */
+    --foreground: 0 0% 4%; /* Near black */
 
-    /* cards flat */
-    --card: 0 0% 100%;
+    --card: 0 0% 98%;
     --card-foreground: 0 0% 4%;
-    --popover: 0 0% 100%;
+    --popover: 0 0% 98%;
     --popover-foreground: 0 0% 4%;
 
-    /* brand accent — sharp black */
-    --primary: 0 0% 9%;
+    --primary: 0 0% 4%;
     --primary-foreground: 0 0% 98%;
 
-    /* secondary / muted surfaces */
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 9%;
+    --secondary: 0 0% 92%;
+    --secondary-foreground: 0 0% 4%;
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 0 0% 92%;
+    --accent-foreground: 0 0% 4%;
 
-    /* semantic */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --success: 142 58% 42%;
     --warning: 38 92% 50%;
 
-    /* chrome */
-    --border: 0 0% 92%;
-    --input: 0 0% 92%;
-    --ring: 0 0% 9%;
-    --radius: 1rem;
+    /* Strong thin lines */
+    --border: 0 0% 85%;
+    --input: 0 0% 85%;
+    --ring: 0 0% 4%;
+    --radius: 0rem;
   }
 
   .dark {
-    /* premium dark canvas - very slight warmth/depth */
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
+    /* Pure Absolute Black */
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
 
-    /* elevated glass cards */
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 7%;
-    --popover-foreground: 0 0% 98%;
+    --card: 0 0% 0%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 0%;
+    --popover-foreground: 0 0% 100%;
 
-    /* brand accent — crisp white */
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
+    /* Crisp White Accent */
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
 
-    /* secondary / muted */
     --secondary: 0 0% 10%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 63%;
-    --accent: 0 0% 12%;
-    --accent-foreground: 0 0% 98%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 100%;
 
-    /* semantic */
     --destructive: 0 63% 55%;
     --destructive-foreground: 0 0% 98%;
     --success: 142 58% 48%;
     --warning: 38 92% 50%;
 
-    /* chrome */
-    --border: 0 0% 14%;
-    --input: 0 0% 14%;
-    --ring: 0 0% 98%;
+    /* Subtle hairines for dark mode */
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 0 0% 100%;
   }
 
   * {
@@ -80,7 +73,7 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
+    @apply bg-background text-foreground antialiased selection:bg-foreground selection:text-background;
     font-feature-settings: 'rlig' 1, 'calt' 1;
   }
 }

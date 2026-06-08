@@ -47,7 +47,7 @@ function Inner() {
   const projects = useProjects({ pageSize: 200 });
 
   const projectCountMap = new Map<string, { total: number; active: number }>();
-  for (const p of projects.data ?? []) {
+  for (const p of projects.data?.items ?? []) {
     if (!p.clientId) continue;
     const entry = projectCountMap.get(p.clientId) ?? { total: 0, active: 0 };
     entry.total += 1;

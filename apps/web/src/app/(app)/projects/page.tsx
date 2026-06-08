@@ -16,6 +16,7 @@ import {
 import { RoleGate } from '@/components/auth/role-gate';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Pagination } from '@/components/ui/pagination';
 import {
   Dialog,
   DialogContent,
@@ -34,7 +35,8 @@ import { PageHeader } from '@/components/layout/page-header';
 import { useCreateProject, useProjects } from '@/features/projects/projects.hooks';
 
 export default function ProjectsPage() {
-  const list = useProjects();
+  const [page, setPage] = useState(1);
+  const list = useProjects({ page, pageSize: 20 });
   const role = useAuthStore((s) => s.user?.role);
   const isOwner = role === Role.OWNER;
   const [open, setOpen] = useState(false);
@@ -126,7 +128,7 @@ export default function ProjectsPage() {
               </TR>
             </THead>
             <TBody>
-              {(list.data ?? []).map((p) => (
+              {(list.data?.items ?? []).map((p) => (
                 <TR key={p._id}>
                   <TD>
                     <Link className="underline" href={`/projects/${p._id}`}>
@@ -142,6 +144,15 @@ export default function ProjectsPage() {
               ))}
             </TBody>
           </Table>
+          {list.data && list.data.meta.totalPages > 1 && (
+            <Pagination
+              page={list.data.meta.page}
+              totalPages={list.data.meta.totalPages}
+              total={list.data.meta.total}
+              onPage={setPage}
+              className="pt-4"
+            />
+          )}
         </CardContent>
       </Card>
     </div>

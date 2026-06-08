@@ -6,14 +6,8 @@ import {
   AreaChart,
   Bar,
   BarChart,
-  CartesianGrid,
-  Legend,
   ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
 } from 'recharts';
-import { Users } from 'lucide-react';
 import { Role } from '@agency/shared';
 
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,8 +26,6 @@ const shortMonth = (m: string) => {
   return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo - 1] ?? m;
 };
 const toINR = (paise: number) => paise / 100;
-const fmtINR = (v: number) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
@@ -43,12 +35,10 @@ export default function DashboardPage() {
   const member = useMemberDashboard();
   const charts = useOwnerCharts(isOwner);
 
-  // Team earnings — pick a month
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [earningsMonth, setEarningsMonth] = useState(currentMonth);
   const teamEarnings = useTeamEarnings(earningsMonth, isOwner);
 
-  // Build merged chart data for revenue vs cost
   const chartData = (charts.data?.revenueByMonth ?? []).map((r, i) => ({
     month: shortMonth(r.month),
     Revenue: Math.round(toINR(r.collectedPaise)),
@@ -58,287 +48,209 @@ export default function DashboardPage() {
   }));
 
   return (
-    <div className="space-y-12 pb-12">
-      {/* Greeting */}
-      <div className="space-y-2">
-        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-          Welcome back, {user?.name?.split(' ')[0] ?? 'System'}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Here's your agency overview and system metrics.
-        </p>
-      </div>
+    <div className="max-w-[1600px] mx-auto pb-24">
+      {/* Header */}
+      <header className="border-b border-border py-8 md:py-16 mb-8 md:mb-16 px-4 md:px-0">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+          <h1 className="text-5xl md:text-7xl font-medium tracking-tighter uppercase">
+            Agency<br />Ledger
+          </h1>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-mono">
+            Operator // {user?.name?.split(' ')[0] ?? 'System'}
+          </p>
+        </div>
+      </header>
 
-      {/* Owner — agency overview */}
       {isOwner && (
-        <>
-          <section className="space-y-6">
-            <SectionHeader title="Agency Metrics" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {owner.isLoading ? (
-                <StatSkeletons count={4} />
-              ) : owner.data ? (
-                <>
-                  <Stat
-                    title="Active projects"
-                    value={owner.data.activeProjects.toString()}
-                  />
-                  <Stat
-                    title="Active SOWs"
-                    value={owner.data.activeSows.toString()}
-                  />
-                  <Stat
-                    title="Outstanding"
-                    value={formatPaise(owner.data.invoices.outstanding, 'INR')}
-                    description={`Overdue ${formatPaise(owner.data.invoices.overdue, 'INR')}`}
-                    valueClassName="text-warning"
-                  />
-                  <Stat
-                    title="Collected"
-                    value={formatPaise(owner.data.invoices.collected, 'INR')}
-                    description={
-                      owner.data.lastPayrollRun
-                        ? `Last payroll · ${owner.data.lastPayrollRun.month}`
-                        : 'No payroll runs yet'
-                    }
-                  />
-                </>
-              ) : null}
+        <div className="border-t border-border">
+          {/* Top Section: Primary Metric + Sparkline vs Secondary Stack */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 border-b border-border">
+            {/* Primary Left */}
+            <div className="lg:col-span-8 lg:border-r border-border p-6 md:p-12 flex flex-col">
+              <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-6">Collected YTD</p>
+              <div className="text-6xl md:text-8xl lg:text-[10rem] leading-none font-medium tracking-tighter mb-12 lg:mb-24">
+                {owner.isLoading ? <Skeleton className="h-24 w-1/2 rounded-none" /> : formatPaise(owner.data?.invoices.collected ?? 0, 'INR')}
+              </div>
+              
+              <div className="h-32 md:h-48 w-full mt-auto">
+                {charts.isLoading ? (
+                  <Skeleton className="h-full w-full rounded-none" />
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                      <Area 
+                        type="monotone" 
+                        dataKey="Revenue" 
+                        stroke="var(--foreground)" 
+                        strokeWidth={1.5} 
+                        fill="none" 
+                        isAnimationActive={false} 
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
             </div>
-          </section>
 
-          {/* Revenue vs Cost chart */}
-          <section className="space-y-6">
-            <SectionHeader title="Financial Performance" />
-            {charts.isLoading ? (
-              <div className="h-72 rounded-2xl border border-border/50 p-6 bg-card shadow-sm"><Skeleton className="h-full w-full rounded-xl" /></div>
-            ) : (
-              <div className="rounded-2xl border border-border/50 bg-card p-6 shadow-sm hover:shadow-md transition-shadow duration-300">
-                <ResponsiveContainer width="100%" height={320}>
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                    <defs>
-                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="currentColor" stopOpacity={0.1}/>
-                        <stop offset="95%" stopColor="currentColor" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorProf" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.06} vertical={false} />
-                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} dy={10} />
-                    <YAxis
-                      tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
-                      tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
-                      tickLine={false}
-                      axisLine={false}
-                      width={60}
-                      dx={-10}
-                    />
-                    <Tooltip
-                      formatter={(v: number, name: string) => [fmtINR(v), name]}
-                      contentStyle={{ fontSize: 13, borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--card)', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
-                      cursor={{ stroke: 'var(--border)', strokeWidth: 1, strokeDasharray: '4 4' }}
-                    />
-                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 13, paddingTop: '20px' }} />
-                    <Area type="monotone" dataKey="Revenue" stroke="currentColor" fill="url(#colorRev)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: 'currentColor' }} />
-                    <Area type="monotone" dataKey="Profit" stroke="#22c55e" fill="url(#colorProf)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: '#22c55e' }} />
-                  </AreaChart>
-                </ResponsiveContainer>
+            {/* Secondary Right */}
+            <div className="lg:col-span-4 flex flex-col">
+              <StatBlock 
+                title="Active Projects" 
+                value={owner.isLoading ? '—' : owner.data?.activeProjects.toString() ?? '0'} 
+              />
+              <StatBlock 
+                title="Active SOWs" 
+                value={owner.isLoading ? '—' : owner.data?.activeSows.toString() ?? '0'} 
+              />
+              <StatBlock 
+                title="Outstanding" 
+                value={owner.isLoading ? '—' : formatPaise(owner.data?.invoices.outstanding ?? 0, 'INR')} 
+                className="border-b-0 flex-1" 
+                valueClassName="text-destructive"
+              />
+            </div>
+          </div>
+
+          {/* Cost Breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 border-b border-border">
+            <div className="lg:col-span-4 lg:border-r border-border border-b lg:border-b-0 p-6 md:p-12 flex flex-col justify-between">
+              <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-6">Cost Breakdown</p>
+              <div className="text-4xl md:text-6xl font-medium tracking-tighter">
+                Payroll &<br />Expenses
               </div>
-            )}
-          </section>
-
-          {/* Payroll vs Expenses bar chart */}
-          <section className="space-y-6">
-            <SectionHeader title="Cost Breakdown" />
-            {charts.isLoading ? (
-              <div className="h-72 rounded-2xl border border-border/50 p-6 bg-card shadow-sm"><Skeleton className="h-full w-full rounded-xl" /></div>
-            ) : (
-              <div className="rounded-2xl border border-border/50 bg-card p-6 shadow-sm hover:shadow-md transition-shadow duration-300">
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: 0 }} barSize={12} barGap={4}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.06} vertical={false} />
-                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} dy={10} />
-                    <YAxis
-                      tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
-                      tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }}
-                      tickLine={false}
-                      axisLine={false}
-                      width={60}
-                      dx={-10}
-                    />
-                    <Tooltip
-                      formatter={(v: number, name: string) => [fmtINR(v), name]}
-                      contentStyle={{ fontSize: 13, borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--card)', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
-                      cursor={{ fill: 'currentColor', opacity: 0.03 }}
-                      itemStyle={{ color: 'var(--foreground)' }}
-                    />
-                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 13, paddingTop: '20px' }} />
-                    <Bar dataKey="Payroll" fill="currentColor" radius={[4, 4, 0, 0]} opacity={0.8} />
-                    <Bar dataKey="Expenses" fill="currentColor" radius={[4, 4, 0, 0]} opacity={0.3} />
-                  </BarChart>
-                </ResponsiveContainer>
+            </div>
+            <div className="lg:col-span-8 p-6 md:p-12">
+              <div className="h-48 md:h-64 w-full">
+                {charts.isLoading ? (
+                  <Skeleton className="h-full w-full rounded-none" />
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barSize={8} barGap={4}>
+                      <Bar dataKey="Payroll" fill="var(--foreground)" />
+                      <Bar dataKey="Expenses" fill="var(--muted-foreground)" opacity={0.3} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
-            )}
-          </section>
+            </div>
+          </div>
 
-          {/* Team earnings */}
-          <section className="space-y-6">
-            <div className="flex items-center gap-4">
-              <SectionHeader title="Team Payroll" />
+          {/* Team Payroll Ledger */}
+          <div className="p-6 md:p-12 border-b border-border">
+            <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-2">Ledger</p>
+                <h2 className="text-4xl md:text-6xl font-medium tracking-tighter">Team Payroll</h2>
+              </div>
               <input
                 type="month"
                 value={earningsMonth}
                 onChange={(e) => setEarningsMonth(e.target.value)}
-                className="ml-auto rounded-xl border border-border/50 bg-card px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                className="bg-transparent border-b border-foreground rounded-none px-0 py-2 text-xl md:text-3xl font-medium tracking-tight focus:outline-none focus:border-foreground w-48"
               />
             </div>
-            <div className="rounded-2xl border border-border/50 bg-card shadow-sm overflow-hidden">
-              <div className="flex items-center gap-2 p-5 border-b border-border/50 text-sm font-medium text-muted-foreground bg-muted/10">
-                <Users className="h-4 w-4" />
-                <span>{earningsMonth} &middot; {teamEarnings.data?.members.length ?? 0} Active Members</span>
-              </div>
-              <div>
-                {teamEarnings.isLoading ? (
-                  <div className="space-y-2 p-5">
-                    {[1,2,3].map((i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}
-                  </div>
-                ) : (teamEarnings.data?.members.length ?? 0) === 0 ? (
-                  <p className="p-8 text-center text-sm text-muted-foreground">No payslip records found for this month.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border/50 text-left font-medium text-muted-foreground bg-muted/5">
-                          <th className="px-6 py-4 font-medium">Team Member</th>
-                          <th className="px-6 py-4 text-right font-medium">Gross Pay</th>
-                          <th className="px-6 py-4 text-right font-medium">Deductions</th>
-                          <th className="px-6 py-4 text-right font-medium">Net Deposit</th>
+
+            <div>
+              {teamEarnings.isLoading ? (
+                <div className="space-y-4">
+                  {[1,2,3].map((i) => <Skeleton key={i} className="h-12 w-full rounded-none" />)}
+                </div>
+              ) : (teamEarnings.data?.members.length ?? 0) === 0 ? (
+                <p className="py-12 text-center text-sm font-mono uppercase tracking-[0.2em] text-muted-foreground">No ledger entries.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-foreground text-left text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground">
+                        <th className="pb-4 font-normal">Team Member</th>
+                        <th className="pb-4 text-right font-normal">Gross Pay</th>
+                        <th className="pb-4 text-right font-normal">Deductions</th>
+                        <th className="pb-4 text-right font-normal">Net Deposit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {(teamEarnings.data?.members ?? []).map((m) => (
+                        <tr key={m.userId} className="group hover:bg-muted/10 transition-colors">
+                          <td className="py-6 text-xl md:text-2xl font-medium tracking-tight text-foreground">{m.name}</td>
+                          <td className="py-6 text-xl md:text-2xl text-right font-medium text-muted-foreground">{formatPaise(m.grossPaise, 'INR')}</td>
+                          <td className="py-6 text-xl md:text-2xl text-right font-medium text-destructive">
+                            {m.deductionsPaise > 0 ? `−${formatPaise(m.deductionsPaise, 'INR')}` : '—'}
+                          </td>
+                          <td className="py-6 text-xl md:text-2xl text-right font-medium text-foreground">{formatPaise(m.netPaise, 'INR')}</td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/50">
-                        {(teamEarnings.data?.members ?? []).map((m) => (
-                          <tr key={m.userId} className="hover:bg-muted/10 transition-colors">
-                            <td className="px-6 py-4 font-medium text-foreground">{m.name}</td>
-                            <td className="px-6 py-4 text-right">{formatPaise(m.grossPaise, 'INR')}</td>
-                            <td className="px-6 py-4 text-right text-destructive">
-                              {m.deductionsPaise > 0 ? `−${formatPaise(m.deductionsPaise, 'INR')}` : '—'}
-                            </td>
-                            <td className="px-6 py-4 text-right font-semibold text-foreground">{formatPaise(m.netPaise, 'INR')}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-muted/20 text-foreground font-semibold">
-                          <td className="px-6 py-5 rounded-bl-xl">Total Aggregated</td>
-                          <td className="px-6 py-5 text-right">
-                            {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.grossPaise, 0), 'INR')}
-                          </td>
-                          <td className="px-6 py-5 text-right text-destructive">
-                            {(() => {
-                              const tot = (teamEarnings.data?.members ?? []).reduce((s, m) => s + m.deductionsPaise, 0);
-                              return tot > 0 ? `−${formatPaise(tot, 'INR')}` : '—';
-                            })()}
-                          </td>
-                          <td className="px-6 py-5 text-right rounded-br-xl">
-                            {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.netPaise, 0), 'INR')}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                )}
-              </div>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-foreground text-foreground">
+                        <td className="py-8 text-xl md:text-2xl font-medium tracking-tight">Total Aggregated</td>
+                        <td className="py-8 text-xl md:text-2xl text-right font-medium text-muted-foreground">
+                          {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.grossPaise, 0), 'INR')}
+                        </td>
+                        <td className="py-8 text-xl md:text-2xl text-right font-medium text-destructive">
+                          {(() => {
+                            const tot = (teamEarnings.data?.members ?? []).reduce((s, m) => s + m.deductionsPaise, 0);
+                            return tot > 0 ? `−${formatPaise(tot, 'INR')}` : '—';
+                          })()}
+                        </td>
+                        <td className="py-8 text-xl md:text-2xl text-right font-medium text-foreground">
+                          {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.netPaise, 0), 'INR')}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
             </div>
-          </section>
-        </>
+          </div>
+        </div>
       )}
 
-      {/* All roles — personal snapshot */}
-      <section className="space-y-6">
-        <SectionHeader title="Personal Snapshot" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {member.isLoading ? (
-            <StatSkeletons count={3} />
-          ) : (
-            <>
-              <Stat
-                title="Active assignments"
-                value={(member.data?.openTasks ?? 0).toString()}
-              />
-              <Stat
-                title="Pending time-off"
-                value={(member.data?.pendingLeaves ?? 0).toString()}
-              />
-              <Stat
-                title="Latest deposit"
-                value={
-                  member.data?.lastPayslip
-                    ? formatPaise(member.data.lastPayslip.netPaise, 'INR')
-                    : '—'
-                }
-              />
-            </>
-          )}
+      {/* Personal Snapshot */}
+      <div className="mt-16 md:mt-32 px-4 md:px-0">
+        <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-8">Personal Snapshot</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-t border-b border-border divide-y md:divide-y-0 md:divide-x divide-border">
+          <StatBlock 
+            title="Active Assignments" 
+            value={member.isLoading ? '—' : (member.data?.openTasks ?? 0).toString()} 
+            className="border-b-0"
+          />
+          <StatBlock 
+            title="Pending Time-off" 
+            value={member.isLoading ? '—' : (member.data?.pendingLeaves ?? 0).toString()} 
+            className="border-b-0"
+          />
+          <StatBlock 
+            title="Latest Deposit" 
+            value={member.isLoading ? '—' : (member.data?.lastPayslip ? formatPaise(member.data.lastPayslip.netPaise, 'INR') : '—')} 
+            className="border-b-0"
+          />
         </div>
-      </section>
+      </div>
     </div>
   );
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <div className="flex items-center gap-4">
-      <h2 className="text-sm font-semibold tracking-tight text-foreground">
-        {title}
-      </h2>
-      <div className="h-px flex-1 bg-border/50" />
-    </div>
-  );
-}
-
-function Stat({
+function StatBlock({
   title,
   value,
-  description,
-  valueClassName,
+  className = '',
+  valueClassName = '',
 }: {
   title: string;
   value: string;
-  description?: string;
+  className?: string;
   valueClassName?: string;
 }) {
   return (
-    <div className="group relative flex h-full flex-col justify-between overflow-hidden rounded-2xl border border-border/50 bg-card p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 pointer-events-none" />
-      <p className="text-sm font-medium text-muted-foreground relative z-10">
+    <div className={`p-6 md:p-12 border-b border-border flex flex-col justify-center ${className}`}>
+      <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-6">
         {title}
       </p>
-      <div className="relative z-10 mt-6">
-        <p className={`text-3xl sm:text-4xl font-semibold tracking-tight ${valueClassName ?? 'text-foreground'}`}>
-          {value}
-        </p>
-        {description && (
-          <p className="mt-2 text-xs font-medium text-muted-foreground">{description}</p>
-        )}
-      </div>
+      <p className={`text-4xl md:text-6xl lg:text-7xl font-medium tracking-tighter ${valueClassName || 'text-foreground'}`}>
+        {value}
+      </p>
     </div>
-  );
-}
-
-function StatSkeletons({ count }: { count: number }) {
-  return (
-    <>
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="flex flex-col justify-between rounded-2xl border border-border/50 bg-card p-6 shadow-sm space-y-4">
-          <Skeleton className="h-4 w-24 rounded-md" />
-          <Skeleton className="h-10 w-28 rounded-md mt-6" />
-        </div>
-      ))}
-    </>
   );
 }

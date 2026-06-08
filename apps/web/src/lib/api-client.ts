@@ -1,7 +1,7 @@
 // Axios instance configured with credentials, response unwrap, 401 refresh, and toast on error.
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 
-import type { ApiError, ApiResponse } from '@agency/shared';
+import type { ApiError, ApiResponse, PaginationMeta } from '@agency/shared';
 
 import { env } from './env';
 
@@ -50,6 +50,28 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+/** Unwrap a paginated ApiResponse into { items, meta }. */
+export async function unwrapPaginated<T>(
+  p: Promise<{ data: ApiResponse<T[]> }>,
+): Promise<{ items: T[]; meta: PaginationMeta }> {
+  try {
+    const res = await p;
+    if (res.data.success) {
+      return {
+        items: res.data.data,
+        meta: res.data.meta ?? { page: 1, limit: 20, total: 0, totalPages: 1 },
+      };
+    }
+    throw res.data;
+  } catch (err) {
+    if (err && typeof err === 'object' && 'isAxiosError' in err) {
+      const axErr = err as AxiosError<ApiError>;
+      if (axErr.response?.data?.error) throw axErr.response.data;
+    }
+    throw err;
+  }
+}
 
 /** Unwrap ApiResponse into either data (success) or throw with the error envelope. */
 export async function unwrap<T>(p: Promise<{ data: ApiResponse<T> }>): Promise<T> {
