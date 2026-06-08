@@ -34,7 +34,7 @@ export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 
 export const listProjectsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
-  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+  pageSize: z.coerce.number().int().min(1).max(500).optional(),
   q: z.string().min(1).optional(),
   status: z.nativeEnum(ProjectStatus).optional(),
   clientId: objectIdSchema.optional(),

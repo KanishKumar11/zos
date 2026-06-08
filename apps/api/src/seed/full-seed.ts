@@ -280,8 +280,8 @@ async function main() {
     project(ID.pCityDental, 'City Dental WordPress Website', 'CITYDENTAL', ID.cSP, 'COMPLETED', '2025-03-01', '2025-03-17', [{ uid: ID.uSidhak, role: L }], 5500, 3500, 'WordPress website for dental clinic'),
     project(ID.pSellercircle, 'Sellercircle Website & Blog', 'SELLERCIRCLE', ID.cSellercircle, 'COMPLETED', '2025-03-01', '2026-01-31', [{ uid: ID.uShabd, role: L }, { uid: ID.uSidhak, role: C }], 27810, 15310, 'Website updates, blog section & virus removal'),
     project(ID.pBallBoundary, 'BallBoundary Website Updates', 'BALLBOUNDARY', ID.cBallBoundary, 'COMPLETED', '2025-04-03', '2025-04-03', [{ uid: ID.uKanish, role: L }], 1000, 1000, 'Website updates done by Kanish'),
-    project(ID.pMendingMindPlatform, 'Mending Mind Platform', 'MM-PLATFORM', ID.cMendingMind, 'ACTIVE', '2025-04-01', null, [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }, { uid: ID.uGeetanjali, role: C }], 38000, 22500, 'Ongoing platform development — ₹6.3k pending from client'),
-    project(ID.pMendingMindQuiz, 'Mending Mind Quiz Website', 'MM-QUIZ', ID.cMendingMind, 'COMPLETED', '2025-04-01', '2025-10-01', [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }], 11700, 7700, 'Quiz website development — ₹11.7k pending from client'),
+    project(ID.pMendingMindQuiz, 'Mending Mind Quiz Website', 'MM-QUIZ', ID.cMendingMind, 'COMPLETED', '2025-04-01', '2025-07-20', [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }], 11700, 7700, 'Quiz website — fully paid (₹11.7k received Apr–Jul 2025)'),
+    project(ID.pMendingMindPlatform, 'Mending Mind Platform', 'MM-PLATFORM', ID.cMendingMind, 'ACTIVE', '2025-10-01', null, [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }, { uid: ID.uGeetanjali, role: C }], 38000, 22500, 'Platform development — ₹18k pending from client'),
     project(ID.pAllWheel, 'AllWheelDriving School Website', 'ALLWHEEL', ID.cAllWheel, 'COMPLETED', '2025-04-01', '2025-04-18', [{ uid: ID.uKanish, role: L }], 5500, 5500, 'WordPress website done by Kanish'),
     project(ID.pSocialSecurity, 'Social Security Website', 'SP-SECSEC', ID.cSP, 'COMPLETED', '2025-04-15', '2025-04-23', [{ uid: ID.uSidhak, role: L }], 5500, 3500, 'Social security website development'),
     project(ID.pInterioDecor, 'InterioDecor Website', 'SP-INTERIODECOR', ID.cSP, 'COMPLETED', '2025-05-15', '2025-05-26', [{ uid: ID.uSidhak, role: L }], 2600, 1600, 'Interior decoration website'),
@@ -385,20 +385,21 @@ async function main() {
   inv(ID.cBallBoundary, ID.pBallBoundary, 'BallBoundary Website Updates', 1000,
     [payment('2025-04-03', 1000)], '2025-04-03', 'PAID');
 
-  // Mending Mind — Platform (38000 total, 31700 received, 6300 pending)
-  inv(ID.cMendingMind, ID.pMendingMindPlatform, 'Mending Mind Platform Development', 38000,
+  // Mending Mind — Quiz Website (11700 total, fully paid Apr–Jul 2025)
+  inv(ID.cMendingMind, ID.pMendingMindQuiz, 'Mending Mind Quiz Website Development', 11700,
     [
       payment('2025-04-15', 3000),
       payment('2025-04-30', 7000),
       payment('2025-06-12', 1100),
       payment('2025-07-20', 600),
+    ], '2025-04-15', 'PAID');
+  // Mending Mind — Platform (38000 total, 20000 received, 18000 pending)
+  inv(ID.cMendingMind, ID.pMendingMindPlatform, 'Mending Mind Platform Development', 38000,
+    [
       payment('2025-10-04', 5000),
       payment('2025-12-07', 5000),
       payment('2026-02-11', 10000),
-    ], '2025-04-15', 'PARTIALLY_PAID');
-  // Mending Mind — Quiz Website (11700 total, 0 received, fully pending)
-  inv(ID.cMendingMind, ID.pMendingMindQuiz, 'Mending Mind Quiz Website Development', 11700,
-    [], '2025-04-15', 'SENT');
+    ], '2025-10-04', 'PARTIALLY_PAID');
 
   // AllWheelDriving (5500, PAID)
   inv(ID.cAllWheel, ID.pAllWheel, 'AllWheelDriving School WordPress Website', 5500,
