@@ -44,7 +44,7 @@ function Inner() {
   const [search, setSearch] = useState('');
   const list = useClients(search || undefined);
   const create = useCreateClient();
-  const projects = useProjects();
+  const projects = useProjects({ pageSize: 200 });
 
   const projectCountMap = new Map<string, { total: number; active: number }>();
   for (const p of projects.data ?? []) {

@@ -30,7 +30,7 @@ function Inner() {
   const dash = useInvoiceDashboard();
   const aging = useInvoiceAging();
   const clients = useClients();
-  const projects = useProjects();
+  const projects = useProjects({ pageSize: 200 });
   const d = dash.data;
 
   const clientMap = new Map((clients.data ?? []).map((c) => [c._id, c.name]));

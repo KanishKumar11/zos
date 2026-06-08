@@ -37,7 +37,7 @@ const ID = {
   // Projects
   pFenkmat: oid(), pSPFixes: oid(), pFoody: oid(),
   pSoftwareKadai: oid(), pTaxByAkram: oid(), pCityDental: oid(),
-  pSellercircle: oid(), pBallBoundary: oid(), pMendingMind: oid(),
+  pSellercircle: oid(), pBallBoundary: oid(), pMendingMindPlatform: oid(), pMendingMindQuiz: oid(),
   pAllWheel: oid(), pSocialSecurity: oid(), pInterioDecor: oid(),
   pUnextdoor: oid(), pPNJFitness: oid(), pBestDiet: oid(),
   pSourcingScreen: oid(), pElectricMarshmallow: oid(), pGessure: oid(),
@@ -187,7 +187,7 @@ async function main() {
       createdAt: d('2024-01-01'), updatedAt: now,
     },
     mkMember(ID.uSidhak,    'sidhak@zlaark.com',     'Sidhak',           '2024-12-19', ['React','Node.js','WordPress','Next.js','MongoDB'], ID.dgFSD),
-    mkMember(ID.uShabd,     'shabdpreet@zlaark.com',  'Shabdpreet Singh', '2025-02-06', ['React','Node.js','WordPress','Shopify'],           ID.dgFSD),
+    mkMember(ID.uShabd,     'shabdpreet@zlaark.com',  'Shabdpreet Singh', '2025-02-06', ['React','Node.js','WordPress','Shopify'],           ID.dgFSD, 'EXITED'),
     mkMember(ID.uShivam,    'shivam@zlaark.com',      'Shivam',           '2025-07-01', ['React','Next.js','Tailwind','WordPress'],          ID.dgDev),
     mkMember(ID.uGeetanjali,'geetanjali@zlaark.com',  'Geetanjali',       '2025-09-01', ['React','WordPress','Figma','CSS'],                 ID.dgDesign),
     mkMember(ID.uJaya,      'jaya@zlaark.com',        'Jaya Arora',       '2025-08-11', ['Shopify','WordPress','React','Figma','UI Design'],  ID.dgDesign),
@@ -280,7 +280,8 @@ async function main() {
     project(ID.pCityDental, 'City Dental WordPress Website', 'CITYDENTAL', ID.cSP, 'COMPLETED', '2025-03-01', '2025-03-17', [{ uid: ID.uSidhak, role: L }], 5500, 3500, 'WordPress website for dental clinic'),
     project(ID.pSellercircle, 'Sellercircle Website & Blog', 'SELLERCIRCLE', ID.cSellercircle, 'COMPLETED', '2025-03-01', '2026-01-31', [{ uid: ID.uShabd, role: L }, { uid: ID.uSidhak, role: C }], 27810, 15310, 'Website updates, blog section & virus removal'),
     project(ID.pBallBoundary, 'BallBoundary Website Updates', 'BALLBOUNDARY', ID.cBallBoundary, 'COMPLETED', '2025-04-03', '2025-04-03', [{ uid: ID.uKanish, role: L }], 1000, 1000, 'Website updates done by Kanish'),
-    project(ID.pMendingMind, 'Mending Mind Platform', 'MENDINGMIND', ID.cMendingMind, 'ACTIVE', '2025-04-01', null, [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }, { uid: ID.uGeetanjali, role: C }], 49700, 30200, 'Quiz website & ongoing platform development — 18k pending from client'),
+    project(ID.pMendingMindPlatform, 'Mending Mind Platform', 'MM-PLATFORM', ID.cMendingMind, 'ACTIVE', '2025-04-01', null, [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }, { uid: ID.uGeetanjali, role: C }], 38000, 22500, 'Ongoing platform development — ₹6.3k pending from client'),
+    project(ID.pMendingMindQuiz, 'Mending Mind Quiz Website', 'MM-QUIZ', ID.cMendingMind, 'COMPLETED', '2025-04-01', '2025-10-01', [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }], 11700, 7700, 'Quiz website development — ₹11.7k pending from client'),
     project(ID.pAllWheel, 'AllWheelDriving School Website', 'ALLWHEEL', ID.cAllWheel, 'COMPLETED', '2025-04-01', '2025-04-18', [{ uid: ID.uKanish, role: L }], 5500, 5500, 'WordPress website done by Kanish'),
     project(ID.pSocialSecurity, 'Social Security Website', 'SP-SECSEC', ID.cSP, 'COMPLETED', '2025-04-15', '2025-04-23', [{ uid: ID.uSidhak, role: L }], 5500, 3500, 'Social security website development'),
     project(ID.pInterioDecor, 'InterioDecor Website', 'SP-INTERIODECOR', ID.cSP, 'COMPLETED', '2025-05-15', '2025-05-26', [{ uid: ID.uSidhak, role: L }], 2600, 1600, 'Interior decoration website'),
@@ -289,11 +290,11 @@ async function main() {
     project(ID.pBestDiet, 'Best Diet WordPress Website', 'SP-BESTDIET', ID.cSP, 'COMPLETED', '2025-07-15', '2025-07-29', [{ uid: ID.uShivam, role: L }], 5500, 3500, 'WordPress diet website'),
     project(ID.pSourcingScreen, 'Sourcing Screen Website', 'SOURCINGSCREEN', ID.cSourcingScreen, 'COMPLETED', '2025-07-29', '2026-01-30', [{ uid: ID.uSidhak, role: L }], 15100, 11100, 'Web development project'),
     project(ID.pElectricMarshmallow, 'Electric Marshmallow', 'ELECMARSH', ID.cNJG, 'COMPLETED', '2025-08-11', '2025-09-09', [{ uid: ID.uJaya, role: L }, { uid: ID.uSidhak, role: C }], 7500, 4000, 'Design & development for NJ Graphica'),
-    project(ID.pGessure, 'Gessure Platform & Maintenance', 'GESSURE', ID.cGessure, 'ACTIVE', '2025-09-17', null, [{ uid: ID.uSidhak, role: L }, { uid: ID.uShabd, role: C }, { uid: ID.uJaya, role: C }, { uid: ID.uShivam, role: C }, { uid: ID.uGeetanjali, role: C }], 123001, 78001, 'Platform development + ongoing monthly maintenance retainer'),
+    project(ID.pGessure, 'Gessure Platform & Maintenance', 'GESSURE', ID.cGessure, 'ACTIVE', '2025-09-17', null, [{ uid: ID.uSidhak, role: L }], 123001, 78001, 'Platform development + ongoing monthly maintenance — currently maintained by Sidhak only'),
     project(ID.pShivmani, 'Shivmanicreations Website', 'SP-SHIVMANI', ID.cSP, 'COMPLETED', '2025-09-01', '2025-09-18', [{ uid: ID.uShivam, role: L }], 3500, 2500, 'Website development'),
     project(ID.pShivAiTelerad, 'ShivAiTelerad Website', 'SHIVAI', ID.cShivAiTelerad, 'COMPLETED', '2025-09-19', '2025-11-22', [{ uid: ID.uGeetanjali, role: L }], 6500, 4000, 'Website development — total received 6.5k'),
     project(ID.pSWBuild, 'SW Build Website', 'SWBUILD', ID.cSWBuild, 'COMPLETED', '2025-09-27', '2025-09-27', [{ uid: ID.uSidhak, role: L }], 3500, 2000, 'Website development'),
-    project(ID.pDhawada, 'Dhawada E-commerce Website', 'DHAWADA', ID.cDhawada, 'ACTIVE', '2025-10-06', null, [{ uid: ID.uJaya, role: L }, { uid: ID.uShabd, role: C }], 56500, 36500, 'E-commerce website — 12.5k pending from client; logo by Shubham Jain (freelancer); Figma by Sampreet (freelancer)'),
+    project(ID.pDhawada, 'Dhawada E-commerce Website', 'DHAWADA', ID.cDhawada, 'ACTIVE', '2025-10-06', null, [{ uid: ID.uJaya, role: L }], 56500, 36500, 'E-commerce website — 12.5k pending from client; logo by Shubham Jain (freelancer); Figma by Sampreet (freelancer)'),
     project(ID.pSkoal, 'Skoal Website', 'SKOAL', ID.cSkoal, 'ON_HOLD', '2025-11-22', null, [{ uid: ID.uSidhak, role: L }], 20000, 6000, 'Client ghosted after advance payment — total deal 20k, received 6k only. Work was delivered.'),
     project(ID.pLandingPages, 'NJ Graphica 2 Landing Pages', 'NJG-LANDING', ID.cNJG, 'COMPLETED', '2025-10-01', '2025-10-09', [{ uid: ID.uSidhak, role: L }, { uid: ID.uJaya, role: C }], 5500, 3500, '2 landing pages design & development'),
     project(ID.pSoulnamaste, 'Soulnamaste Website', 'SP-SOULNAMASTE', ID.cSP, 'COMPLETED', '2025-10-01', '2025-10-13', [{ uid: ID.uSidhak, role: L }], 5000, 2500, 'Website development'),
@@ -384,8 +385,8 @@ async function main() {
   inv(ID.cBallBoundary, ID.pBallBoundary, 'BallBoundary Website Updates', 1000,
     [payment('2025-04-03', 1000)], '2025-04-03', 'PAID');
 
-  // Mending Mind (31700 received + 18000 pending = 49700 total)
-  inv(ID.cMendingMind, ID.pMendingMind, 'Mending Mind Quiz & Platform Development', 49700,
+  // Mending Mind — Platform (38000 total, 31700 received, 6300 pending)
+  inv(ID.cMendingMind, ID.pMendingMindPlatform, 'Mending Mind Platform Development', 38000,
     [
       payment('2025-04-15', 3000),
       payment('2025-04-30', 7000),
@@ -395,6 +396,9 @@ async function main() {
       payment('2025-12-07', 5000),
       payment('2026-02-11', 10000),
     ], '2025-04-15', 'PARTIALLY_PAID');
+  // Mending Mind — Quiz Website (11700 total, 0 received, fully pending)
+  inv(ID.cMendingMind, ID.pMendingMindQuiz, 'Mending Mind Quiz Website Development', 11700,
+    [], '2025-04-15', 'SENT');
 
   // AllWheelDriving (5500, PAID)
   inv(ID.cAllWheel, ID.pAllWheel, 'AllWheelDriving School WordPress Website', 5500,
