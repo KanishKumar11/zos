@@ -195,13 +195,30 @@ export class ProjectsService {
     return doc.save();
   }
 
-  /** OWNER-only: record how much has actually been paid to a specific member for this project. */
-  async setMemberPaid(projectId: string, userId: string, paidPaise: number): Promise<ProjectDocument> {
+  /** OWNER-only: log a payment made to a specific member for this project. */
+  async addMemberPayment(
+    projectId: string,
+    userId: string,
+    input: { amountPaise: number; paidAt: Date; note?: string },
+  ): Promise<ProjectDocument> {
     const doc = await this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec();
     if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
     const member = doc.members.find((m) => m.userId.toString() === userId);
     if (!member) throw new NotFoundException({ code: ErrorCodes.MEMBER_NOT_FOUND, message: 'Member not found on project' });
-    member.paidPaise = paidPaise;
+    (member.payments as any[]).push({ paidAt: input.paidAt, amountPaise: input.amountPaise, note: input.note ?? '' });
+    doc.markModified('members');
+    return doc.save();
+  }
+
+  /** OWNER-only: delete a specific payment entry from a member's payments log. */
+  async removeMemberPayment(projectId: string, userId: string, paymentId: string): Promise<ProjectDocument> {
+    const doc = await this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec();
+    if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
+    const member = doc.members.find((m) => m.userId.toString() === userId);
+    if (!member) throw new NotFoundException({ code: ErrorCodes.MEMBER_NOT_FOUND, message: 'Member not found on project' });
+    const before = member.payments.length;
+    (member as any).payments = member.payments.filter((p: any) => p._id.toString() !== paymentId);
+    if (member.payments.length === before) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Payment not found' });
     doc.markModified('members');
     return doc.save();
   }

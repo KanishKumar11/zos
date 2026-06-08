@@ -3,17 +3,17 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 
 import {
   Role,
+  addMemberPaymentSchema,
   createProjectSchema,
   listProjectsQuerySchema,
   projectMemberInputSchema,
   setMemberCostSchema,
-  setMemberPaidSchema,
   updateProjectSchema,
+  type AddMemberPaymentInput,
   type CreateProjectInput,
   type ListProjectsQuery,
   type ProjectMemberInput,
   type SetMemberCostInput,
-  type SetMemberPaidInput,
   type UpdateProjectInput,
 } from '@agency/shared';
 
@@ -96,13 +96,23 @@ export class ProjectsController {
   }
 
   @Roles(Role.OWNER)
-  @Patch(':id/members/:userId/paid')
-  setMemberPaid(
+  @Post(':id/members/:userId/payments')
+  addMemberPayment(
     @Param('id', ObjectIdPipe) id: string,
     @Param('userId', ObjectIdPipe) userId: string,
-    @Body(new ZodValidationPipe(setMemberPaidSchema)) body: SetMemberPaidInput,
+    @Body(new ZodValidationPipe(addMemberPaymentSchema)) body: AddMemberPaymentInput,
   ) {
-    return this.svc.setMemberPaid(id, userId, body.paidPaise);
+    return this.svc.addMemberPayment(id, userId, { amountPaise: body.amountPaise, paidAt: new Date(body.paidAt), note: body.note });
+  }
+
+  @Roles(Role.OWNER)
+  @Delete(':id/members/:userId/payments/:paymentId')
+  removeMemberPayment(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('userId', ObjectIdPipe) userId: string,
+    @Param('paymentId', ObjectIdPipe) paymentId: string,
+  ) {
+    return this.svc.removeMemberPayment(id, userId, paymentId);
   }
 
   @Roles(Role.OWNER)

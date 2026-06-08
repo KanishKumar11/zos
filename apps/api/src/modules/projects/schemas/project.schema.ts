@@ -4,6 +4,14 @@ import { type HydratedDocument, Schema as MS, Types } from 'mongoose';
 
 import { ProjectMemberRole, ProjectStatus } from '@agency/shared';
 
+@Schema({ _id: true })
+export class MemberPayment {
+  @Prop({ type: Date, required: true }) paidAt!: Date;
+  @Prop({ type: Number, required: true }) amountPaise!: number;
+  @Prop({ type: String, default: '' }) note!: string;
+}
+export const MemberPaymentSchema = SchemaFactory.createForClass(MemberPayment);
+
 @Schema({ _id: false })
 export class ProjectMember {
   @Prop({ type: MS.Types.ObjectId, ref: 'User', required: true }) userId!: Types.ObjectId;
@@ -11,7 +19,7 @@ export class ProjectMember {
   role!: ProjectMemberRole;
   @Prop({ type: Date, default: () => new Date() }) addedAt!: Date;
   @Prop({ type: Number, default: 0 }) amountPaise!: number;
-  @Prop({ type: Number, default: 0 }) paidPaise!: number;
+  @Prop({ type: [MemberPaymentSchema], default: [] }) payments!: MemberPayment[];
 }
 export const ProjectMemberSchema = SchemaFactory.createForClass(ProjectMember);
 

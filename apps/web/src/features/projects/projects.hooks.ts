@@ -10,17 +10,23 @@ import {
   type ProjectMemberInput,
   type UpdateProjectInput,
 } from '@agency/shared';
-import type { SetMemberCostInput, SetMemberPaidInput } from '@agency/shared';
+import type { AddMemberPaymentInput, SetMemberCostInput } from '@agency/shared';
 
 import { api, unwrap, unwrapPaginated } from '@/lib/api-client';
 import { qk } from '@/lib/query-keys';
 
+export interface MemberPaymentEntry {
+  _id: string;
+  paidAt: string;
+  amountPaise: number;
+  note: string;
+}
 export interface ProjectMemberRow {
   userId: string;
   role: ProjectMemberRole;
   addedAt: string;
   amountPaise: number;
-  paidPaise: number;
+  payments: MemberPaymentEntry[];
 }
 export interface ProjectRow {
   _id: string;
@@ -60,8 +66,10 @@ const projectsApi = {
   memberCosts: (id: string) => unwrap<MemberCostRow[]>(api.get(`/projects/${id}/member-costs`)),
   setMemberCost: (id: string, userId: string, body: SetMemberCostInput) =>
     unwrap<ProjectRow>(api.patch(`/projects/${id}/members/${userId}/cost`, body)),
-  setMemberPaid: (id: string, userId: string, body: SetMemberPaidInput) =>
-    unwrap<ProjectRow>(api.patch(`/projects/${id}/members/${userId}/paid`, body)),
+  addMemberPayment: (id: string, userId: string, body: AddMemberPaymentInput) =>
+    unwrap<ProjectRow>(api.post(`/projects/${id}/members/${userId}/payments`, body)),
+  removeMemberPayment: (id: string, userId: string, paymentId: string) =>
+    unwrap<ProjectRow>(api.delete(`/projects/${id}/members/${userId}/payments/${paymentId}`)),
 };
 
 export function useProjects(q: ListProjectsQuery = {}) {
@@ -118,15 +126,29 @@ export function useSetMemberCost() {
   });
 }
 
-export function useSetMemberPaid() {
+export function useAddMemberPayment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { id: string; userId: string; paidPaise: number }) =>
-      projectsApi.setMemberPaid(vars.id, vars.userId, { paidPaise: vars.paidPaise }),
+    mutationFn: (vars: { id: string; userId: string } & AddMemberPaymentInput) =>
+      projectsApi.addMemberPayment(vars.id, vars.userId, { amountPaise: vars.amountPaise, paidAt: vars.paidAt, note: vars.note }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
       qc.invalidateQueries({ queryKey: qk.projects.all() });
-      toast.success('Saved');
+      toast.success('Payment recorded');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useRemoveMemberPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; userId: string; paymentId: string }) =>
+      projectsApi.removeMemberPayment(vars.id, vars.userId, vars.paymentId),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
+      qc.invalidateQueries({ queryKey: qk.projects.all() });
+      toast.success('Payment removed');
     },
     onError: (err: Error) => toast.error(err.message),
   });

@@ -11,9 +11,14 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatPaise } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
 
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/page-header';
 import { useInvoices } from '@/features/invoices/invoices.hooks';
-import { useProject, useSetMemberCost, useSetMemberPaid } from '@/features/projects/projects.hooks';
+import {
+  useProject, useSetMemberCost,
+  useAddMemberPayment, useRemoveMemberPayment,
+  type MemberPaymentEntry,
+} from '@/features/projects/projects.hooks';
 import { useTeamList } from '@/features/team/team.hooks';
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -35,7 +40,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const invoiceTotal = invList.reduce((s, i) => s + i.totalPaise, 0);
   const clientReceived = invList.reduce((s, i) => s + i.paidPaise, 0);
   const memberBudgeted = p.members.reduce((s, m) => s + (m.amountPaise ?? 0), 0);
-  const memberPaid = p.members.reduce((s, m) => s + (m.paidPaise ?? 0), 0);
+  const memberPaid = p.members.reduce((s, m) => s + m.payments.reduce((ps, pay) => ps + pay.amountPaise, 0), 0);
 
   return (
     <div className="space-y-6">
@@ -147,16 +152,20 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </TR>
             </THead>
             <TBody>
-              {p.members.map((m) => (
-                <MemberRow
-                  key={m.userId}
-                  projectId={id}
-                  member={m}
-                  name={nameMap.get(m.userId) ?? m.userId.slice(-6)}
-                  currency={p.currency ?? 'INR'}
-                  isOwner={isOwner}
-                />
-              ))}
+              {p.members.map((m) => {
+                const paid = m.payments.reduce((s, pay) => s + pay.amountPaise, 0);
+                return (
+                  <MemberRow
+                    key={m.userId}
+                    projectId={id}
+                    member={m}
+                    name={nameMap.get(m.userId) ?? m.userId.slice(-6)}
+                    currency={cur}
+                    isOwner={isOwner}
+                    paidTotal={paid}
+                  />
+                );
+              })}
               {isOwner && p.members.length > 0 && (
                 <TR>
                   <TD colSpan={3} className="text-right text-xs text-muted-foreground">Total</TD>
@@ -168,6 +177,25 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </Table>
         </CardContent>
       </Card>
+
+      {isOwner && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Member Payments</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {p.members.map((m) => (
+              <MemberPaymentBlock
+                key={m.userId}
+                projectId={id}
+                member={m}
+                name={nameMap.get(m.userId) ?? m.userId.slice(-6)}
+                currency={cur}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -331,15 +359,16 @@ function MemberRow({
   name,
   currency,
   isOwner,
+  paidTotal,
 }: {
   projectId: string;
-  member: { userId: string; role: string; addedAt: string; amountPaise: number; paidPaise: number };
+  member: { userId: string; role: string; addedAt: string; amountPaise: number; payments: MemberPaymentEntry[] };
   name: string;
   currency: string;
   isOwner: boolean;
+  paidTotal: number;
 }) {
   const setCost = useSetMemberCost();
-  const setPaid = useSetMemberPaid();
 
   return (
     <TR>
@@ -356,14 +385,106 @@ function MemberRow({
         </TD>
       )}
       {isOwner && (
-        <TD>
-          <EditableCell
-            initialPaise={member.paidPaise ?? 0}
-            currency={currency}
-            onSave={(paise) => setPaid.mutate({ id: projectId, userId: member.userId, paidPaise: paise })}
-          />
+        <TD className="text-green-700 font-medium">
+          {paidTotal > 0 ? formatPaise(paidTotal, currency) : <span className="text-muted-foreground">₹0</span>}
         </TD>
       )}
     </TR>
+  );
+}
+
+function MemberPaymentBlock({
+  projectId, member, name, currency,
+}: {
+  projectId: string;
+  member: { userId: string; amountPaise: number; payments: MemberPaymentEntry[] };
+  name: string;
+  currency: string;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState('');
+  const add = useAddMemberPayment();
+  const remove = useRemoveMemberPayment();
+
+  const paidTotal = member.payments.reduce((s, p) => s + p.amountPaise, 0);
+  const remaining = (member.amountPaise ?? 0) - paidTotal;
+
+  const save = () => {
+    const paise = Math.round(parseFloat(amount) * 100);
+    if (isNaN(paise) || paise <= 0) return;
+    add.mutate({ id: projectId, userId: member.userId, amountPaise: paise, paidAt: date, note: note || undefined });
+    setAdding(false);
+    setAmount('');
+    setNote('');
+  };
+
+  return (
+    <div className="rounded border p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-sm font-medium">{name}</span>
+          <span className="ml-3 text-xs text-muted-foreground">
+            Budgeted: {formatPaise(member.amountPaise ?? 0, currency)}
+            {' · '}Paid: {formatPaise(paidTotal, currency)}
+            {remaining > 0 && <span className="text-amber-600"> · ₹{Math.round(remaining / 100).toLocaleString('en-IN')} pending</span>}
+          </span>
+        </div>
+        {!adding && (
+          <Button size="sm" variant="outline" onClick={() => setAdding(true)}>+ Add payment</Button>
+        )}
+      </div>
+
+      {member.payments.length > 0 && (
+        <div className="space-y-1">
+          {member.payments.map((pay) => (
+            <div key={pay._id} className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                {new Date(pay.paidAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {pay.note ? ` · ${pay.note}` : ''}
+              </span>
+              <div className="flex items-center gap-3">
+                <span className="font-medium text-green-700">+{formatPaise(pay.amountPaise, currency)}</span>
+                <button
+                  className="text-xs text-muted-foreground hover:text-red-500"
+                  onClick={() => remove.mutate({ id: projectId, userId: member.userId, paymentId: pay._id })}
+                  title="Remove"
+                >✕</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <div className="flex flex-wrap gap-2 items-end border-t pt-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Date</label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-8 w-36 text-sm" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Amount (₹)</label>
+            <Input
+              type="number" min={1} placeholder="0" value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }}
+              className="h-8 w-28 text-sm"
+              autoFocus
+            />
+          </div>
+          <div className="flex flex-col gap-1 flex-1">
+            <label className="text-xs text-muted-foreground">Note (optional)</label>
+            <Input placeholder="e.g. Milestone 1" value={note} onChange={(e) => setNote(e.target.value)} className="h-8 text-sm" />
+          </div>
+          <Button size="sm" onClick={save} disabled={add.isPending}>Save</Button>
+          <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+        </div>
+      )}
+
+      {!adding && member.payments.length === 0 && (
+        <p className="text-xs text-muted-foreground">No payments recorded yet</p>
+      )}
+    </div>
   );
 }
