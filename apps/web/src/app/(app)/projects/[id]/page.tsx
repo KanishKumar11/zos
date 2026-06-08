@@ -11,17 +11,21 @@ import { formatPaise } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { useProject } from '@/features/projects/projects.hooks';
+import { useProject, useProjectMemberCosts } from '@/features/projects/projects.hooks';
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const project = useProject(id);
   const role = useAuthStore((s) => s.user?.role);
   const isOwner = role === Role.OWNER;
+  const costs = useProjectMemberCosts(isOwner ? id : undefined);
 
   if (project.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!project.data) return <p className="text-sm text-muted-foreground">Not found.</p>;
   const p = project.data;
+
+  const costsMap = new Map((costs.data ?? []).map((c) => [c.userId, c]));
+  const totalDevCost = (p.clientBudgetPaise ?? 0) - (p.agencyMarginPaise ?? 0);
 
   return (
     <div className="space-y-6">
@@ -41,7 +45,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <CardHeader>
             <CardTitle>Financials</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
+          <CardContent className="grid gap-4 sm:grid-cols-3">
             <div className="rounded border p-3">
               <p className="text-xs text-muted-foreground">Client budget</p>
               <p className="text-lg font-semibold">
@@ -49,8 +53,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </p>
             </div>
             <div className="rounded border p-3">
+              <p className="text-xs text-muted-foreground">Dev cost</p>
+              <p className="text-lg font-semibold text-amber-600">
+                {formatPaise(totalDevCost, p.currency ?? 'INR')}
+              </p>
+            </div>
+            <div className="rounded border p-3">
               <p className="text-xs text-muted-foreground">Agency margin</p>
-              <p className="text-lg font-semibold">
+              <p className="text-lg font-semibold text-green-600">
                 {formatPaise(p.agencyMarginPaise ?? 0, p.currency ?? 'INR')}
               </p>
             </div>
@@ -66,19 +76,32 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <Table>
             <THead>
               <TR>
-                <TH>User</TH>
+                <TH>Name</TH>
                 <TH>Role</TH>
                 <TH>Added</TH>
+                {isOwner && <TH>Paid (project period)</TH>}
               </TR>
             </THead>
             <TBody>
-              {p.members.map((m) => (
-                <TR key={m.userId}>
-                  <TD>{m.userId}</TD>
-                  <TD>{m.role}</TD>
-                  <TD>{new Date(m.addedAt).toLocaleDateString()}</TD>
-                </TR>
-              ))}
+              {p.members.map((m) => {
+                const cost = costsMap.get(m.userId);
+                return (
+                  <TR key={m.userId}>
+                    <TD className="font-medium">{cost?.name ?? m.userId.slice(-6)}</TD>
+                    <TD>{m.role}</TD>
+                    <TD>{new Date(m.addedAt).toLocaleDateString()}</TD>
+                    {isOwner && (
+                      <TD>
+                        {cost
+                          ? formatPaise(cost.totalPaidPaise, p.currency ?? 'INR')
+                          : costs.isLoading
+                            ? '…'
+                            : '—'}
+                      </TD>
+                    )}
+                  </TR>
+                );
+              })}
             </TBody>
           </Table>
         </CardContent>

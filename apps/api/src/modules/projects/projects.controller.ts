@@ -81,6 +81,12 @@ export class ProjectsController {
     return this.svc.removeMember(id, userId);
   }
 
+  @Roles(Role.OWNER)
+  @Get(':id/member-costs')
+  memberCosts(@Param('id', ObjectIdPipe) id: string) {
+    return this.svc.memberCosts(id);
+  }
+
   @Roles(Role.OWNER, Role.ADMIN)
   @Delete(':id')
   remove(@Param('id', ObjectIdPipe) id: string) {

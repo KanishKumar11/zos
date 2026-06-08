@@ -36,6 +36,12 @@ export interface ProjectRow {
   currency?: string;
 }
 
+export interface MemberCostRow {
+  userId: string;
+  name: string;
+  totalPaidPaise: number;
+}
+
 const projectsApi = {
   list: (q: ListProjectsQuery = {}) =>
     unwrapPaginated<ProjectRow>(api.get('/projects', { params: q })),
@@ -48,6 +54,7 @@ const projectsApi = {
   removeMember: (id: string, userId: string) =>
     unwrap<ProjectRow>(api.delete(`/projects/${id}/members/${userId}`)),
   remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/projects/${id}`)),
+  memberCosts: (id: string) => unwrap<MemberCostRow[]>(api.get(`/projects/${id}/member-costs`)),
 };
 
 export function useProjects(q: ListProjectsQuery = {}) {
@@ -90,6 +97,14 @@ export function useAddProjectMember() {
     onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) }),
   });
 }
+export function useProjectMemberCosts(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? ['projects', id, 'member-costs'] : ['projects', 'undefined', 'member-costs'],
+    queryFn: () => projectsApi.memberCosts(id!),
+    enabled: !!id,
+  });
+}
+
 export function useRemoveProjectMember() {
   const qc = useQueryClient();
   return useMutation({

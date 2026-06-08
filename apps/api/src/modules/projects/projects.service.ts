@@ -14,13 +14,19 @@ import {
 import { ErrorCodes } from '@/common/constants/error-codes';
 import { Paginated, paginate } from '@/common/utils/pagination.util';
 
+import { Payslip, type PayslipDocument } from '../payroll/schemas/payslip.schema';
+import { User, type UserDocument } from '../users/schemas/user.schema';
 import { Project, type ProjectDocument } from './schemas/project.schema';
 
 const OWNER_ONLY_FIELDS = ['clientId', 'clientBudgetPaise', 'agencyMarginPaise', 'currency'] as const;
 
 @Injectable()
 export class ProjectsService {
-  constructor(@InjectModel(Project.name) private readonly model: Model<ProjectDocument>) {}
+  constructor(
+    @InjectModel(Project.name) private readonly model: Model<ProjectDocument>,
+    @InjectModel(Payslip.name) private readonly slips: Model<PayslipDocument>,
+    @InjectModel(User.name) private readonly users: Model<UserDocument>,
+  ) {}
 
   async list(q: ListProjectsQuery, viewer: { sub: string; role: Role }): Promise<Paginated<ProjectDocument>> {
     const page = q.page ?? 1;
@@ -176,5 +182,43 @@ export class ProjectsService {
       }
     }
     return [...map.values()];
+  }
+
+  /** OWNER-only: payslip totals per member for this project's date range. */
+  async memberCosts(id: string): Promise<{ userId: string; name: string; totalPaidPaise: number }[]> {
+    const doc = await this.model.findOne({ _id: id, deletedAt: { $exists: false } }).exec();
+    if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
+
+    const memberIds = doc.members.map((m) => m.userId);
+    if (memberIds.length === 0) return [];
+
+    // Build month strings for the project's date range
+    const start = doc.startDate ?? (doc as unknown as { createdAt: Date }).createdAt ?? new Date();
+    const end = doc.endDate ?? new Date();
+    const months: string[] = [];
+    const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+    while (cur <= endMonth) {
+      months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`);
+      cur.setMonth(cur.getMonth() + 1);
+    }
+
+    const [slipDocs, userDocs] = await Promise.all([
+      this.slips.find({ userId: { $in: memberIds }, month: { $in: months } }).exec(),
+      this.users.find({ _id: { $in: memberIds } }).select('name').exec(),
+    ]);
+
+    const nameMap = new Map(userDocs.map((u) => [u.id as string, u.name]));
+    const totals = new Map<string, number>();
+    for (const s of slipDocs) {
+      const uid = s.userId.toString();
+      totals.set(uid, (totals.get(uid) ?? 0) + s.netPaise);
+    }
+
+    return memberIds.map((uid) => ({
+      userId: uid.toString(),
+      name: nameMap.get(uid.toString()) ?? uid.toString(),
+      totalPaidPaise: totals.get(uid.toString()) ?? 0,
+    }));
   }
 }
