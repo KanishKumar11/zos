@@ -118,12 +118,17 @@ function MemberRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [displayPaise, setDisplayPaise] = useState<number | null>(null);
   const committed = useRef(false);
+  const dirty = useRef(false);
   const setCost = useSetMemberCost();
+
+  const shownPaise = displayPaise ?? (member.amountPaise ?? 0);
 
   const startEdit = () => {
     committed.current = false;
-    setDraft(String(Math.round((member.amountPaise ?? 0) / 100)));
+    dirty.current = false;
+    setDraft(String(Math.round(shownPaise / 100)));
     setEditing(true);
   };
 
@@ -131,12 +136,12 @@ function MemberRow({
     if (committed.current) return;
     committed.current = true;
     setEditing(false);
+    if (!dirty.current) return;
     const inr = parseFloat(draft);
     if (!isNaN(inr) && inr >= 0) {
       const paise = Math.round(inr * 100);
-      if (paise !== (member.amountPaise ?? 0)) {
-        setCost.mutate({ id: projectId, userId: member.userId, amountPaise: paise });
-      }
+      setDisplayPaise(paise);
+      setCost.mutate({ id: projectId, userId: member.userId, amountPaise: paise });
     }
   };
 
@@ -159,7 +164,7 @@ function MemberRow({
               min={0}
               className="h-7 w-28 text-sm"
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => { dirty.current = true; setDraft(e.target.value); }}
               onBlur={commit}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') { e.preventDefault(); commit(); }
@@ -172,8 +177,8 @@ function MemberRow({
               onClick={startEdit}
               title="Click to edit"
             >
-              {(member.amountPaise ?? 0) > 0
-                ? formatPaise(member.amountPaise, currency)
+              {shownPaise > 0
+                ? formatPaise(shownPaise, currency)
                 : <span className="text-muted-foreground">— click to set</span>}
             </button>
           )}

@@ -49,7 +49,7 @@ const ID = {
   pGoLaundry: oid(), pGKGIndustries: oid(), pStudycrux: oid(),
   pJouelcube: oid(), pDigitalMandir: oid(), pHRBook: oid(),
   pFirstrank: oid(), pRewardzy: oid(), pOnebox: oid(),
-  pRealEstate: oid(), pNavisha: oid(), pAvcoEnergy: oid(),
+  pRealEstate: oid(), pInnoWebsite: oid(), pNavisha: oid(), pAvcoEnergy: oid(),
   pEldeco: oid(), pBroBuzz: oid(), pVelotra: oid(),
   pArowai: oid(), pBitaminNaturals: oid(), pDhawadaNGO: oid(),
   pHiristan: oid(), pSoulSurf: oid(), pResto: oid(),
@@ -331,10 +331,11 @@ async function main() {
     project(ID.pFirstrank, 'Firstrank Website & Platform', 'FIRSTRANK', ID.cFirstrank, 'ACTIVE', '2026-03-06', null, [{ uid: ID.uJaya, role: L }, { uid: ID.uKanish, role: C }], 85000, 57500, 'Website & platform development'),
     project(ID.pRewardzy, 'Rewardzy Platform', 'REWARDZY', ID.cAnshulGlobal, 'ACTIVE', '2026-03-13', null, [{ uid: ID.uSidhak, role: L }], 30000, 9000, '9k pending from client; 12k to Sidhak pending'),
     project(ID.pOnebox, 'Onebox Project', 'ONEBOX', ID.cOnebox, 'ACTIVE', '2026-03-14', null, [{ uid: ID.uKanish, role: L }], 40001, 12001, 'Platform development — 28k pending from client'),
-    project(ID.pRealEstate, 'Inno Transventive Real Estate App & Website', 'INNO-REALESTATE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L }], 92000, 20050, 'Real estate app (60.95k pending) + website (25k pending); 11k to Shivam pending'),
+    project(ID.pRealEstate, 'Inno Transventive Real Estate App', 'INNO-REALESTATE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 30000 }], 88000, 58000, 'Real estate app — ₹56.95k pending from client; ₹30k to Shivam'),
+    project(ID.pInnoWebsite, 'Inno Transventive Website', 'INNO-WEBSITE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 11000 }], 30000, 19000, 'Website development — ₹30k pending from client; ₹11k to Shivam'),
     project(ID.pNavisha, 'Navisha Website', 'SP-NAVISHA', ID.cSP, 'COMPLETED', '2026-03-15', '2026-03-27', [{ uid: ID.uJaya, role: L }], 12000, 7000, 'Website development'),
     project(ID.pAvcoEnergy, 'Avco Energy Website', 'AVCO-ENERGY', ID.cStartiffy, 'COMPLETED', '2026-04-01', '2026-04-30', [{ uid: ID.uJaya, role: L }, { uid: ID.uSidhak, role: C }], 8000, 5000, 'Website development'),
-    project(ID.pEldeco, 'Eldeco Website', 'ELDECO', ID.cEldeco, 'ACTIVE', '2026-04-28', null, [{ uid: ID.uShivam, role: L }], 3500, 1500, 'Website development — more pending'),
+    project(ID.pEldeco, 'Eldeco Website', 'ELDECO', ID.cEldeco, 'ACTIVE', '2026-04-28', null, [{ uid: ID.uShivam, role: L, amountINR: 1000 }], 3500, 2500, 'Website development — more pending'),
     project(ID.pBroBuzz, 'Bro Buzz App', 'BROBUZZ', ID.cBroBuzz, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L }, { uid: ID.uJaya, role: C }], 60000, 42000, 'App development — 30k pending from client'),
     project(ID.pVelotra, 'Velotra Website', 'VELOTRA', ID.cVelotra, 'ACTIVE', '2026-02-20', null, [{ uid: ID.uShivam, role: L }], 20000, 15000, 'Website development — ongoing, 20k total received so far; 15k balance to pay Shivam'),
     project(ID.pArowai, 'Arowai Website', 'AROWAI', ID.cArowai, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L }], 3000, 1500, 'Website development'),
@@ -570,9 +571,12 @@ async function main() {
   inv(ID.cOnebox, ID.pOnebox, 'Onebox Project Development', 40001,
     [payment('2026-03-14', 12001, 'Bank Transfer', 'Advance')], '2026-03-14', 'PARTIALLY_PAID');
 
-  // Real Estate App & Website (92000 total, 31050 received, 60950 pending)
-  inv(ID.cInnoTrans, ID.pRealEstate, 'Real Estate App & Website Development', 92000,
-    [payment('2026-04-06', 13050, 'Bank Transfer', 'Advance'), payment('2026-05-21', 18000, 'Bank Transfer', 'Milestone 2')], '2026-04-06', 'PARTIALLY_PAID');
+  // Inno Transventive Real Estate App (88000 total, 26050 received, 61950 pending)
+  inv(ID.cInnoTrans, ID.pRealEstate, 'Real Estate App Development', 88000,
+    [payment('2026-04-06', 13050, 'Bank Transfer', 'Advance'), payment('2026-05-21', 13000, 'Bank Transfer', 'Milestone 2')], '2026-04-06', 'PARTIALLY_PAID');
+  // Inno Transventive Website (30000 total, 5000 received, 25000 pending)
+  inv(ID.cInnoTrans, ID.pInnoWebsite, 'Website Development', 30000,
+    [payment('2026-05-21', 5000, 'Bank Transfer', 'Milestone 1')], '2026-04-06', 'PARTIALLY_PAID');
 
   // Navisha (12000, PAID)
   inv(ID.cSP, ID.pNavisha, 'Navisha Website', 12000,

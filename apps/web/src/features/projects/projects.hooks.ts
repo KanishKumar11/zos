@@ -108,6 +108,8 @@ export function useSetMemberCost() {
       projectsApi.setMemberCost(vars.id, vars.userId, { amountPaise: vars.amountPaise }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
+      qc.invalidateQueries({ queryKey: qk.projects.all() });
+      toast.success('Saved');
     },
     onError: (err: Error) => toast.error(err.message),
   });
