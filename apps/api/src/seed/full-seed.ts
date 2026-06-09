@@ -341,12 +341,12 @@ async function main() {
     project(ID.pEldeco, 'Eldeco Website', 'ELDECO', ID.cEldeco, 'ACTIVE', '2026-04-28', null, [{ uid: ID.uShivam, role: L, amountINR: 1000, paidINR: 1000 }], 3500, 2500, 'Website development — more pending'),
     project(ID.pBroBuzz, 'Bro Buzz App', 'BROBUZZ', ID.cBroBuzz, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L }, { uid: ID.uJaya, role: C }], 60000, 42000, 'App development — 30k pending from client'),
     project(ID.pVelotra, 'Velotra Website', 'VELOTRA', ID.cVelotra, 'ACTIVE', '2026-02-20', null, [{ uid: ID.uShivam, role: L }], 20000, 15000, 'Website development — ongoing, 20k total received so far; 15k balance to pay Shivam'),
-    project(ID.pArowai, 'Arowai Website', 'AROWAI', ID.cArowai, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L }], 3000, 1500, 'Website development'),
-    project(ID.pBitaminNaturals, 'Bitamin Naturals Website', 'BITAMINNATURALS', ID.cBitaminNaturals, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L }], 0, -1500, 'Client had payment issues — agency covered 1.5k cost from Arowai payment'),
+    project(ID.pArowai, 'Arowai Website', 'AROWAI', ID.cArowai, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L, amountINR: 1500, paidINR: 1500 }], 3000, 1500, 'Website development'),
+    project(ID.pBitaminNaturals, 'Bitamin Naturals Website', 'BITAMINNATURALS', ID.cBitaminNaturals, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L, amountINR: 1500, paidINR: 1500 }], 0, -1500, 'Client had payment issues — agency covered 1.5k cost from Arowai payment'),
     project(ID.pDhawadaNGO, 'Dhawada NGO Website', 'DHAWADA-NGO', ID.cDhawada, 'ACTIVE', '2026-05-01', null, [{ uid: ID.uSidhak, role: L, amountINR: 2000, paidINR: 2000 }], 8000, 6000, 'NGO website — fully paid'),
     project(ID.pHiristan, 'Hiristan Website', 'HIRISTAN', ID.cDhawada, 'ACTIVE', '2026-05-01', null, [{ uid: ID.uKanish, role: L }], 8000, 2000, 'Part of Dhawada group — 6k pending from client'),
     project(ID.pSoulSurf, 'SoulSurf Website', 'NJG-SOULSURF', ID.cNJG, 'COMPLETED', '2026-02-15', '2026-03-06', [{ uid: ID.uShivam, role: L }], 12000, 7500, 'Website for NJ Graphica'),
-    project(ID.pResto, 'Resto Shopify Website', 'NJG-RESTO', ID.cNJG, 'COMPLETED', '2026-04-01', '2026-04-21', [{ uid: ID.uGeetanjali, role: L }], 12000, 7000, 'Shopify website for NJ Graphica'),
+    project(ID.pResto, 'Resto Shopify Website', 'NJG-RESTO', ID.cNJG, 'COMPLETED', '2026-04-01', '2026-04-21', [{ uid: ID.uGeetanjali, role: L, amountINR: 5000, paidINR: 5000 }], 12000, 7000, 'Shopify website for NJ Graphica'),
     project(ID.pGPower, 'G-Power Website', 'GPOWER', ID.cNamit, 'ACTIVE', '2026-04-01', null, [{ uid: ID.uJaya, role: L, amountINR: 4000, paidINR: 4000 }, { uid: ID.uSidhak, role: C, amountINR: 2500, paidINR: 2500 }, { uid: ID.uHarshika, role: C, amountINR: 1000, paidINR: 1000 }], 20000, 12500, 'Website development under Namit (same client as Jouelcube); Jaya 4k, Sidhak 2.5k, Harshika 1k'),
   ]);
 
@@ -792,12 +792,12 @@ async function main() {
     {
       _id: oid(), freelancerName: 'Jyoti Makwana',
       projectRef: 'HR Book HRMS', projectId: ID.pHRBook,
-      agreedTotalPaise: p(52500), paidPaise: p(17500), pendingPaise: p(35000),
+      agreedTotalPaise: p(70000), paidPaise: p(17500), pendingPaise: p(52500),
       payments: [
         { date: d('2026-05-01'), amountPaise: p(17500), note: 'Milestone 2 — brought the project, 1st payout' },
       ],
       status: 'ACTIVE', currency: 'INR',
-      notes: 'Jyoti Makwana sourced this project. ₹52,500 agreed total; ₹35,000 still pending.',
+      notes: 'Jyoti Makwana sourced this project. ₹70,000 agreed total; ₹17,500 paid; ₹52,500 still pending.',
       createdAt: now, updatedAt: now,
     },
   ]);

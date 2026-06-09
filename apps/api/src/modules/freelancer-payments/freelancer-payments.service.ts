@@ -34,6 +34,11 @@ export class FreelancerPaymentsService {
     return paginate(items, total, page, limit);
   }
 
+  async byProjectId(projectId: string): Promise<FreelancerPaymentDocument[]> {
+    const oid = new Types.ObjectId(projectId);
+    return this.model.find({ projectId: oid, deletedAt: { $exists: false } }).exec();
+  }
+
   async byId(id: string): Promise<FreelancerPaymentDocument> {
     const doc = await this.model.findOne({ _id: id, deletedAt: { $exists: false } }).exec();
     if (!doc) throw new NotFoundException('Freelancer payment record not found');

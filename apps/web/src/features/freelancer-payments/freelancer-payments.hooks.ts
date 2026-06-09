@@ -49,6 +49,8 @@ export interface AddPaymentEntryInput {
 const fpApi = {
   list: (params?: Record<string, string | number | undefined>) =>
     unwrap<FreelancerPaymentsPaginated>(api.get('/freelancer-payments', { params })),
+  byProjectId: (projectId: string) =>
+    unwrap<FreelancerPaymentRow[]>(api.get(`/freelancer-payments/project/${projectId}`)),
   create: (body: CreateFreelancerPaymentInput) =>
     unwrap<FreelancerPaymentRow>(api.post('/freelancer-payments', body)),
   addPayment: (id: string, body: AddPaymentEntryInput) =>
@@ -62,6 +64,14 @@ const QK = {
 
 export function useFreelancerPayments(params?: Record<string, string | number | undefined>) {
   return useQuery({ queryKey: QK.list(params), queryFn: () => fpApi.list(params) });
+}
+
+export function useFreelancerPaymentsByProject(projectId: string | undefined) {
+  return useQuery({
+    queryKey: projectId ? ['freelancer-payments', 'project', projectId] : ['freelancer-payments', 'project', 'undefined'],
+    queryFn: () => fpApi.byProjectId(projectId!),
+    enabled: !!projectId,
+  });
 }
 
 export function useCreateFreelancerPayment() {

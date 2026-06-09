@@ -20,6 +20,7 @@ import {
   type MemberPaymentEntry,
 } from '@/features/projects/projects.hooks';
 import { useTeamList } from '@/features/team/team.hooks';
+import { useFreelancerPaymentsByProject } from '@/features/freelancer-payments/freelancer-payments.hooks';
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -28,6 +29,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const isOwner = role === Role.OWNER;
   const team = useTeamList({ pageSize: 100 });
   const invoices = useInvoices({ projectId: id });
+  const freelancerPayments = useFreelancerPaymentsByProject(isOwner ? id : undefined);
 
   if (project.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!project.data) return <p className="text-sm text-muted-foreground">Not found.</p>;
@@ -41,6 +43,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const clientReceived = invList.reduce((s, i) => s + i.paidPaise, 0);
   const memberBudgeted = p.members.reduce((s, m) => s + (m.amountPaise ?? 0), 0);
   const memberPaid = p.members.reduce((s, m) => s + m.payments.reduce((ps, pay) => ps + pay.amountPaise, 0), 0);
+  const freelancerList = freelancerPayments.data ?? [];
+  const freelancerAgreed = freelancerList.reduce((s, f) => s + f.agreedTotalPaise, 0);
+  const freelancerPaid = freelancerList.reduce((s, f) => s + f.paidPaise, 0);
 
   return (
     <div className="space-y-6">
@@ -86,6 +91,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           clientReceived={clientReceived}
           memberBudgeted={memberBudgeted}
           memberPaid={memberPaid}
+          freelancerAgreed={freelancerAgreed}
+          freelancerPaid={freelancerPaid}
         />
       )}
 
@@ -132,6 +139,49 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               );
             })}
+          </CardContent>
+        </Card>
+      )}
+
+      {isOwner && freelancerList.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Freelancer Payments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Name</TH>
+                  <TH>Agreed</TH>
+                  <TH>Paid</TH>
+                  <TH>Pending</TH>
+                  <TH>Status</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {freelancerList.map((fp) => (
+                  <TR key={fp._id}>
+                    <TD className="font-medium">{fp.freelancerName}</TD>
+                    <TD>{formatPaise(fp.agreedTotalPaise, fp.currency)}</TD>
+                    <TD className="text-green-700 font-medium">{formatPaise(fp.paidPaise, fp.currency)}</TD>
+                    <TD className="text-amber-600">{formatPaise(fp.pendingPaise, fp.currency)}</TD>
+                    <TD>
+                      <span className={`text-xs px-2 py-1 rounded ${fp.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : fp.status === 'ACTIVE' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {fp.status}
+                      </span>
+                    </TD>
+                  </TR>
+                ))}
+                <TR>
+                  <TD colSpan={1} className="text-right text-xs text-muted-foreground font-semibold">Total</TD>
+                  <TD className="font-semibold">{formatPaise(freelancerAgreed, cur)}</TD>
+                  <TD className="font-semibold text-green-700">{formatPaise(freelancerPaid, cur)}</TD>
+                  <TD className="font-semibold text-amber-600">{formatPaise(freelancerAgreed - freelancerPaid, cur)}</TD>
+                  <TD></TD>
+                </TR>
+              </TBody>
+            </Table>
           </CardContent>
         </Card>
       )}
@@ -231,11 +281,13 @@ function SyncRow({
 }
 
 function SyncCard({
-  currency, clientBudgetPaise, devCostPaise, invoiceTotal, clientReceived, memberBudgeted, memberPaid,
+  currency, clientBudgetPaise, devCostPaise, invoiceTotal, clientReceived, memberBudgeted, memberPaid, freelancerAgreed, freelancerPaid,
 }: {
   currency: string; clientBudgetPaise: number; devCostPaise: number;
   invoiceTotal: number; clientReceived: number; memberBudgeted: number; memberPaid: number;
+  freelancerAgreed: number; freelancerPaid: number;
 }) {
+  const totalPayoutsExpense = memberPaid + freelancerPaid;
   return (
     <Card>
       <CardHeader>
@@ -251,17 +303,17 @@ function SyncCard({
           currency={currency}
         />
         <SyncRow
-          label="Dev cost vs Member budgets"
+          label="Dev cost vs Expenses"
           leftLabel="Dev cost (budget − margin)"
           leftValue={devCostPaise}
-          rightLabel="Total member budgets"
-          rightValue={memberBudgeted}
+          rightLabel="Total expenses (members + freelancers)"
+          rightValue={memberBudgeted + freelancerAgreed}
           currency={currency}
         />
         <SyncRow
           label="Cash flow"
-          leftLabel="Team paid out"
-          leftValue={memberPaid}
+          leftLabel="Total paid out (members + freelancers)"
+          leftValue={totalPayoutsExpense}
           rightLabel="Client received"
           rightValue={clientReceived}
           currency={currency}

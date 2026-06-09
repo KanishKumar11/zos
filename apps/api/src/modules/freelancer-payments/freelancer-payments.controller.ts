@@ -36,6 +36,11 @@ export class FreelancerPaymentsController {
     return this.svc.byId(id);
   }
 
+  @Get('project/:projectId')
+  byProjectId(@Param('projectId', ObjectIdPipe) projectId: string) {
+    return this.svc.byProjectId(projectId);
+  }
+
   @Post()
   create(@Body() body: CreateFreelancerPaymentDto) {
     return this.svc.create(body);
