@@ -13,7 +13,7 @@ import { useAuthStore } from '@/store/auth.store';
 
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/page-header';
-import { useInvoices } from '@/features/invoices/invoices.hooks';
+import { useInvoices, useCreateInvoice } from '@/features/invoices/invoices.hooks';
 import { useContracts } from '@/features/contracts/contracts.hooks';
 import {
   useProject, useSetMemberCost,
@@ -32,6 +32,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const invoices = useInvoices({ projectId: id });
   const freelancerPayments = useFreelancerPaymentsByProject(isOwner ? id : undefined);
   const contracts = useContracts();
+  const createInvoice = useCreateInvoice();
+
+  const [addingInvoice, setAddingInvoice] = useState(false);
+  const [invAmount, setInvAmount] = useState('');
+  const [invDate, setInvDate] = useState(new Date().toISOString().slice(0, 10));
+  const [invDesc, setInvDesc] = useState('');
 
   if (project.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!project.data) return <p className="text-sm text-muted-foreground">Not found.</p>;
@@ -124,12 +130,54 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         />
       )}
 
-      {isOwner && (invoices.data ?? []).length > 0 && (
+      {isOwner && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Client Payments</CardTitle>
+            {!addingInvoice && (
+              <Button size="sm" variant="outline" onClick={() => {
+                setInvDesc(p.name);
+                setInvAmount(p.clientBudgetPaise ? String(Math.round(p.clientBudgetPaise / 100)) : '');
+                setAddingInvoice(true);
+              }}>+ Add Invoice</Button>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
+            {addingInvoice && (
+              <div className="rounded border p-3 space-y-3 bg-muted/40">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">New Invoice</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Issue Date</label>
+                    <Input type="date" value={invDate} onChange={(e) => setInvDate(e.target.value)} className="h-8 text-sm" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Amount (₹)</label>
+                    <Input type="number" min={1} value={invAmount} onChange={(e) => setInvAmount(e.target.value)} className="h-8 text-sm" placeholder="e.g. 50000" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Description</label>
+                    <Input value={invDesc} onChange={(e) => setInvDesc(e.target.value)} className="h-8 text-sm" placeholder="e.g. Website development" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" disabled={createInvoice.isPending} onClick={() => {
+                    const paise = Math.round(parseFloat(invAmount) * 100);
+                    if (!p.clientId || isNaN(paise) || paise <= 0) return;
+                    const count = (invoices.data?.length ?? 0) + 1;
+                    createInvoice.mutate({
+                      clientId: p.clientId,
+                      projectId: id,
+                      number: `PRJ-${p.code}-${String(count).padStart(2, '0')}`,
+                      issueDate: new Date(invDate),
+                      lineItems: [{ description: invDesc || p.name, qty: 1, unitPaise: paise }],
+                      currency: p.currency ?? 'INR',
+                    }, { onSuccess: () => setAddingInvoice(false) });
+                  }}>{createInvoice.isPending ? 'Creating…' : 'Create Invoice'}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setAddingInvoice(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
             {(invoices.data ?? []).map((inv) => {
               const outstanding = inv.totalPaise - inv.paidPaise;
               return (

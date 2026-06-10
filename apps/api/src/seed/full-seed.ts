@@ -35,7 +35,7 @@ const ID = {
   cEldeco: oid(), cArowai: oid(), cBroBuzz: oid(),
   cBitaminNaturals: oid(), cOnebox: oid(), cHostinger: oid(),
   // Contracts
-  cFoodyContract: oid(),
+  cFoodyContract: oid(), cGessureContract: oid(),
   // Projects
   pFenkmat: oid(), pSPFixes: oid(), pFoody: oid(),
   pSoftwareKadai: oid(), pTaxByAkram: oid(), pCityDental: oid(),
@@ -56,9 +56,13 @@ const ID = {
   pMrVeg: oid(), pGPower: oid(), pSPNov25: oid(),
 };
 
-// Invoice counter
-let _inv = 0;
-const nextInv = () => `INV-${String(++_inv).padStart(4, '0')}`;
+// Invoice counter — per-year sequential: ZLK-YYYY-NNNN
+const _invCounters: Record<number, number> = {};
+const nextInv = (issueDate?: string) => {
+  const y = issueDate ? new Date(issueDate).getFullYear() : new Date().getFullYear();
+  _invCounters[y] = (_invCounters[y] ?? 0) + 1;
+  return `ZLK-${y}-${String(_invCounters[y]).padStart(4, '0')}`;
+};
 
 // Payroll run IDs per month
 const runIds: Record<string, Types.ObjectId> = {};
@@ -238,7 +242,6 @@ async function main() {
   const mkClient = (id: Types.ObjectId, name: string, notes = '', contacts: object[] = []) => ({
     _id: id, name, gstin: '', address: '', contacts, notes, createdAt: now, updatedAt: now,
   });
-  const contact = (name: string, email = '', phone = '', role = '') => ({ name, email, phone, role });
 
   await db.collection('clients').insertMany([
     mkClient(ID.cLalit,          'Lalit Kumar Soni',       'Individual client — Fenkmat WordPress news website'),
@@ -286,7 +289,21 @@ async function main() {
       status: 'ACTIVE',
       startDate: d('2025-01-15'),
       notes: 'Month-to-month retainer. No fixed end date. Kanish handles all development.',
+      billingDay: 20,
       createdAt: d('2025-01-01'), updatedAt: new Date(),
+    },
+    {
+      _id: ID.cGessureContract,
+      name: 'Gessure Support & Maintenance',
+      clientId: ID.cGessure,
+      description: 'Monthly support and maintenance retainer — started after development completion',
+      monthlyAmountPaise: p(15000),
+      currency: 'INR',
+      status: 'ACTIVE',
+      startDate: d('2026-02-27'),
+      notes: 'First 3 months (Feb–Apr 2026) @ ₹15k. From May 2026 @ ₹24k. Sidhak handles maintenance at 40% of retainer.',
+      billingDay: 1,
+      createdAt: d('2026-02-27'), updatedAt: new Date(),
     },
   ]);
   console.log('[full-seed] Inserted contracts');
@@ -313,7 +330,7 @@ async function main() {
     project(ID.pBestDiet, 'Best Diet WordPress Website', 'SP-BESTDIET', ID.cSP, 'COMPLETED', '2025-07-15', '2025-07-29', [{ uid: ID.uShivam, role: L }], 5500, 3500, 'WordPress diet website'),
     project(ID.pSourcingScreen, 'Sourcing Screen Website', 'SOURCINGSCREEN', ID.cSourcingScreen, 'COMPLETED', '2025-07-29', '2026-01-30', [{ uid: ID.uSidhak, role: L }], 15100, 11100, 'Web development project'),
     project(ID.pElectricMarshmallow, 'Electric Marshmallow', 'ELECMARSH', ID.cNJG, 'COMPLETED', '2025-08-11', '2025-09-09', [{ uid: ID.uJaya, role: L }, { uid: ID.uSidhak, role: C }], 7500, 4000, 'Design & development for NJ Graphica'),
-    project(ID.pGessure, 'Gessure Platform & Maintenance', 'GESSURE', ID.cGessure, 'ACTIVE', '2025-09-17', null, [{ uid: ID.uSidhak, role: L }], 123001, 78501, 'Platform development (Sep-Feb) + maintenance (Mar+) — Sidhak: 6k/mo (Mar-May, 15k budget), 12k/mo (Jun, 24k budget), 12k/mo (Jul+, 20k budget)'),
+    project(ID.pGessure, 'Gessure Platform', 'GESSURE', ID.cGessure, 'COMPLETED', '2025-09-17', '2026-02-27', [{ uid: ID.uSidhak, role: L }], 54001, 20501, 'Platform development (Sep 2025 – Feb 2026). Maintenance moved to contract from Feb 27, 2026.'),
     project(ID.pShivmani, 'Shivmanicreations Website', 'SP-SHIVMANI', ID.cSP, 'COMPLETED', '2025-09-01', '2025-09-18', [{ uid: ID.uShivam, role: L }], 3500, 2500, 'Website development'),
     project(ID.pShivAiTelerad, 'ShivAiTelerad Website', 'SHIVAI', ID.cShivAiTelerad, 'COMPLETED', '2025-09-19', '2025-11-22', [{ uid: ID.uGeetanjali, role: L }], 6500, 5500, 'Website development — total received 6.5k'),
     project(ID.pSWBuild, 'SW Build Website', 'SWBUILD', ID.cSWBuild, 'COMPLETED', '2025-09-27', '2025-09-27', [{ uid: ID.uSidhak, role: L }], 3500, 2000, 'Website development'),
@@ -328,7 +345,7 @@ async function main() {
     project(ID.pGoLaundry, 'Go Laundry Website', 'GOLAUNDRY', ID.cSculpt, 'COMPLETED', '2025-12-01', '2026-01-15', [{ uid: ID.uGeetanjali, role: L }, { uid: ID.uJaya, role: C }], 14500, 9200, 'Website development for Sculpt Agency'),
     project(ID.pGKGIndustries, 'GKG Industries Website', 'SP-GKG', ID.cSP, 'COMPLETED', '2025-12-15', '2025-12-30', [{ uid: ID.uGeetanjali, role: L, amountINR: 1800, paidINR: 1800, paidAtDate: '2025-12-30' }], 5000, 3200, 'Industries website development — 1.8k paid to Geetanjali'),
     project(ID.pStudycrux, 'Studycrux LMS', 'STUDYCRUX', ID.cStartiffy, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L, amountINR: 22000, paidINR: 7000, payments: [{ amountINR: 1500, paidAtDate: '2026-02-01', note: 'Initial payment' }, { amountINR: 5500, paidAtDate: '2026-05-01', note: 'Second payment' }] }], 50000, 28000, 'LMS development — dev cost 22k; Shivam budgeted 22k, paid 7k (1.5k Feb 1 + 5.5k May 1); 15k pending from client'),
-    project(ID.pDigitalMandir, 'Digital Mandir App', 'DIGITALMANDIR', ID.cDigitalMandir, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uGeetanjali, role: L, amountINR: 9000, paidINR: 9000, payments: [{ amountINR: 4500, paidAtDate: '2026-02-01', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-05-01', note: 'Payment 2' }] }], 9000, 2000, 'App development — fully paid to Geetanjali (4.5k + 4.5k); client paid in full'),
+    project(ID.pDigitalMandir, 'Digital Mandir App', 'DIGITALMANDIR', ID.cDigitalMandir, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uGeetanjali, role: L, amountINR: 9000, paidINR: 9000, payments: [{ amountINR: 4500, paidAtDate: '2026-02-01', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-05-01', note: 'Payment 2' }] }], 15000, 4000, 'Android app + admin panel. Total: ₹15k. Client: 10% advance (1.5k Feb 1) + 50% milestone (7.5k Feb 28) = 9k received. 40% (6k) pending.'),
     project(ID.pHRBook, 'HR Book HRMS', 'HRBOOK', ID.cHorizon, 'ACTIVE', '2026-02-23', null, [{ uid: ID.uJaya, role: L, amountINR: 20000, paidINR: 10000, paidAtDate: '2026-05-01' }, { uid: ID.uSidhak, role: C, amountINR: 20000, paidINR: 0 }], 240000, 82500, 'HRMS platform — 172.5k pending from client; 70k to Jyoti (freelancer, 17.5k paid), 20k to Jaya (10k paid on May 1, 10k pending), 20k to Sidhak pending'),
     project(ID.pFirstrank, 'Firstrank Website & Platform', 'FIRSTRANK', ID.cFirstrank, 'ACTIVE', '2026-03-06', null, [{ uid: ID.uJaya, role: L, amountINR: 45000, paidINR: 10000, paidAtDate: '2026-06-02' }, { uid: ID.uSidhak, role: C, amountINR: 45000, paidINR: 0 }, { uid: ID.uKanish, role: C, amountINR: 0 }], 530000, 440000, 'Website & platform — 85k received of 530k; 10k of 45k paid to Jaya on June 2; 0 of 45k paid to Sidhak'),
     project(ID.pRewardzy, 'Rewardzy Platform', 'REWARDZY', ID.cAnshulGlobal, 'ACTIVE', '2026-03-13', null, [{ uid: ID.uSidhak, role: L, amountINR: 12000, paidINR: 0 }], 30000, 18000, '9k pending from client; 12k to Sidhak (not paid yet)'),
@@ -359,7 +376,7 @@ async function main() {
     issueDate: string, status: string,
     contractId?: Types.ObjectId,
   ) => {
-    invoices.push(invoice(nextInv(), cid, pid, contractId, desc, totalINR, pays, issueDate, status));
+    invoices.push(invoice(nextInv(issueDate), cid, pid, contractId, desc, totalINR, pays, issueDate, status));
   };
 
   // Fenkmat (5500 total, PAID)
@@ -475,19 +492,44 @@ async function main() {
   inv(ID.cNJG, ID.pElectricMarshmallow, 'Electric Marshmallow Design & Development', 7500,
     [payment('2025-08-11', 2250), payment('2025-09-09', 5250)], '2025-08-11', 'PAID');
 
-  // Gessure (123001, ACTIVE — ongoing maintenance)
-  inv(ID.cGessure, ID.pGessure, 'Gessure Platform Development & Maintenance', 123001,
-    [
-      payment('2025-09-17', 4001),
-      payment('2025-10-19', 10000),
-      payment('2025-11-09', 10000),
-      payment('2026-01-05', 15000),
-      payment('2026-01-30', 15000),
-      payment('2026-02-27', 15000),
-      payment('2026-03-31', 15000),
-      payment('2026-04-30', 15000),
-      payment('2026-06-03', 24000),
-    ], '2025-09-17', 'PAID');
+  // Gessure — Development milestones (project invoices; numbers preserve original agency doc sequence)
+  invoices.push(invoice('ZLK-2025-0019', ID.cGessure, ID.pGessure, undefined,
+    'Gessure — Project Kickoff', 4001,
+    [payment('2025-09-17', 4001, 'UPI', 'Payment received for project kickoff')],
+    '2025-09-17', 'PAID'));
+  invoices.push(invoice('ZLK-2025-0020', ID.cGessure, ID.pGessure, undefined,
+    'Gessure — Development Milestone 1', 10000,
+    [payment('2025-10-19', 10000, 'UPI', 'Payment received for milestone 1')],
+    '2025-10-19', 'PAID'));
+  invoices.push(invoice(nextInv('2025-11-09'), ID.cGessure, ID.pGessure, undefined,
+    'Gessure — Development Milestone 2 & 3', 10000,
+    [payment('2025-11-09', 10000)],
+    '2025-11-09', 'PAID'));
+  invoices.push(invoice('ZLK-2026-0021', ID.cGessure, ID.pGessure, undefined,
+    'Gessure — Development Milestone 4', 15000,
+    [payment('2026-01-05', 15000, 'UPI', 'T2601052030175278059313 / UTR: 105340297039')],
+    '2026-01-05', 'PAID'));
+  invoices.push(invoice('ZLK-2026-0022', ID.cGessure, ID.pGessure, undefined,
+    'Gessure — Development Milestone 5', 15000,
+    [payment('2026-01-30', 15000, 'UPI', 'T2601302201596556293975 / UTR: 255766393455')],
+    '2026-01-30', 'PAID'));
+
+  // Gessure — Maintenance invoices (contract)
+  invoices.push(invoice('ZLK-2026-0023', ID.cGessure, undefined, ID.cGessureContract,
+    'Gessure — Support & Maintenance', 15000,
+    [payment('2026-02-27', 15000, 'UPI', 'T2602271931483945575954 / UTR: 621314791177')],
+    '2026-02-27', 'PAID'));
+  invoices.push(invoice('ZLK-2026-0024', ID.cGessure, undefined, ID.cGessureContract,
+    'Gessure — Support & Maintenance — March 2026', 15000,
+    [payment('2026-03-31', 15000, 'UPI', 'T2603311222106893406313 | UTR: 013971040394')],
+    '2026-03-31', 'PAID'));
+  invoices.push(invoice('ZLK-2026-0025', ID.cGessure, undefined, ID.cGessureContract,
+    'Gessure — Support & Maintenance — April 2026', 15000,
+    [payment('2026-04-30', 15000, 'UPI', 'T2604300606554460125994 | UTR: 244261982743')],
+    '2026-04-30', 'PAID'));
+  invoices.push(invoice('ZLK-2026-0026', ID.cGessure, undefined, ID.cGessureContract,
+    'Gessure — Support & Maintenance — May 2026', 24000,
+    [], '2026-06-01', 'UNPAID'));
 
   // Shivmanicreations (3500, PAID)
   inv(ID.cSP, ID.pShivmani, 'Shivmanicreations Website', 3500,
@@ -549,9 +591,16 @@ async function main() {
   inv(ID.cStartiffy, ID.pStudycrux, 'Studycrux LMS Development', 50000,
     [payment('2026-02-01', 5000), payment('2026-05-22', 20000)], '2026-02-01', 'PARTIALLY_PAID');
 
-  // Digital Mandir (9000, PAID by client)
-  inv(ID.cDigitalMandir, ID.pDigitalMandir, 'Digital Mandir App Development', 9000,
-    [payment('2026-02-01', 1500), payment('2026-02-25', 6000), payment('2026-02-28', 1500)], '2026-02-01', 'PAID');
+  // Digital Mandir — two invoices (total project ₹15k, ₹9k received; ₹6k pending)
+  invoices.push(invoice('ZLK-2026-0009', ID.cDigitalMandir, ID.pDigitalMandir, undefined,
+    'Digital Mandir App Development — Advance Payment (10%)', 1500,
+    [payment('2026-02-01', 1500, 'UPI Transfer', 'T2602011444211734427575')],
+    '2026-02-01', 'PAID'));
+  invoices.push(invoice('ZLK-2026-0010', ID.cDigitalMandir, ID.pDigitalMandir, undefined,
+    'Digital Mandir App Development — 50% Project Completion', 7500,
+    [payment('2026-02-25', 6000, 'UPI', 'T2602252309205945592246'), payment('2026-02-28', 1500, 'UPI', 'UTR: 398077738704')],
+    '2026-02-28', 'PAID'));
+  // Remaining 40% (₹6,000) not yet invoiced
 
   // HR Book (240000 total, 67500 received, 172500 pending)
   inv(ID.cHorizon, ID.pHRBook, 'HR Book HRMS Development', 240000,

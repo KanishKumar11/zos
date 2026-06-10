@@ -23,6 +23,7 @@ export interface ContractRow {
   startDate?: string;
   endDate?: string;
   notes?: string;
+  billingDay?: number;
   createdAt: string;
 }
 
@@ -35,6 +36,8 @@ const contractsApi = {
   update: (id: string, body: UpdateContractInput) =>
     unwrap<ContractRow>(api.patch(`/contracts/${id}`, body)),
   remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/contracts/${id}`)),
+  generateInvoice: (id: string, month: string) =>
+    unwrap<{ _id: string; number: string }>(api.post(`/contracts/${id}/generate-invoice`, { month })),
 };
 
 export function useContracts(q: ListContractsQuery = {}) {
@@ -85,6 +88,19 @@ export function useDeleteContract() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contracts'] });
       toast.success('Contract removed');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useGenerateContractInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, month }: { id: string; month: string }) =>
+      contractsApi.generateInvoice(id, month),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      toast.success(`Invoice ${data.number} created as draft`);
     },
     onError: (err: Error) => toast.error(err.message),
   });

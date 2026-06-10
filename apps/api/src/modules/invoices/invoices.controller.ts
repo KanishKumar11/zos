@@ -29,8 +29,9 @@ export class InvoicesController {
     @Query('status') status?: InvoiceStatus,
     @Query('clientId') clientId?: string,
     @Query('projectId') projectId?: string,
+    @Query('contractId') contractId?: string,
   ) {
-    return this.svc.list({ status, clientId, projectId });
+    return this.svc.list({ status, clientId, projectId, contractId });
   }
 
   @Get('dashboard')

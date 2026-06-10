@@ -20,6 +20,7 @@ import {
   useOwnerDashboard,
   useTeamEarnings,
 } from '@/features/dashboard/dashboard.hooks';
+import { BillingReminders } from './billing-reminders';
 
 const shortMonth = (m: string) => {
   const mo = m.split('-')[1] ?? '';
@@ -60,6 +61,8 @@ export default function DashboardPage() {
           </p>
         </div>
       </header>
+
+      {isOwner && <BillingReminders />}
 
       {isOwner && (
         <div className="border-t border-border">

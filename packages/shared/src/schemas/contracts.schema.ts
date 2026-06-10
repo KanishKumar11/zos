@@ -14,6 +14,7 @@ export const createContractSchema = z.object({
   startDate: isoDateSchema.optional(),
   endDate: isoDateSchema.optional(),
   notes: z.string().max(5000).optional(),
+  billingDay: z.number().int().min(1).max(28).optional(),
 });
 export type CreateContractInput = z.infer<typeof createContractSchema>;
 

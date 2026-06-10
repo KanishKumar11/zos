@@ -48,6 +48,7 @@ import { UsersModule } from './modules/users/users.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { FreelancerPaymentsModule } from './modules/freelancer-payments/freelancer-payments.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
+import { LettersModule } from './modules/letters/letters.module';
 
 @Module({
   imports: [
@@ -100,6 +101,7 @@ import { ContractsModule } from './modules/contracts/contracts.module';
     ExpensesModule,
     FreelancerPaymentsModule,
     ContractsModule,
+    LettersModule,
   ],
   providers: [
     { provide: APP_PIPE, useFactory: () => new ValidationPipe({ whitelist: true, transform: true }) },

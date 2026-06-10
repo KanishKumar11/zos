@@ -38,6 +38,13 @@ export interface PayslipRow {
     professionalTax: number;
     tdsMonthly: number;
   };
+  projectPayments?: {
+    projectId: string;
+    projectName: string;
+    amountPaise: number;
+    paidAt: string;
+    note: string;
+  }[];
 }
 
 const payrollApi = {

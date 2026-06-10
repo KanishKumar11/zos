@@ -33,11 +33,12 @@ export class InvoicesService {
     private readonly settings: SettingsService,
   ) {}
 
-  list(filter: { status?: InvoiceStatus; clientId?: string; projectId?: string } = {}): Promise<InvoiceDocument[]> {
+  list(filter: { status?: InvoiceStatus; clientId?: string; projectId?: string; contractId?: string } = {}): Promise<InvoiceDocument[]> {
     const q: Record<string, unknown> = { deletedAt: { $exists: false } };
     if (filter.status) q.status = filter.status;
     if (filter.clientId) q.clientId = new Types.ObjectId(filter.clientId);
     if (filter.projectId) q.projectId = new Types.ObjectId(filter.projectId);
+    if (filter.contractId) q.contractId = new Types.ObjectId(filter.contractId);
     return this.model.find(q).sort({ createdAt: -1 }).limit(500).exec();
   }
 
@@ -76,13 +77,25 @@ export class InvoicesService {
   }
 
   async create(input: CreateInvoiceInput): Promise<InvoiceDocument> {
+    const issueDate = input.issueDate ? new Date(input.issueDate as unknown as string) : new Date();
+    const year = issueDate.getFullYear();
+    let number = input.number;
+    if (!number) {
+      const yearCount = await this.model.countDocuments({
+        deletedAt: { $exists: false },
+        issueDate: { $gte: new Date(year, 0, 1), $lt: new Date(year + 1, 0, 1) },
+      }).exec();
+      number = `ZLK-${year}-${String(yearCount + 1).padStart(4, '0')}`;
+    }
     const doc = new this.model({
       ...input,
+      number,
       clientId: new Types.ObjectId(input.clientId),
       projectId: input.projectId ? new Types.ObjectId(input.projectId) : undefined,
       contractId: input.contractId ? new Types.ObjectId(input.contractId) : undefined,
       status: InvoiceStatus.DRAFT,
       currency: input.currency ?? 'INR',
+      issueDate,
     });
     this.computeTotals(doc);
     return doc.save();
@@ -180,6 +193,12 @@ export class InvoicesService {
       totalPaise: inv.totalPaise,
       paidPaise: inv.paidPaise,
       notes: inv.notes,
+      payments: inv.payments.map((p) => ({
+        paidAt: p.paidAt,
+        amountPaise: p.amountPaise,
+        reference: p.reference || undefined,
+        method: p.method || undefined,
+      })),
     });
     const buffer = await this.pdf.renderPdf(html);
     try {

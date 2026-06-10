@@ -49,4 +49,12 @@ export class ContractsController {
   remove(@Param('id', ObjectIdPipe) id: string) {
     return this.svc.remove(id).then(() => ({ ok: true }));
   }
+
+  @Post(':id/generate-invoice')
+  generateInvoice(
+    @Param('id', ObjectIdPipe) id: string,
+    @Body('month') month: string,
+  ) {
+    return this.svc.generateInvoice(id, month);
+  }
 }

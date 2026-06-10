@@ -14,6 +14,7 @@ import {
 import { ErrorCodes } from '@/common/constants/error-codes';
 import { Paginated, paginate } from '@/common/utils/pagination.util';
 
+import { PayrollRun, type PayrollRunDocument } from '../payroll/schemas/payroll-run.schema';
 import { Payslip, type PayslipDocument } from '../payroll/schemas/payslip.schema';
 import { User, type UserDocument } from '../users/schemas/user.schema';
 import { Project, type ProjectDocument } from './schemas/project.schema';
@@ -24,6 +25,7 @@ const OWNER_ONLY_FIELDS = ['clientId', 'clientBudgetPaise', 'agencyMarginPaise',
 export class ProjectsService {
   constructor(
     @InjectModel(Project.name) private readonly model: Model<ProjectDocument>,
+    @InjectModel(PayrollRun.name) private readonly runs: Model<PayrollRunDocument>,
     @InjectModel(Payslip.name) private readonly slips: Model<PayslipDocument>,
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
   ) {}
@@ -195,7 +197,7 @@ export class ProjectsService {
     return doc.save();
   }
 
-  /** OWNER-only: log a payment made to a specific member for this project. */
+  /** OWNER-only: log a payment made to a specific member for this project. Auto-syncs to payroll. */
   async addMemberPayment(
     projectId: string,
     userId: string,
@@ -207,20 +209,110 @@ export class ProjectsService {
     if (!member) throw new NotFoundException({ code: ErrorCodes.MEMBER_NOT_FOUND, message: 'Member not found on project' });
     (member.payments as any[]).push({ paidAt: input.paidAt, amountPaise: input.amountPaise, note: input.note ?? '' });
     doc.markModified('members');
-    return doc.save();
+    await doc.save();
+    await this.syncPayslip(projectId, doc.name, userId, input.paidAt);
+    return doc;
   }
 
-  /** OWNER-only: delete a specific payment entry from a member's payments log. */
+  /** OWNER-only: delete a specific payment entry from a member's payments log. Auto-syncs to payroll. */
   async removeMemberPayment(projectId: string, userId: string, paymentId: string): Promise<ProjectDocument> {
     const doc = await this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec();
     if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
     const member = doc.members.find((m) => m.userId.toString() === userId);
     if (!member) throw new NotFoundException({ code: ErrorCodes.MEMBER_NOT_FOUND, message: 'Member not found on project' });
+    const removedPayment = member.payments.find((p: any) => p._id.toString() === paymentId);
     const before = member.payments.length;
     (member as any).payments = member.payments.filter((p: any) => p._id.toString() !== paymentId);
     if (member.payments.length === before) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Payment not found' });
     doc.markModified('members');
-    return doc.save();
+    await doc.save();
+    if (removedPayment) await this.syncPayslip(projectId, doc.name, userId, (removedPayment as any).paidAt);
+    return doc;
+  }
+
+  /**
+   * Upsert a payslip for the month of paidAt, reflecting all project payments
+   * for this user in that month across ALL projects.
+   */
+  private async syncPayslip(_projectId: string, _projectName: string, userId: string, paidAt: Date): Promise<void> {
+    const month = `${paidAt.getFullYear()}-${String(paidAt.getMonth() + 1).padStart(2, '0')}`;
+    const start = new Date(paidAt.getFullYear(), paidAt.getMonth(), 1);
+    const end = new Date(paidAt.getFullYear(), paidAt.getMonth() + 1, 1);
+
+    // Collect all project payments for this user in this month across all projects
+    const allProjects = await this.model.find({
+      'members.userId': new Types.ObjectId(userId),
+      deletedAt: { $exists: false },
+    }).exec();
+
+    const projectPayments: { projectId: Types.ObjectId; projectName: string; amountPaise: number; paidAt: Date; note: string }[] = [];
+    for (const proj of allProjects) {
+      const mem = proj.members.find((m) => m.userId.toString() === userId);
+      if (!mem) continue;
+      for (const pay of mem.payments as any[]) {
+        const payDate = new Date(pay.paidAt);
+        if (payDate >= start && payDate < end) {
+          projectPayments.push({
+            projectId: proj._id as Types.ObjectId,
+            projectName: proj.name,
+            amountPaise: pay.amountPaise,
+            paidAt: payDate,
+            note: pay.note ?? '',
+          });
+        }
+      }
+    }
+
+    const totalPaise = projectPayments.reduce((s, p) => s + p.amountPaise, 0);
+
+    // Find or create payroll run for this month
+    let run = await this.runs.findOne({ month }).exec();
+    if (!run) {
+      run = await this.runs.create({
+        month,
+        status: 'FINALIZED',
+        totalNetPaise: 0,
+        employeeCount: 0,
+        notes: `Project-based payouts for ${month}`,
+      });
+    }
+
+    // Upsert the payslip — preserve existing stipend/adjustment portion if present
+    const existing = await this.slips.findOne({ runId: run._id, userId: new Types.ObjectId(userId) }).exec();
+    const stipendNet = existing ? (existing.netPaise - (existing.projectPayments?.reduce((s, p) => s + p.amountPaise, 0) ?? 0)) : 0;
+    const newNet = Math.max(0, stipendNet) + totalPaise;
+
+    await this.slips.findOneAndUpdate(
+      { runId: run._id, userId: new Types.ObjectId(userId) },
+      {
+        $set: {
+          runId: run._id,
+          month,
+          userId: new Types.ObjectId(userId),
+          projectPayments,
+          netPaise: newNet,
+          grossPaise: newNet,
+          deductionsPaise: existing?.deductionsPaise ?? 0,
+          workingDays: existing?.workingDays ?? 0,
+          presentDays: existing?.presentDays ?? 0,
+          lopDays: existing?.lopDays ?? 0,
+          currency: existing?.currency ?? 'INR',
+          breakdown: existing?.breakdown ?? {
+            baseAmount: 0, hra: 0, specialAllowance: 0, lopDeduction: 0,
+            providentFundEmployee: 0, professionalTax: 0, tdsMonthly: 0,
+            lateDeduction: 0, bonusPaise: 0, manualDeductionPaise: 0,
+          },
+          adjustments: existing?.adjustments ?? [],
+        },
+      },
+      { upsert: true, new: true },
+    );
+
+    // Update run totals
+    const allSlips = await this.slips.find({ runId: run._id }).exec();
+    run.totalNetPaise = allSlips.reduce((s, sl) => s + sl.netPaise, 0);
+    run.employeeCount = allSlips.length;
+    await run.save();
   }
 
   /** OWNER-only: payslip totals per member for this project's date range. */

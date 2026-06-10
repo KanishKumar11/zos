@@ -66,9 +66,23 @@ function Inner({ id }: { id: string }) {
               {(slips.data ?? []).map((s) => (
                 <TR key={s._id}>
                   <TD>
-                    <a href={`/team/${s.userId}`} className="text-blue-600 hover:underline">
-                      {teamMap.get(s.userId) || s.userId}
-                    </a>
+                    <div>
+                      <a href={`/team/${s.userId}`} className="text-blue-600 hover:underline font-medium">
+                        {teamMap.get(s.userId) || s.userId}
+                      </a>
+                      {s.projectPayments && s.projectPayments.length > 0 && (
+                        <div className="mt-1 space-y-0.5">
+                          {s.projectPayments.map((pp: any, i: number) => (
+                            <div key={i} className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <a href={`/projects/${pp.projectId}`} className="hover:underline text-blue-500">
+                                {pp.projectName}
+                              </a>
+                              <span>— {formatPaise(pp.amountPaise, s.currency)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </TD>
                   <TD>{s.workingDays}</TD>
                   <TD>{s.presentDays}</TD>

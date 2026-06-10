@@ -22,6 +22,7 @@ export class Contract {
   @Prop({ type: Date }) startDate?: Date;
   @Prop({ type: Date }) endDate?: Date;
   @Prop({ default: '' }) notes!: string;
+  @Prop({ type: Number, min: 1, max: 28 }) billingDay?: number;
   @Prop({ type: Date }) deletedAt?: Date;
 }
 

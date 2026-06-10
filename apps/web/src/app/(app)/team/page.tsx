@@ -57,7 +57,14 @@ export default function TeamPage() {
       <PageHeader
         title="Team"
         description="Manage members, roles, and departments."
-        action={<Button onClick={() => setOpen(true)}>Invite member</Button>}
+        action={
+          <div className="flex gap-2">
+            <Link href="/team/internship-letter">
+              <Button variant="outline">Internship Letter</Button>
+            </Link>
+            <Button onClick={() => setOpen(true)}>Invite member</Button>
+          </div>
+        }
       />
 
       <div className="grid gap-3 md:grid-cols-4">

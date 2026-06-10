@@ -1,20 +1,22 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, Calendar, DollarSign, FileText } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, Calendar, DollarSign, FileText, Plus } from 'lucide-react';
 
 import { ContractStatus, Role } from '@agency/shared';
 
 import { RoleGate } from '@/components/auth/role-gate';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatPaise, formatDate } from '@/lib/formatters';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { useContract } from '@/features/contracts/contracts.hooks';
+import { useContract, useGenerateContractInvoice } from '@/features/contracts/contracts.hooks';
 import { useClients } from '@/features/clients/clients.hooks';
 import { useInvoices } from '@/features/invoices/invoices.hooks';
 
@@ -45,9 +47,13 @@ export default function ContractDetailPage() {
 }
 
 function Inner({ contractId }: { contractId: string }) {
+  const router = useRouter();
   const contract = useContract(contractId);
   const clients = useClients();
   const invoices = useInvoices({ contractId });
+  const generateInvoice = useGenerateContractInvoice();
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
 
   const clientName = clients.data?.find((c) => c._id === contract.data?.clientId)?.name;
   const contractInvoices = invoices.data || [];
@@ -76,7 +82,33 @@ function Inner({ contractId }: { contractId: string }) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={c.name} description={c.description} />
+      <PageHeader
+        title={c.name}
+        description={c.description}
+        action={
+          <div className="flex items-center gap-2">
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            />
+            <Button
+              onClick={() =>
+                generateInvoice.mutate(
+                  { id: contractId, month: selectedMonth },
+                  { onSuccess: (data) => router.push(`/invoices/${data._id}`) },
+                )
+              }
+              disabled={generateInvoice.isPending}
+              size="sm"
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              {generateInvoice.isPending ? 'Generating…' : 'Generate Invoice'}
+            </Button>
+          </div>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>

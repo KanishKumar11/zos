@@ -3,6 +3,16 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { type HydratedDocument, Schema as MS, Types } from 'mongoose';
 
 @Schema({ _id: false })
+export class ProjectPaymentEntry {
+  @Prop({ type: MS.Types.ObjectId, required: true }) projectId!: Types.ObjectId;
+  @Prop({ required: true }) projectName!: string;
+  @Prop({ type: Number, required: true }) amountPaise!: number;
+  @Prop({ required: true }) paidAt!: Date;
+  @Prop({ default: '' }) note!: string;
+}
+export const ProjectPaymentEntrySchema = SchemaFactory.createForClass(ProjectPaymentEntry);
+
+@Schema({ _id: false })
 export class PayslipBreakdown {
   @Prop({ type: Number, default: 0 }) baseAmount!: number;
   @Prop({ type: Number, default: 0 }) hra!: number;
@@ -43,6 +53,7 @@ export class Payslip {
   @Prop() pdfKey?: string;
   @Prop({ default: 'INR' }) currency!: string;
   @Prop({ type: [PayslipAdjustmentSchema], default: [] }) adjustments!: PayslipAdjustment[];
+  @Prop({ type: [ProjectPaymentEntrySchema], default: [] }) projectPayments!: ProjectPaymentEntry[];
 }
 
 export type PayslipDocument = HydratedDocument<Payslip>;
