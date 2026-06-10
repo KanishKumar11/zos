@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/page-header';
 import { useInvoices } from '@/features/invoices/invoices.hooks';
+import { useContracts } from '@/features/contracts/contracts.hooks';
 import {
   useProject, useSetMemberCost,
   useAddMemberPayment, useRemoveMemberPayment,
@@ -30,6 +31,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const team = useTeamList({ pageSize: 100 });
   const invoices = useInvoices({ projectId: id });
   const freelancerPayments = useFreelancerPaymentsByProject(isOwner ? id : undefined);
+  const contracts = useContracts();
 
   if (project.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!project.data) return <p className="text-sm text-muted-foreground">Not found.</p>;
@@ -47,9 +49,35 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const freelancerAgreed = freelancerList.reduce((s, f) => s + f.agreedTotalPaise, 0);
   const freelancerPaid = freelancerList.reduce((s, f) => s + f.paidPaise, 0);
 
+  const relatedContractIds = new Set(
+    (invoices.data ?? [])
+      .filter((inv) => inv.contractId)
+      .map((inv) => inv.contractId)
+  );
+  const relatedContracts = (contracts.data ?? []).filter((c) => relatedContractIds.has(c._id));
+
   return (
     <div className="space-y-6">
       <PageHeader title={p.name} description={`${p.code} · ${p.status}`} />
+
+      {relatedContracts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Related Contracts</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {relatedContracts.map((c) => (
+              <a
+                key={c._id}
+                href={`/contracts/${c._id}`}
+                className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent hover:underline"
+              >
+                {c.name}
+              </a>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -107,12 +135,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               return (
                 <div key={inv._id} className="rounded border p-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{inv.number}</span>
+                    <a href={`/invoices/${inv._id}`} className="text-sm font-medium hover:underline text-blue-600">
+                      {inv.number}
+                    </a>
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-muted-foreground">
                         Total: {formatPaise(inv.totalPaise, inv.currency)}
                       </span>
                       <InvoiceStatusBadge status={inv.status} />
+                      <a href={`/invoices/${inv._id}`} className="text-xs text-blue-600 hover:underline">
+                        View →
+                      </a>
                     </div>
                   </div>
                   {inv.payments.length > 0 ? (

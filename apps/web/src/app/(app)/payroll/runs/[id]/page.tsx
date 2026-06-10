@@ -13,6 +13,7 @@ import { formatPaise } from '@/lib/formatters';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { usePayrollRun, useRunPayslips } from '@/features/payroll/payroll.hooks';
+import { useTeamList } from '@/features/team/team.hooks';
 
 export default function PayrollRunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -26,6 +27,9 @@ export default function PayrollRunPage({ params }: { params: Promise<{ id: strin
 function Inner({ id }: { id: string }) {
   const run = usePayrollRun(id);
   const slips = useRunPayslips(id);
+  const team = useTeamList({ pageSize: 100 });
+
+  const teamMap = new Map((team.data ?? []).map((u) => [u._id, u.name]));
 
   return (
     <div className="space-y-6">
@@ -33,6 +37,12 @@ function Inner({ id }: { id: string }) {
         title={`Payroll run ${run.data?.month ?? '…'}`}
         description={run.data ? `${run.data.status} · ${run.data.employeeCount} team members · ${formatPaise(run.data.totalNetPaise, 'INR')} total net` : undefined}
       />
+
+      <Card>
+        <CardContent className="pt-6 text-sm text-muted-foreground">
+          💡 For individual project payments and member payment tracking, view the <a href="/projects" className="text-blue-600 hover:underline">Projects</a> section.
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -55,7 +65,11 @@ function Inner({ id }: { id: string }) {
             <TBody>
               {(slips.data ?? []).map((s) => (
                 <TR key={s._id}>
-                  <TD>{s.userId}</TD>
+                  <TD>
+                    <a href={`/team/${s.userId}`} className="text-blue-600 hover:underline">
+                      {teamMap.get(s.userId) || s.userId}
+                    </a>
+                  </TD>
                   <TD>{s.workingDays}</TD>
                   <TD>{s.presentDays}</TD>
                   <TD>{s.lopDays}</TD>

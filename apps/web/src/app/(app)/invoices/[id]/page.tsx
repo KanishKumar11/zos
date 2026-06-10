@@ -68,7 +68,7 @@ function Inner({ id }: { id: string }) {
         }
       />
 
-      <div>
+      <div className="flex flex-wrap gap-2">
         <a
           href={`${env.apiBaseUrl}/invoices/${id}/pdf`}
           target="_blank"
@@ -78,6 +78,32 @@ function Inner({ id }: { id: string }) {
           Download PDF
         </a>
       </div>
+
+      {(i.projectId || i.contractId) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Related</CardTitle>
+          </CardHeader>
+          <CardContent className="flex gap-3">
+            {i.projectId && (
+              <a
+                href={`/projects/${i.projectId}`}
+                className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
+              >
+                → View Project
+              </a>
+            )}
+            {i.contractId && (
+              <a
+                href={`/contracts/${i.contractId}`}
+                className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
+              >
+                → View Contract
+              </a>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

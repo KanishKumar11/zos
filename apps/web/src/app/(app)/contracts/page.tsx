@@ -178,6 +178,7 @@ function Inner() {
                 <TH>Status</TH>
                 <TH>Start</TH>
                 <TH>Notes</TH>
+                <TH></TH>
               </TR>
             </THead>
             <TBody>
@@ -201,6 +202,11 @@ function Inner() {
                   </TD>
                   <TD>{c.startDate ? new Date(c.startDate).toLocaleDateString() : '—'}</TD>
                   <TD className="max-w-xs truncate text-muted-foreground">{c.notes || '—'}</TD>
+                  <TD>
+                    <a href={`/contracts/${c._id}`} className="text-xs text-blue-600 hover:underline">
+                      View →
+                    </a>
+                  </TD>
                 </TR>
               ))}
             </TBody>
