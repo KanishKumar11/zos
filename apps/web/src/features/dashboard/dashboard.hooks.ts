@@ -14,6 +14,45 @@ export interface OwnerDashboard {
     byStatus: Record<string, { total: number; paid: number; count: number }>;
   };
   lastPayrollRun: { month: string; totalNetPaise: number; memberCount: number } | null;
+  revenueThisMonth: number;
+  revenueThisFinancialYear: number;
+  profitThisMonth: number;
+  profitThisFinancialYear: number;
+  fyLabel: string;
+}
+
+export interface BirthdayNotification {
+  userId: string;
+  name: string;
+  daysUntil: number;
+  dateLabel: string;
+}
+
+export interface DashboardNotifications {
+  birthdays: BirthdayNotification[];
+  payrollReminder: { month: string } | null;
+}
+
+export interface MemberEarningPoint {
+  month: string;
+  grossPaise: number;
+  netPaise: number;
+  deductionsPaise: number;
+}
+
+export interface MemberProjectStat {
+  projectId: string;
+  projectName: string;
+  projectCode: string;
+  status: string;
+  role?: string;
+  amountPaise: number;
+  payments: { paidAt: string; amountPaise: number; note?: string }[];
+}
+
+export interface MemberStats {
+  earnings: MemberEarningPoint[];
+  projects: MemberProjectStat[];
 }
 
 export interface MemberDashboard {
@@ -58,6 +97,8 @@ export const dashboardApi = {
   charts: () => unwrap<OwnerCharts>(api.get('/dashboard/owner/charts')),
   teamEarnings: (month?: string) =>
     unwrap<TeamEarnings>(api.get('/dashboard/owner/team-earnings', { params: month ? { month } : {} })),
+  notifications: () => unwrap<DashboardNotifications>(api.get('/dashboard/owner/notifications')),
+  memberStats: (id: string) => unwrap<MemberStats>(api.get(`/dashboard/owner/member/${id}/stats`)),
 };
 
 export function useOwnerDashboard(enabled: boolean) {
@@ -77,6 +118,21 @@ export function useTeamEarnings(month: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: [...qk.dashboard.owner(), 'team-earnings', month ?? 'current'],
     queryFn: () => dashboardApi.teamEarnings(month),
+    enabled,
+  });
+}
+export function useDashboardNotifications(enabled: boolean) {
+  return useQuery({
+    queryKey: [...qk.dashboard.owner(), 'notifications'],
+    queryFn: dashboardApi.notifications,
+    enabled,
+    refetchInterval: 60 * 60 * 1000, // refresh hourly
+  });
+}
+export function useMemberStats(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...qk.dashboard.owner(), 'member-stats', id],
+    queryFn: () => dashboardApi.memberStats(id),
     enabled,
   });
 }

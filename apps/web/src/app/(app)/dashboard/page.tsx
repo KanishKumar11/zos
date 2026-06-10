@@ -2,11 +2,15 @@
 
 import { useState } from 'react';
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
+  Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts';
 import { Role } from '@agency/shared';
 
@@ -21,6 +25,7 @@ import {
   useTeamEarnings,
 } from '@/features/dashboard/dashboard.hooks';
 import { BillingReminders } from './billing-reminders';
+import { DashboardNotifications } from './dashboard-notifications';
 
 const shortMonth = (m: string) => {
   const mo = m.split('-')[1] ?? '';
@@ -62,34 +67,59 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {isOwner && <DashboardNotifications />}
       {isOwner && <BillingReminders />}
 
       {isOwner && (
         <div className="border-t border-border">
-          {/* Top Section: Primary Metric + Sparkline vs Secondary Stack */}
+          {/* Revenue row: this month / this FY / collected all time / outstanding */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-border divide-x divide-border">
+            <StatBlock
+              title={`Revenue — ${new Date().toLocaleString('en-IN', { month: 'short' })} ${new Date().getFullYear()}`}
+              value={owner.isLoading ? '—' : formatPaise(owner.data?.revenueThisMonth ?? 0, 'INR')}
+            />
+            <StatBlock
+              title={owner.data?.fyLabel ?? 'This Financial Year'}
+              value={owner.isLoading ? '—' : formatPaise(owner.data?.revenueThisFinancialYear ?? 0, 'INR')}
+            />
+            <StatBlock
+              title="Profit This Month"
+              value={owner.isLoading ? '—' : formatPaise(owner.data?.profitThisMonth ?? 0, 'INR')}
+              valueClassName={(owner.data?.profitThisMonth ?? 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}
+            />
+            <StatBlock
+              title="Profit This FY"
+              value={owner.isLoading ? '—' : formatPaise(owner.data?.profitThisFinancialYear ?? 0, 'INR')}
+              valueClassName={(owner.data?.profitThisFinancialYear ?? 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}
+            />
+          </div>
+
+          {/* Top Section: Primary Metric + Chart vs Secondary Stack */}
           <div className="grid grid-cols-1 lg:grid-cols-12 border-b border-border">
             {/* Primary Left */}
             <div className="lg:col-span-8 lg:border-r border-border p-6 md:p-12 flex flex-col">
-              <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-6">Collected YTD</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-6">All-Time Collected</p>
               <div className="text-6xl md:text-8xl lg:text-[10rem] leading-none font-medium tracking-tighter mb-12 lg:mb-24">
                 {owner.isLoading ? <Skeleton className="h-24 w-1/2 rounded-none" /> : formatPaise(owner.data?.invoices.collected ?? 0, 'INR')}
               </div>
-              
-              <div className="h-32 md:h-48 w-full mt-auto">
+
+              {/* Revenue + Profit dual-line chart */}
+              <div className="h-48 md:h-64 w-full mt-auto">
                 {charts.isLoading ? (
                   <Skeleton className="h-full w-full rounded-none" />
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                      <Area 
-                        type="monotone" 
-                        dataKey="Revenue" 
-                        stroke="var(--foreground)" 
-                        strokeWidth={1.5} 
-                        fill="none" 
-                        isAnimationActive={false} 
+                    <LineChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
+                      <YAxis hide />
+                      <Tooltip
+                        contentStyle={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+                        formatter={(v: number) => [`₹${Math.round(v / 100).toLocaleString('en-IN')}`, '']}
                       />
-                    </AreaChart>
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
+                      <Line type="monotone" dataKey="Revenue" stroke="var(--foreground)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="Profit" stroke="#10b981" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeDasharray="4 2" />
+                    </LineChart>
                   </ResponsiveContainer>
                 )}
               </div>
@@ -97,18 +127,18 @@ export default function DashboardPage() {
 
             {/* Secondary Right */}
             <div className="lg:col-span-4 flex flex-col">
-              <StatBlock 
-                title="Active Projects" 
-                value={owner.isLoading ? '—' : owner.data?.activeProjects.toString() ?? '0'} 
+              <StatBlock
+                title="Active Projects"
+                value={owner.isLoading ? '—' : owner.data?.activeProjects.toString() ?? '0'}
               />
-              <StatBlock 
-                title="Active SOWs" 
-                value={owner.isLoading ? '—' : owner.data?.activeSows.toString() ?? '0'} 
+              <StatBlock
+                title="Active SOWs"
+                value={owner.isLoading ? '—' : owner.data?.activeSows.toString() ?? '0'}
               />
-              <StatBlock 
-                title="Outstanding" 
-                value={owner.isLoading ? '—' : formatPaise(owner.data?.invoices.outstanding ?? 0, 'INR')} 
-                className="border-b-0 flex-1" 
+              <StatBlock
+                title="Outstanding"
+                value={owner.isLoading ? '—' : formatPaise(owner.data?.invoices.outstanding ?? 0, 'INR')}
+                className="border-b-0 flex-1"
                 valueClassName="text-destructive"
               />
             </div>
@@ -129,6 +159,10 @@ export default function DashboardPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barSize={8} barGap={4}>
+                      <Tooltip
+                        contentStyle={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+                        formatter={(v: number) => [`₹${Math.round(v / 100).toLocaleString('en-IN')}`, '']}
+                      />
                       <Bar dataKey="Payroll" fill="var(--foreground)" />
                       <Bar dataKey="Expenses" fill="var(--muted-foreground)" opacity={0.3} />
                     </BarChart>
