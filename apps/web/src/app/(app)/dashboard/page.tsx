@@ -54,14 +54,14 @@ export default function DashboardPage() {
   }));
 
   return (
-    <div className="max-w-[1600px] mx-auto pb-24">
+    <div className="max-w-[1400px] mx-auto pb-16">
       {/* Header */}
-      <header className="border-b border-border py-8 md:py-16 mb-8 md:mb-16 px-4 md:px-0">
+      <header className="border-b border-border py-6 md:py-10 mb-6 md:mb-10 px-4 md:px-0">
         <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
-          <h1 className="text-5xl md:text-7xl font-medium tracking-tighter uppercase">
-            Agency<br />Ledger
+          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground">
+            Agency Ledger
           </h1>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-mono">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground font-mono">
             Operator // {user?.name?.split(' ')[0] ?? 'System'}
           </p>
         </div>
@@ -97,28 +97,28 @@ export default function DashboardPage() {
           {/* Top Section: Primary Metric + Chart vs Secondary Stack */}
           <div className="grid grid-cols-1 lg:grid-cols-12 border-b border-border">
             {/* Primary Left */}
-            <div className="lg:col-span-8 lg:border-r border-border p-6 md:p-12 flex flex-col">
-              <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-6">All-Time Collected</p>
-              <div className="text-6xl md:text-8xl lg:text-[10rem] leading-none font-medium tracking-tighter mb-12 lg:mb-24">
-                {owner.isLoading ? <Skeleton className="h-24 w-1/2 rounded-none" /> : formatPaise(owner.data?.invoices.collected ?? 0, 'INR')}
+            <div className="lg:col-span-8 lg:border-r border-border p-6 md:p-8 flex flex-col">
+              <p className="text-xs uppercase tracking-wider font-mono text-muted-foreground mb-4">All-Time Collected</p>
+              <div className="text-4xl md:text-5xl lg:text-6xl leading-none font-semibold tracking-tight mb-8">
+                {owner.isLoading ? <Skeleton className="h-16 w-1/2 rounded-md" /> : formatPaise(owner.data?.invoices.collected ?? 0, 'INR')}
               </div>
 
               {/* Revenue + Profit dual-line chart */}
-              <div className="h-48 md:h-64 w-full mt-auto">
+              <div className="h-56 md:h-72 w-full mt-auto">
                 {charts.isLoading ? (
-                  <Skeleton className="h-full w-full rounded-none" />
+                  <Skeleton className="h-full w-full rounded-md" />
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
                       <YAxis hide />
                       <Tooltip
                         contentStyle={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
                         formatter={(v: number) => [`₹${Math.round(v / 100).toLocaleString('en-IN')}`, '']}
                       />
-                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
-                      <Line type="monotone" dataKey="Revenue" stroke="var(--foreground)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-                      <Line type="monotone" dataKey="Profit" stroke="#10b981" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeDasharray="4 2" />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                      <Line type="monotone" dataKey="Revenue" stroke="var(--foreground)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="Profit" stroke="#10b981" strokeWidth={2} dot={false} isAnimationActive={false} strokeDasharray="4 4" />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
@@ -146,25 +146,25 @@ export default function DashboardPage() {
 
           {/* Cost Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-12 border-b border-border">
-            <div className="lg:col-span-4 lg:border-r border-border border-b lg:border-b-0 p-6 md:p-12 flex flex-col justify-between">
-              <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-6">Cost Breakdown</p>
-              <div className="text-4xl md:text-6xl font-medium tracking-tighter">
+            <div className="lg:col-span-4 lg:border-r border-border border-b lg:border-b-0 p-6 md:p-8 flex flex-col justify-between">
+              <p className="text-xs uppercase tracking-wider font-mono text-muted-foreground mb-4">Cost Breakdown</p>
+              <div className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
                 Payroll &<br />Expenses
               </div>
             </div>
-            <div className="lg:col-span-8 p-6 md:p-12">
-              <div className="h-48 md:h-64 w-full">
+            <div className="lg:col-span-8 p-6 md:p-8">
+              <div className="h-56 md:h-72 w-full">
                 {charts.isLoading ? (
-                  <Skeleton className="h-full w-full rounded-none" />
+                  <Skeleton className="h-full w-full rounded-md" />
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barSize={8} barGap={4}>
+                    <BarChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barSize={12} barGap={4}>
                       <Tooltip
                         contentStyle={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
                         formatter={(v: number) => [`₹${Math.round(v / 100).toLocaleString('en-IN')}`, '']}
                       />
-                      <Bar dataKey="Payroll" fill="var(--foreground)" />
-                      <Bar dataKey="Expenses" fill="var(--muted-foreground)" opacity={0.3} />
+                      <Bar dataKey="Payroll" fill="var(--foreground)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Expenses" fill="var(--muted-foreground)" opacity={0.4} radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -173,63 +173,63 @@ export default function DashboardPage() {
           </div>
 
           {/* Team Payroll Ledger */}
-          <div className="p-6 md:p-12 border-b border-border">
-            <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
+          <div className="p-6 md:p-8 border-b border-border">
+            <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-2">Ledger</p>
-                <h2 className="text-4xl md:text-6xl font-medium tracking-tighter">Team Payroll</h2>
+                <p className="text-xs uppercase tracking-wider font-mono text-muted-foreground mb-2">Ledger</p>
+                <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">Team Payroll</h2>
               </div>
               <input
                 type="month"
                 value={earningsMonth}
                 onChange={(e) => setEarningsMonth(e.target.value)}
-                className="bg-transparent border-b border-foreground rounded-none px-0 py-2 text-xl md:text-3xl font-medium tracking-tight focus:outline-none focus:border-foreground w-48"
+                className="bg-transparent border-b border-border rounded-none px-0 py-1 text-base md:text-lg font-medium tracking-tight focus:outline-none focus:border-foreground w-40 text-foreground transition-colors"
               />
             </div>
 
             <div>
               {teamEarnings.isLoading ? (
                 <div className="space-y-4">
-                  {[1,2,3].map((i) => <Skeleton key={i} className="h-12 w-full rounded-none" />)}
+                  {[1,2,3].map((i) => <Skeleton key={i} className="h-10 w-full rounded-md" />)}
                 </div>
               ) : (teamEarnings.data?.members.length ?? 0) === 0 ? (
-                <p className="py-12 text-center text-sm font-mono uppercase tracking-[0.2em] text-muted-foreground">No ledger entries.</p>
+                <p className="py-12 text-center text-sm font-mono uppercase tracking-widest text-muted-foreground">No ledger entries.</p>
               ) : (
                 <div className="overflow-x-auto -mx-4 md:-mx-8 px-4 md:px-8">
                   <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead>
                       <tr>
-                        <th className="pb-4 pt-2 font-semibold text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap">Team Member</th>
-                        <th className="pb-4 pt-2 font-semibold text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Gross Pay</th>
-                        <th className="pb-4 pt-2 font-semibold text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Deductions</th>
-                        <th className="pb-4 pt-2 font-semibold text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Net Deposit</th>
+                        <th className="pb-3 pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap">Team Member</th>
+                        <th className="pb-3 pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Gross Pay</th>
+                        <th className="pb-3 pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Deductions</th>
+                        <th className="pb-3 pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Net Deposit</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(teamEarnings.data?.members ?? []).map((m) => (
-                        <tr key={m.userId} className="group hover:bg-muted/5 transition-colors">
-                          <td className="py-5 text-sm font-medium text-foreground border-b border-border align-middle">{m.name}</td>
-                          <td className="py-5 text-sm text-foreground border-b border-border align-middle text-right">{formatPaise(m.grossPaise, 'INR')}</td>
-                          <td className="py-5 text-sm text-destructive border-b border-border align-middle text-right">
+                        <tr key={m.userId} className="group hover:bg-muted/30 transition-colors">
+                          <td className="py-4 text-sm font-medium text-foreground border-b border-border align-middle">{m.name}</td>
+                          <td className="py-4 text-sm text-foreground border-b border-border align-middle text-right">{formatPaise(m.grossPaise, 'INR')}</td>
+                          <td className="py-4 text-sm text-destructive border-b border-border align-middle text-right">
                             {m.deductionsPaise > 0 ? `−${formatPaise(m.deductionsPaise, 'INR')}` : '—'}
                           </td>
-                          <td className="py-5 text-sm font-semibold text-foreground border-b border-border align-middle text-right">{formatPaise(m.netPaise, 'INR')}</td>
+                          <td className="py-4 text-sm font-semibold text-foreground border-b border-border align-middle text-right">{formatPaise(m.netPaise, 'INR')}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td className="py-5 text-sm font-semibold text-foreground border-b-0 align-middle">Total Aggregated</td>
-                        <td className="py-5 text-sm text-muted-foreground border-b-0 align-middle text-right">
+                        <td className="py-4 text-sm font-medium text-foreground border-b-0 align-middle">Total Aggregated</td>
+                        <td className="py-4 text-sm text-muted-foreground border-b-0 align-middle text-right">
                           {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.grossPaise, 0), 'INR')}
                         </td>
-                        <td className="py-5 text-sm text-destructive border-b-0 align-middle text-right">
+                        <td className="py-4 text-sm text-destructive border-b-0 align-middle text-right">
                           {(() => {
                             const tot = (teamEarnings.data?.members ?? []).reduce((s, m) => s + m.deductionsPaise, 0);
                             return tot > 0 ? `−${formatPaise(tot, 'INR')}` : '—';
                           })()}
                         </td>
-                        <td className="py-5 text-sm font-semibold text-foreground border-b-0 align-middle text-right">
+                        <td className="py-4 text-sm font-semibold text-foreground border-b-0 align-middle text-right">
                           {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.netPaise, 0), 'INR')}
                         </td>
                       </tr>
@@ -243,8 +243,8 @@ export default function DashboardPage() {
       )}
 
       {/* Personal Snapshot */}
-      <div className="mt-16 md:mt-32 px-4 md:px-0">
-        <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-8">Personal Snapshot</p>
+      <div className="mt-12 md:mt-16 px-4 md:px-0">
+        <p className="text-xs uppercase tracking-wider font-mono text-muted-foreground mb-6">Personal Snapshot</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-t border-b border-border divide-y md:divide-y-0 md:divide-x divide-border">
           <StatBlock 
             title="Active Assignments" 
@@ -281,11 +281,11 @@ function StatBlock({
   valueClassName?: string;
 }) {
   return (
-    <div className={`p-6 md:p-12 border-b border-border flex flex-col justify-center ${className}`}>
-      <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-6">
+    <div className={`p-5 md:p-6 border-b border-border flex flex-col justify-center ${className}`}>
+      <p className="text-xs uppercase tracking-wider font-mono text-muted-foreground mb-2">
         {title}
       </p>
-      <p className={`text-4xl md:text-6xl lg:text-7xl font-medium tracking-tighter ${valueClassName || 'text-foreground'}`}>
+      <p className={`text-2xl md:text-3xl font-semibold tracking-tight ${valueClassName || 'text-foreground'}`}>
         {value}
       </p>
     </div>
