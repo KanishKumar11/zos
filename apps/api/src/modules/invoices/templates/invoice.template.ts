@@ -79,7 +79,7 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
 <div style="padding:40px 44px;max-width:800px;margin:0 auto">
 
   <!-- Header: Logo left · Invoice meta right -->
-  <div style="display:flex;justify-content:space-between;align-items:center;padding-top:24px;margin-bottom:36px;padding-bottom:28px;border-bottom:1px solid #e5e7eb">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:36px;padding-bottom:28px;border-bottom:1px solid #e5e7eb">
     <div>
       ${LOGO_SVG}
       <p style="font-size:10px;color:#9ca3af;letter-spacing:0.04em;margin-top:4px;padding-left:1px">Software &amp; Design Services</p>
