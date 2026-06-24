@@ -136,6 +136,14 @@ export default function DashboardPage() {
                 value={owner.isLoading ? '—' : owner.data?.activeSows.toString() ?? '0'}
               />
               <StatBlock
+                title={`Expenses — ${new Date().toLocaleString('en-IN', { month: 'short' })} ${new Date().getFullYear()}`}
+                value={owner.isLoading ? '—' : formatPaise(owner.data?.expensesThisMonth ?? 0, 'INR')}
+              />
+              <StatBlock
+                title={`Expenses — ${new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleString('en-IN', { month: 'short' })} ${new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).getFullYear()}`}
+                value={owner.isLoading ? '—' : formatPaise(owner.data?.expensesNextMonth ?? 0, 'INR')}
+              />
+              <StatBlock
                 title="Outstanding"
                 value={owner.isLoading ? '—' : formatPaise(owner.data?.invoices.outstanding ?? 0, 'INR')}
                 className="border-b-0 flex-1"

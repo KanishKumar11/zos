@@ -65,14 +65,13 @@ export class InvoicesService {
   }
 
   private updateStatusByPayments(doc: InvoiceDocument): void {
-    if (doc.status === InvoiceStatus.DRAFT) return;
-    if (doc.paidPaise === 0) {
+    if (doc.paidPaise >= doc.totalPaise && doc.totalPaise > 0) {
+      doc.status = InvoiceStatus.PAID;
+    } else if (doc.paidPaise > 0 && doc.status !== InvoiceStatus.DRAFT) {
+      doc.status = InvoiceStatus.PARTIAL;
+    } else if (doc.paidPaise === 0 && doc.status !== InvoiceStatus.DRAFT) {
       const overdue = doc.dueDate && doc.dueDate < new Date();
       doc.status = overdue ? InvoiceStatus.OVERDUE : InvoiceStatus.SENT;
-    } else if (doc.paidPaise >= doc.totalPaise) {
-      doc.status = InvoiceStatus.PAID;
-    } else {
-      doc.status = InvoiceStatus.PARTIAL;
     }
   }
 

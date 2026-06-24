@@ -56,6 +56,8 @@ export class DashboardService {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const nextMonthStart = monthEnd;
+    const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 1);
     // India FY: April 1 – March 31
     const fyStart =
       now.getMonth() >= 3
@@ -63,7 +65,7 @@ export class DashboardService {
         : new Date(now.getFullYear() - 1, 3, 1);
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    const [activeProjects, activeSows, invoiceAgg, lastRun, revThisMonth, revThisFY, payThisMonth, payThisFY, expThisMonth, expThisFY, freThisMonth, freThisFY] = await Promise.all([
+    const [activeProjects, activeSows, invoiceAgg, lastRun, revThisMonth, revThisFY, payThisMonth, payThisFY, expThisMonth, expNextMonth, expThisFY, freThisMonth, freThisFY] = await Promise.all([
       this.projects.countDocuments({ deletedAt: { $exists: false }, status: 'ACTIVE' }),
       this.sows.countDocuments({ deletedAt: { $exists: false } }),
       this.invoices
@@ -100,6 +102,11 @@ export class DashboardService {
       // Expenses this month
       this.expenses.aggregate([
         { $match: { deletedAt: { $exists: false }, date: { $gte: monthStart, $lt: monthEnd } } },
+        { $group: { _id: null, total: { $sum: '$amountPaise' } } },
+      ]).exec(),
+      // Expenses next month
+      this.expenses.aggregate([
+        { $match: { deletedAt: { $exists: false }, date: { $gte: nextMonthStart, $lt: nextMonthEnd } } },
         { $group: { _id: null, total: { $sum: '$amountPaise' } } },
       ]).exec(),
       // Expenses this FY
@@ -142,6 +149,7 @@ export class DashboardService {
     const pMonth = (payThisMonth as Array<{ total: number }>)[0]?.total ?? 0;
     const pFY = (payThisFY as Array<{ total: number }>)[0]?.total ?? 0;
     const eMonth = (expThisMonth as Array<{ total: number }>)[0]?.total ?? 0;
+    const eNextMonth = (expNextMonth as Array<{ total: number }>)[0]?.total ?? 0;
     const eFY = (expThisFY as Array<{ total: number }>)[0]?.total ?? 0;
     const fMonth = (freThisMonth as Array<{ total: number }>)[0]?.total ?? 0;
     const fFY = (freThisFY as Array<{ total: number }>)[0]?.total ?? 0;
@@ -155,6 +163,8 @@ export class DashboardService {
         : null,
       revenueThisMonth: rMonth,
       revenueThisFinancialYear: rFY,
+      expensesThisMonth: eMonth,
+      expensesNextMonth: eNextMonth,
       profitThisMonth: rMonth - pMonth - eMonth - fMonth,
       profitThisFinancialYear: rFY - pFY - eFY - fFY,
       fyLabel: `FY ${fyStart.getFullYear()}–${String(fyStart.getFullYear() + 1).slice(-2)}`,

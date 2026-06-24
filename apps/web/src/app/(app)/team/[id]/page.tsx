@@ -179,7 +179,7 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
                           </p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-xs text-muted-foreground">Monthly Rate</p>
+                          <p className="text-xs text-muted-foreground">Budget</p>
                           <p className="text-sm font-semibold">{p.amountPaise ? formatPaise(p.amountPaise, 'INR') : '—'}</p>
                         </div>
                       </div>

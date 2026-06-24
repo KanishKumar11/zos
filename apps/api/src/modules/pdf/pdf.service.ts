@@ -23,7 +23,7 @@ export class PdfService implements OnModuleDestroy {
     const browser = await this.getBrowser();
     const page = await browser.newPage();
     try {
-      await page.setContent(html, { waitUntil: 'networkidle0' });
+      await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       const buf = await page.pdf({
         format: 'A4',
         printBackground: true,
