@@ -58,7 +58,7 @@ export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;
 export const createMilestoneSchema = z.object({
   name: z.string().min(1).max(200),
   amountPaise: z.number().int().min(0),
-  dueDate: isoDateSchema.optional(),
+  dueDate: z.string().optional(),
   note: z.string().max(500).optional(),
 });
 export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
@@ -66,7 +66,7 @@ export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
 export const updateMilestoneSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   amountPaise: z.number().int().min(0).optional(),
-  dueDate: isoDateSchema.optional(),
+  dueDate: z.string().optional(),
   note: z.string().max(500).optional(),
   status: z.enum(['PENDING', 'INVOICED', 'COLLECTED']).optional(),
   invoiceId: objectIdSchema.optional(),
