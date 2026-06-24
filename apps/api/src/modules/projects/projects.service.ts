@@ -14,6 +14,7 @@ import {
 import { ErrorCodes } from '@/common/constants/error-codes';
 import { Paginated, paginate } from '@/common/utils/pagination.util';
 
+import { Invoice, type InvoiceDocument } from '../invoices/schemas/invoice.schema';
 import { PayrollRun, type PayrollRunDocument } from '../payroll/schemas/payroll-run.schema';
 import { Payslip, type PayslipDocument } from '../payroll/schemas/payslip.schema';
 import { User, type UserDocument } from '../users/schemas/user.schema';
@@ -28,6 +29,7 @@ export class ProjectsService {
     @InjectModel(PayrollRun.name) private readonly runs: Model<PayrollRunDocument>,
     @InjectModel(Payslip.name) private readonly slips: Model<PayslipDocument>,
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
+    @InjectModel(Invoice.name) private readonly invoices: Model<InvoiceDocument>,
   ) {}
 
   async list(q: ListProjectsQuery, viewer: { sub: string; role: Role }): Promise<Paginated<ProjectDocument>> {
@@ -201,13 +203,13 @@ export class ProjectsService {
   async addMemberPayment(
     projectId: string,
     userId: string,
-    input: { amountPaise: number; paidAt: Date; note?: string },
+    input: { amountPaise: number; paidAt: Date; note?: string; forPeriod?: string },
   ): Promise<ProjectDocument> {
     const doc = await this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec();
     if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
     const member = doc.members.find((m) => m.userId.toString() === userId);
     if (!member) throw new NotFoundException({ code: ErrorCodes.MEMBER_NOT_FOUND, message: 'Member not found on project' });
-    (member.payments as any[]).push({ paidAt: input.paidAt, amountPaise: input.amountPaise, note: input.note ?? '' });
+    (member.payments as any[]).push({ paidAt: input.paidAt, amountPaise: input.amountPaise, note: input.note ?? '', ...(input.forPeriod ? { forPeriod: input.forPeriod } : {}) });
     doc.markModified('members');
     await doc.save();
     await this.syncPayslip(projectId, doc.name, userId, input.paidAt);
@@ -313,6 +315,74 @@ export class ProjectsService {
     run.totalNetPaise = allSlips.reduce((s, sl) => s + sl.netPaise, 0);
     run.employeeCount = allSlips.length;
     await run.save();
+  }
+
+  async addMilestone(projectId: string, input: { name: string; amountPaise: number; dueDate?: string; note?: string }) {
+    const doc = await this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec();
+    if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
+    (doc.milestones as any[]).push({
+      name: input.name,
+      amountPaise: input.amountPaise,
+      dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+      note: input.note ?? '',
+      status: 'PENDING',
+    });
+    doc.markModified('milestones');
+    return doc.save();
+  }
+
+  async updateMilestone(projectId: string, milestoneId: string, input: { name?: string; amountPaise?: number; dueDate?: string; note?: string; status?: string; invoiceId?: string }) {
+    const doc = await this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec();
+    if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
+    const ms = (doc.milestones as any[]).find((m: any) => m._id.toString() === milestoneId);
+    if (!ms) throw new NotFoundException({ message: 'Milestone not found' });
+    if (input.name !== undefined) ms.name = input.name;
+    if (input.amountPaise !== undefined) ms.amountPaise = input.amountPaise;
+    if (input.dueDate !== undefined) ms.dueDate = new Date(input.dueDate);
+    if (input.note !== undefined) ms.note = input.note;
+    if (input.status !== undefined) ms.status = input.status;
+    if (input.invoiceId !== undefined) ms.invoiceId = new Types.ObjectId(input.invoiceId);
+    doc.markModified('milestones');
+    return doc.save();
+  }
+
+  async removeMilestone(projectId: string, milestoneId: string) {
+    const doc = await this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec();
+    if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
+    const before = doc.milestones.length;
+    (doc as any).milestones = (doc.milestones as any[]).filter((m: any) => m._id.toString() !== milestoneId);
+    if (doc.milestones.length === before) throw new NotFoundException({ message: 'Milestone not found' });
+    doc.markModified('milestones');
+    return doc.save();
+  }
+
+  async projectBalance(projectId: string) {
+    const [doc, invDocs] = await Promise.all([
+      this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec(),
+      this.invoices.find({ projectId: new Types.ObjectId(projectId), deletedAt: { $exists: false } }).exec(),
+    ]);
+    if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
+
+    const collectedPaise = invDocs.reduce((s, inv) =>
+      s + (inv.payments ?? []).reduce((ps: number, p: any) => ps + p.amountPaise, 0), 0);
+
+    const memberIds = doc.members.map((m) => m.userId);
+    const userDocs = await this.users.find({ _id: { $in: memberIds } }).select('name').exec();
+    const nameMap = new Map(userDocs.map((u) => [u.id as string, u.name]));
+
+    const memberBalances = doc.members.map((m) => {
+      const disbursed = (m.payments as any[]).reduce((s: number, p: any) => s + p.amountPaise, 0);
+      return {
+        userId: m.userId.toString(),
+        name: nameMap.get(m.userId.toString()) ?? m.userId.toString(),
+        budgetedPaise: m.amountPaise ?? 0,
+        disbursedPaise: disbursed,
+        pendingPaise: Math.max(0, (m.amountPaise ?? 0) - disbursed),
+      };
+    });
+
+    const disbursedPaise = memberBalances.reduce((s, m) => s + m.disbursedPaise, 0);
+    return { collectedPaise, disbursedPaise, inHandPaise: collectedPaise - disbursedPaise, memberBalances };
   }
 
   /** OWNER-only: payslip totals per member for this project's date range. */

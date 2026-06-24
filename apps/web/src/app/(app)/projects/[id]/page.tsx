@@ -18,7 +18,9 @@ import { useContracts } from '@/features/contracts/contracts.hooks';
 import {
   useProject, useSetMemberCost,
   useAddMemberPayment, useRemoveMemberPayment,
+  useProjectBalance, useAddMilestone, useUpdateMilestone, useRemoveMilestone,
   type MemberPaymentEntry,
+  type MilestoneRow,
 } from '@/features/projects/projects.hooks';
 import { useTeamList } from '@/features/team/team.hooks';
 import { useFreelancerPaymentsByProject } from '@/features/freelancer-payments/freelancer-payments.hooks';
@@ -33,6 +35,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const freelancerPayments = useFreelancerPaymentsByProject(isOwner ? id : undefined);
   const contracts = useContracts();
   const createInvoice = useCreateInvoice();
+
+  const balance = useProjectBalance(isOwner ? id : undefined);
+  const addMilestone = useAddMilestone();
+  const updateMilestone = useUpdateMilestone();
+  const removeMilestone = useRemoveMilestone();
+
+  const [addingMilestone, setAddingMilestone] = useState(false);
+  const [msName, setMsName] = useState('');
+  const [msAmount, setMsAmount] = useState('');
+  const [msDue, setMsDue] = useState('');
+  const [msNote, setMsNote] = useState('');
 
   const [addingInvoice, setAddingInvoice] = useState(false);
   const [invAmount, setInvAmount] = useState('');
@@ -112,6 +125,114 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <p className="text-xs text-muted-foreground">Agency margin</p>
               <p className="text-lg font-semibold text-green-600">{formatPaise(p.agencyMarginPaise ?? 0, cur)}</p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isOwner && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle>Milestones</CardTitle>
+            {!addingMilestone && (
+              <Button size="sm" variant="outline" onClick={() => setAddingMilestone(true)}>+ Add</Button>
+            )}
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {(p.milestones ?? []).length === 0 && !addingMilestone && (
+              <p className="text-xs text-muted-foreground">No milestones defined. Add milestones to track the payment schedule.</p>
+            )}
+            {(p.milestones ?? []).map((ms: any) => (
+              <MilestoneBlock
+                key={ms._id}
+                milestone={ms}
+                currency={cur}
+                onUpdate={(body) => updateMilestone.mutate({ id, milestoneId: ms._id, body })}
+                onRemove={() => removeMilestone.mutate({ id, milestoneId: ms._id })}
+              />
+            ))}
+            {addingMilestone && (
+              <div className="rounded border p-3 space-y-3 bg-muted/40">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">New Milestone</p>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <div className="flex flex-col gap-1 sm:col-span-2">
+                    <label className="text-xs text-muted-foreground">Name</label>
+                    <Input value={msName} onChange={(e) => setMsName(e.target.value)} className="h-8 text-sm" placeholder="e.g. Advance" autoFocus />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Amount (₹)</label>
+                    <Input type="number" min={0} value={msAmount} onChange={(e) => setMsAmount(e.target.value)} className="h-8 text-sm" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Due date</label>
+                    <Input type="date" value={msDue} onChange={(e) => setMsDue(e.target.value)} className="h-8 text-sm" />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">Note (optional)</label>
+                  <Input value={msNote} onChange={(e) => setMsNote(e.target.value)} className="h-8 text-sm" placeholder="optional" />
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" disabled={addMilestone.isPending} onClick={() => {
+                    const paise = Math.round(parseFloat(msAmount) * 100);
+                    if (!msName.trim() || isNaN(paise) || paise < 0) return;
+                    addMilestone.mutate({ id, name: msName.trim(), amountPaise: paise, dueDate: msDue || undefined, note: msNote || undefined }, {
+                      onSuccess: () => { setAddingMilestone(false); setMsName(''); setMsAmount(''); setMsDue(''); setMsNote(''); },
+                    });
+                  }}>Add Milestone</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setAddingMilestone(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {isOwner && balance.data && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Project Balance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-3 mb-4">
+              <div className="rounded border p-3">
+                <p className="text-xs text-muted-foreground">Collected from client</p>
+                <p className="text-lg font-semibold text-green-600">{formatPaise(balance.data.collectedPaise, cur)}</p>
+              </div>
+              <div className="rounded border p-3">
+                <p className="text-xs text-muted-foreground">Paid to team</p>
+                <p className="text-lg font-semibold text-amber-600">{formatPaise(balance.data.disbursedPaise, cur)}</p>
+              </div>
+              <div className="rounded border p-3">
+                <p className="text-xs text-muted-foreground">In hand</p>
+                <p className={`text-lg font-semibold ${balance.data.inHandPaise >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                  {formatPaise(balance.data.inHandPaise, cur)}
+                </p>
+              </div>
+            </div>
+            {balance.data.memberBalances.length > 0 && (
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Member</TH>
+                    <TH>Budgeted</TH>
+                    <TH>Paid</TH>
+                    <TH>Pending</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {balance.data.memberBalances.map((mb) => (
+                    <TR key={mb.userId}>
+                      <TD className="font-medium">{mb.name}</TD>
+                      <TD>{mb.budgetedPaise > 0 ? formatPaise(mb.budgetedPaise, cur) : '—'}</TD>
+                      <TD className="text-green-700">{mb.disbursedPaise > 0 ? formatPaise(mb.disbursedPaise, cur) : '₹0'}</TD>
+                      <TD className={mb.pendingPaise > 0 ? 'text-amber-600' : 'text-muted-foreground'}>
+                        {mb.pendingPaise > 0 ? formatPaise(mb.pendingPaise, cur) : '✓'}
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       )}
@@ -538,6 +659,7 @@ function MemberPaymentBlock({
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState('');
+  const [forPeriod, setForPeriod] = useState('');
   const add = useAddMemberPayment();
   const remove = useRemoveMemberPayment();
 
@@ -547,10 +669,11 @@ function MemberPaymentBlock({
   const save = () => {
     const paise = Math.round(parseFloat(amount) * 100);
     if (isNaN(paise) || paise <= 0) return;
-    add.mutate({ id: projectId, userId: member.userId, amountPaise: paise, paidAt: date, note: note || undefined });
+    add.mutate({ id: projectId, userId: member.userId, amountPaise: paise, paidAt: date, note: note || undefined, forPeriod: forPeriod || undefined } as any);
     setAdding(false);
     setAmount('');
     setNote('');
+    setForPeriod('');
   };
 
   return (
@@ -575,7 +698,7 @@ function MemberPaymentBlock({
             <div key={pay._id} className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
                 {new Date(pay.paidAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                {pay.note ? ` · ${pay.note}` : ''}
+                {(pay as any).forPeriod ? ` (for ${(pay as any).forPeriod})` : ''}{pay.note ? ` · ${pay.note}` : ''}
               </span>
               <div className="flex items-center gap-3">
                 <span className="font-medium text-green-700">+{formatPaise(pay.amountPaise, currency)}</span>
@@ -606,6 +729,10 @@ function MemberPaymentBlock({
               autoFocus
             />
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">For period (YYYY-MM)</label>
+            <Input placeholder="e.g. 2026-05" value={forPeriod} onChange={(e) => setForPeriod(e.target.value)} className="h-8 w-32 text-sm" />
+          </div>
           <div className="flex flex-col gap-1 flex-1">
             <label className="text-xs text-muted-foreground">Note (optional)</label>
             <Input placeholder="e.g. Milestone 1" value={note} onChange={(e) => setNote(e.target.value)} className="h-8 text-sm" />
@@ -618,6 +745,55 @@ function MemberPaymentBlock({
       {!adding && member.payments.length === 0 && (
         <p className="text-xs text-muted-foreground">No payments recorded yet</p>
       )}
+    </div>
+  );
+}
+
+function MilestoneBlock({
+  milestone,
+  currency,
+  onUpdate,
+  onRemove,
+}: {
+  milestone: { _id: string; name: string; amountPaise: number; dueDate?: string; status: string; note: string };
+  currency: string;
+  onUpdate: (body: Record<string, unknown>) => void;
+  onRemove: () => void;
+}) {
+  const statusColors: Record<string, string> = {
+    PENDING: 'bg-slate-100 text-slate-700',
+    INVOICED: 'bg-amber-100 text-amber-700',
+    COLLECTED: 'bg-green-100 text-green-700',
+  };
+  return (
+    <div className="flex items-center justify-between rounded border p-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-medium">{milestone.name}</span>
+          <span className={`rounded px-2 py-0.5 text-xs font-medium ${statusColors[milestone.status] ?? statusColors.PENDING}`}>
+            {milestone.status}
+          </span>
+          {milestone.dueDate && (
+            <span className="text-xs text-muted-foreground">
+              Due {new Date(milestone.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </span>
+          )}
+        </div>
+        {milestone.note && <p className="text-xs text-muted-foreground mt-0.5">{milestone.note}</p>}
+      </div>
+      <div className="flex items-center gap-3 ml-4 shrink-0">
+        <span className="text-sm font-semibold">{formatPaise(milestone.amountPaise, currency)}</span>
+        <select
+          value={milestone.status}
+          onChange={(e) => onUpdate({ status: e.target.value })}
+          className="rounded border bg-background px-1.5 py-0.5 text-xs"
+        >
+          <option value="PENDING">PENDING</option>
+          <option value="INVOICED">INVOICED</option>
+          <option value="COLLECTED">COLLECTED</option>
+        </select>
+        <button onClick={onRemove} className="text-xs text-muted-foreground hover:text-red-500" title="Remove">✕</button>
+      </div>
     </div>
   );
 }

@@ -20,6 +20,7 @@ export const addMemberPaymentSchema = z.object({
   amountPaise: z.number().int().min(1),
   paidAt: z.string(),
   note: z.string().max(200).optional(),
+  forPeriod: z.string().regex(/^\d{4}-\d{2}$/).optional(),
 });
 export type AddMemberPaymentInput = z.infer<typeof addMemberPaymentSchema>;
 
@@ -53,3 +54,21 @@ export const listProjectsQuerySchema = z.object({
   clientId: objectIdSchema.optional(),
 });
 export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;
+
+export const createMilestoneSchema = z.object({
+  name: z.string().min(1).max(200),
+  amountPaise: z.number().int().min(0),
+  dueDate: isoDateSchema.optional(),
+  note: z.string().max(500).optional(),
+});
+export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
+
+export const updateMilestoneSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  amountPaise: z.number().int().min(0).optional(),
+  dueDate: isoDateSchema.optional(),
+  note: z.string().max(500).optional(),
+  status: z.enum(['PENDING', 'INVOICED', 'COLLECTED']).optional(),
+  invoiceId: objectIdSchema.optional(),
+}).refine((v) => Object.keys(v).length > 0, { message: 'no fields to update' });
+export type UpdateMilestoneInput = z.infer<typeof updateMilestoneSchema>;

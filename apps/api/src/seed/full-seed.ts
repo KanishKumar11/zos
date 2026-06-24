@@ -98,7 +98,7 @@ function invoice(
 function project(
   id: Types.ObjectId, name: string, code: string, clientId: Types.ObjectId | undefined,
   status: string, startDate: string, endDate: string | null,
-  membersList: { uid: Types.ObjectId; role: string; amountINR?: number; paidINR?: number; paidAtDate?: string; payments?: { amountINR: number; paidAtDate: string; note?: string }[] }[],
+  membersList: { uid: Types.ObjectId; role: string; amountINR?: number; paidINR?: number; paidAtDate?: string; payments?: { amountINR: number; paidAtDate: string; note?: string; forPeriod?: string }[] }[],
   budgetINR = 0, marginINR = 0, desc = '',
 ) {
   return {
@@ -107,7 +107,7 @@ function project(
     clientBudgetPaise: p(budgetINR), agencyMarginPaise: p(marginINR), currency: 'INR',
     members: membersList.map((m) => ({
       userId: m.uid, role: m.role, addedAt: d(startDate), amountPaise: p(m.amountINR ?? 0),
-      payments: m.payments ? m.payments.map(pmt => ({ _id: oid(), paidAt: d(pmt.paidAtDate), amountPaise: p(pmt.amountINR), note: pmt.note ?? '' })) : (m.paidINR ? [{ _id: oid(), paidAt: d(m.paidAtDate ?? startDate), amountPaise: p(m.paidINR), note: '' }] : []),
+      payments: m.payments ? m.payments.map(pmt => ({ _id: oid(), paidAt: d(pmt.paidAtDate), amountPaise: p(pmt.amountINR), note: pmt.note ?? '', ...(pmt.forPeriod ? { forPeriod: pmt.forPeriod } : {}) })) : (m.paidINR ? [{ _id: oid(), paidAt: d(m.paidAtDate ?? startDate), amountPaise: p(m.paidINR), note: '' }] : []),
     })),
     createdAt: d(startDate), updatedAt: new Date(),
   };
@@ -312,45 +312,107 @@ async function main() {
   const L = 'LEAD', C = 'CONTRIBUTOR';
 
   await db.collection('projects').insertMany([
-    project(ID.pFenkmat, 'Fenkmat WordPress News Website', 'FENKMAT', ID.cLalit, 'COMPLETED', '2024-12-19', '2025-01-01', [{ uid: ID.uSidhak, role: L }], 5500, 3100, 'WordPress news website design & development'),
+    project(ID.pFenkmat, 'Fenkmat WordPress News Website', 'FENKMAT', ID.cLalit, 'COMPLETED', '2024-12-19', '2025-01-01', [{ uid: ID.uSidhak, role: L, amountINR: 2400, payments: [
+      { amountINR: 1000, paidAtDate: '2024-12-31', note: 'Advance Dec' },
+      { amountINR: 1400, paidAtDate: '2025-01-15', note: 'Final Jan' },
+    ] }], 5500, 3100, 'WordPress news website — Sidhak 2.4k (1k Dec + 1.4k Jan)'),
     project(ID.pSPFixes, 'Social Parindee Website Fixes', 'SP-FIXES', ID.cSP, 'COMPLETED', '2025-01-10', '2025-01-20', [{ uid: ID.uKanish, role: L }], 1200, 1200, 'General website fixes done by owner'),
-    project(ID.pSoftwareKadai, 'SoftwareKadai.com Development', 'SWKADAI', ID.cBluehutch, 'COMPLETED', '2025-02-06', '2025-02-28', [{ uid: ID.uShabd, role: L }], 4000, 1500, 'Full website development'),
+    project(ID.pSoftwareKadai, 'SoftwareKadai.com Development', 'SWKADAI', ID.cBluehutch, 'COMPLETED', '2025-02-06', '2025-02-28', [{ uid: ID.uShabd, role: L, amountINR: 2500, paidINR: 2500, paidAtDate: '2025-02-28' }], 4000, 1500, 'Full website development — Shabd 2.5k paid'),
     project(ID.pTaxByAkram, 'TaxBy Akram Website', 'TAXBYAKRAM', ID.cSculpt, 'COMPLETED', '2025-02-01', '2025-03-01', [{ uid: ID.uKanish, role: L }], 4000, 4000, 'Website done by Kanish for Sculpt Agency (Sampreet)'),
-    project(ID.pCityDental, 'City Dental WordPress Website', 'CITYDENTAL', ID.cSP, 'COMPLETED', '2025-03-01', '2025-03-17', [{ uid: ID.uSidhak, role: L }], 5500, 3500, 'WordPress website for dental clinic'),
-    project(ID.pSellercircle, 'Sellercircle Website & Blog', 'SELLERCIRCLE', ID.cSellercircle, 'COMPLETED', '2025-03-01', '2025-05-31', [{ uid: ID.uShabd, role: L, amountINR: 8500, paidINR: 8500, payments: [{ amountINR: 4000, paidAtDate: '2026-04-06', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-04-30', note: 'Payment 2' }] }], 18810, 14310, 'Website + blog page creation — Shabd (paid 4k Apr 6 + 4.5k Apr 30)'),
-    project(ID.pSellercircle2, 'Sellercircle Virus Removal & Updates', 'SELLERCIRCLE-V', ID.cSellercircle, 'COMPLETED', '2026-01-01', '2026-01-31', [{ uid: ID.uSidhak, role: L, amountINR: 6000, paidINR: 6000, paidAtDate: '2026-02-27' }], 9000, 5000, 'Virus removal & minor website updates — Sidhak (paid Feb 27)'),
+    project(ID.pCityDental, 'City Dental WordPress Website', 'CITYDENTAL', ID.cSP, 'COMPLETED', '2025-03-01', '2025-03-17', [{ uid: ID.uSidhak, role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2025-03-17' }], 5500, 3500, 'WordPress website for dental clinic — Sidhak 2k paid'),
+    project(ID.pSellercircle, 'Sellercircle Website & Blog', 'SELLERCIRCLE', ID.cSellercircle, 'COMPLETED', '2025-03-01', '2025-05-31', [{ uid: ID.uShabd, role: L, amountINR: 13000, payments: [
+      { amountINR: 4500, paidAtDate: '2025-04-30', note: 'Advance Apr 2025' },
+      { amountINR: 4000, paidAtDate: '2026-04-06', note: 'Payment 2' },
+      { amountINR: 4500, paidAtDate: '2026-04-30', note: 'Payment 3' },
+    ] }], 18810, 14310, 'Website + blog page creation — Shabd 13k (4.5k Apr 2025 + 8.5k Apr 2026)'),
+    project(ID.pSellercircle2, 'Sellercircle Virus Removal & Updates', 'SELLERCIRCLE-V', ID.cSellercircle, 'COMPLETED', '2026-01-01', '2026-01-31', [{ uid: ID.uSidhak, role: L, amountINR: 4000, paidINR: 4000, paidAtDate: '2026-01-31' }], 9000, 5000, 'Virus removal & minor website updates — Sidhak 4k paid Jan'),
     project(ID.pBallBoundary, 'BallBoundary Website Updates', 'BALLBOUNDARY', ID.cBallBoundary, 'COMPLETED', '2025-04-03', '2025-04-03', [{ uid: ID.uKanish, role: L }], 1000, 1000, 'Website updates done by Kanish'),
     project(ID.pMendingMindQuiz, 'Mending Mind Quiz Website', 'MM-QUIZ', ID.cMendingMind, 'COMPLETED', '2025-04-01', '2025-07-20', [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C }], 11700, 7700, 'Quiz website — fully paid (₹11.7k received Apr–Jul 2025)'),
-    project(ID.pMendingMindPlatform, 'Mending Mind Platform', 'MM-PLATFORM', ID.cMendingMind, 'ACTIVE', '2025-10-01', null, [{ uid: ID.uShabd, role: L }, { uid: ID.uJaya, role: C, amountINR: 6000, paidINR: 6000, paidAtDate: '2026-02-01' }, { uid: ID.uGeetanjali, role: C }], 38000, 22500, 'Platform development — ₹18k pending from client; Jaya 6k paid in Feb'),
+    project(ID.pMendingMindPlatform, 'Mending Mind Platform', 'MM-PLATFORM', ID.cMendingMind, 'ACTIVE', '2025-10-01', null, [
+      { uid: ID.uShabd, role: L, amountINR: 9000, payments: [
+        { amountINR: 2500, paidAtDate: '2025-10-31', note: 'Milestone Oct', forPeriod: '2025-10' },
+        { amountINR: 1000, paidAtDate: '2025-12-31', note: 'Milestone Dec', forPeriod: '2025-12' },
+        { amountINR: 5500, paidAtDate: '2026-04-30', note: 'Milestone Apr', forPeriod: '2026-04' },
+      ]},
+      { uid: ID.uJaya, role: C, amountINR: 6000, paidINR: 6000, paidAtDate: '2026-02-01' },
+      { uid: ID.uGeetanjali, role: C, amountINR: 500, payments: [
+        { amountINR: 500, paidAtDate: '2025-12-31', note: 'Design work Dec' },
+      ]},
+    ], 38000, 22500, 'Platform development — ₹18k pending from client; Shabd 9k (Oct+Dec+Apr), Jaya 6k (Feb), Geetanjali 500 (Dec)'),
     project(ID.pAllWheel, 'AllWheelDriving School Website', 'ALLWHEEL', ID.cAllWheel, 'COMPLETED', '2025-04-01', '2025-04-18', [{ uid: ID.uKanish, role: L }], 5500, 5500, 'WordPress website done by Kanish'),
-    project(ID.pSocialSecurity, 'Social Security Website', 'SP-SECSEC', ID.cSP, 'COMPLETED', '2025-04-15', '2025-04-23', [{ uid: ID.uSidhak, role: L }], 5500, 3500, 'Social security website development'),
-    project(ID.pInterioDecor, 'InterioDecor Website', 'SP-INTERIODECOR', ID.cSP, 'COMPLETED', '2025-05-15', '2025-05-26', [{ uid: ID.uSidhak, role: L }], 2600, 1600, 'Interior decoration website'),
-    project(ID.pUnextdoor, 'Unextdoor App & Website', 'UNEXTDOOR', ID.cUnextdoor, 'COMPLETED', '2025-06-19', '2025-09-24', [{ uid: ID.uKanish, role: L }, { uid: ID.uShivam, role: C }], 32500, 29500, 'Play store / App store deployment & website development'),
+    project(ID.pSocialSecurity, 'Social Security Website', 'SP-SECSEC', ID.cSP, 'COMPLETED', '2025-04-15', '2025-04-23', [{ uid: ID.uSidhak, role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2025-04-23' }], 5500, 3500, 'Social security website development — Sidhak 2k paid'),
+    project(ID.pInterioDecor, 'InterioDecor Website', 'SP-INTERIODECOR', ID.cSP, 'COMPLETED', '2025-05-15', '2025-05-26', [{ uid: ID.uSidhak, role: L, amountINR: 1000, paidINR: 1000, paidAtDate: '2025-05-26' }], 2600, 1600, 'Interior decoration website — Sidhak 1k paid'),
+    project(ID.pUnextdoor, 'Unextdoor App & Website', 'UNEXTDOOR', ID.cUnextdoor, 'COMPLETED', '2025-06-19', '2025-09-24', [{ uid: ID.uKanish, role: L }, { uid: ID.uShivam, role: C, amountINR: 3000, paidINR: 3000, paidAtDate: '2025-09-24' }], 32500, 29500, 'Play store / App store deployment & website development — Shivam 3k paid'),
     project(ID.pPNJFitness, 'PNJ Fitness Website', 'SP-PNJFITNESS', ID.cSP, 'COMPLETED', '2025-07-01', '2025-07-21', [{ uid: ID.uKanish, role: L }], 1200, 1200, 'Fitness website development'),
-    project(ID.pBestDiet, 'Best Diet WordPress Website', 'SP-BESTDIET', ID.cSP, 'COMPLETED', '2025-07-15', '2025-07-29', [{ uid: ID.uShivam, role: L }], 5500, 3500, 'WordPress diet website'),
-    project(ID.pSourcingScreen, 'Sourcing Screen Website', 'SOURCINGSCREEN', ID.cSourcingScreen, 'COMPLETED', '2025-07-29', '2026-01-30', [{ uid: ID.uSidhak, role: L }], 15100, 11100, 'Web development project'),
-    project(ID.pElectricMarshmallow, 'Electric Marshmallow', 'ELECMARSH', ID.cNJG, 'COMPLETED', '2025-08-11', '2025-09-09', [{ uid: ID.uJaya, role: L }, { uid: ID.uSidhak, role: C }], 7500, 4000, 'Design & development for NJ Graphica'),
-    project(ID.pGessure, 'Gessure Platform', 'GESSURE', ID.cGessure, 'COMPLETED', '2025-09-17', '2026-02-27', [{ uid: ID.uSidhak, role: L, payments: [
-      { amountINR: 1000,  paidAtDate: '2025-10-31', note: 'Dev milestone — Oct' },
-      { amountINR: 7500,  paidAtDate: '2026-01-15', note: 'Dev milestone — Jan final' },
-      { amountINR: 6000,  paidAtDate: '2026-02-27', note: 'Maintenance Feb (40% of ₹15k)' },
-      { amountINR: 6000,  paidAtDate: '2026-03-31', note: 'Maintenance Mar (40% of ₹15k)' },
-      { amountINR: 6000,  paidAtDate: '2026-04-30', note: 'Maintenance Apr (40% of ₹15k)' },
-      { amountINR: 6000,  paidAtDate: '2026-05-10', note: 'Maintenance May — late (40% of ₹24k)' },
-      { amountINR: 12000, paidAtDate: '2026-06-10', note: 'Maintenance Jun (50% of ₹24k; ₹3k Claude contribution deducted from payslip)' },
-    ] }], 54001, 20501, 'Platform development (Sep 2025 – Feb 2026). Maintenance via contract from Feb 27 — Sidhak at 40% of retainer (₹6k/mo Feb–May) then 50% at ₹24k from Jun.'),
-    project(ID.pShivmani, 'Shivmanicreations Website', 'SP-SHIVMANI', ID.cSP, 'COMPLETED', '2025-09-01', '2025-09-18', [{ uid: ID.uShivam, role: L }], 3500, 2500, 'Website development'),
-    project(ID.pShivAiTelerad, 'ShivAiTelerad Website', 'SHIVAI', ID.cShivAiTelerad, 'COMPLETED', '2025-09-19', '2025-11-22', [{ uid: ID.uGeetanjali, role: L }], 6500, 5500, 'Website development — total received 6.5k'),
-    project(ID.pSWBuild, 'SW Build Website', 'SWBUILD', ID.cSWBuild, 'COMPLETED', '2025-09-27', '2025-09-27', [{ uid: ID.uSidhak, role: L }], 3500, 2000, 'Website development'),
-    project(ID.pDhawada, 'Dhawada E-commerce Website', 'DHAWADA', ID.cDhawada, 'ACTIVE', '2025-10-06', null, [{ uid: ID.uJaya, role: L }], 56500, 36500, 'E-commerce website — 12.5k pending from client; logo by Shubham Jain (freelancer); Figma by Sampreet (freelancer)'),
+    project(ID.pBestDiet, 'Best Diet WordPress Website', 'SP-BESTDIET', ID.cSP, 'COMPLETED', '2025-07-15', '2025-07-29', [{ uid: ID.uShivam, role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2025-07-29' }], 5500, 3500, 'WordPress diet website — Shivam 2k paid'),
+    project(ID.pSourcingScreen, 'Sourcing Screen Website', 'SOURCINGSCREEN', ID.cSourcingScreen, 'COMPLETED', '2025-07-29', '2026-01-30', [{ uid: ID.uSidhak, role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2026-01-30' }], 15100, 11100, 'Web development project — Sidhak 2k paid'),
+    project(ID.pElectricMarshmallow, 'Electric Marshmallow', 'ELECMARSH', ID.cNJG, 'COMPLETED', '2025-08-11', '2025-09-09', [
+      { uid: ID.uJaya, role: L, amountINR: 1750, payments: [
+        { amountINR: 500,  paidAtDate: '2025-08-31', note: 'Advance Aug' },
+        { amountINR: 1250, paidAtDate: '2025-09-09', note: 'Final Sep' },
+      ]},
+      { uid: ID.uSidhak, role: C, amountINR: 1750, payments: [
+        { amountINR: 500,  paidAtDate: '2025-08-31', note: 'Advance Aug' },
+        { amountINR: 1250, paidAtDate: '2025-09-09', note: 'Final Sep' },
+      ]},
+    ], 7500, 4000, 'Design & development for NJ Graphica — Jaya 1.75k + Sidhak 1.75k'),
+    project(ID.pGessure, 'Gessure Platform', 'GESSURE', ID.cGessure, 'COMPLETED', '2025-09-17', '2026-02-27', [
+      { uid: ID.uSidhak, role: L, payments: [
+        { amountINR: 1000,  paidAtDate: '2025-10-31', note: 'Dev milestone — Oct', forPeriod: '2025-10' },
+        { amountINR: 7500,  paidAtDate: '2026-01-15', note: 'Dev milestone — Jan final', forPeriod: '2026-01' },
+        { amountINR: 6000,  paidAtDate: '2026-02-27', note: 'Maintenance Feb (40% of ₹15k)', forPeriod: '2026-02' },
+        { amountINR: 6000,  paidAtDate: '2026-03-31', note: 'Maintenance Mar (40% of ₹15k)', forPeriod: '2026-03' },
+        { amountINR: 6000,  paidAtDate: '2026-04-30', note: 'Maintenance Apr (40% of ₹15k)', forPeriod: '2026-04' },
+        { amountINR: 12000, paidAtDate: '2026-06-10', note: 'Maintenance May (late, paid Jun; new rate 50% of ₹24k; ₹3k Claude contribution deducted from payslip)', forPeriod: '2026-05' },
+      ]},
+      { uid: ID.uJaya, role: C, amountINR: 2000, payments: [
+        { amountINR: 1000, paidAtDate: '2025-10-31', note: 'Dev milestone — Oct', forPeriod: '2025-10' },
+        { amountINR: 1000, paidAtDate: '2026-01-15', note: 'Dev milestone — Jan final', forPeriod: '2026-01' },
+      ]},
+      { uid: ID.uShivam, role: C, amountINR: 5000, payments: [
+        { amountINR: 1000, paidAtDate: '2025-10-31', note: 'Dev milestone — Oct', forPeriod: '2025-10' },
+        { amountINR: 2000, paidAtDate: '2025-11-30', note: 'Dev milestone — Nov', forPeriod: '2025-11' },
+        { amountINR: 2000, paidAtDate: '2026-01-15', note: 'Dev milestone — Jan final', forPeriod: '2026-01' },
+      ]},
+      { uid: ID.uGeetanjali, role: C, amountINR: 4000, payments: [
+        { amountINR: 1000, paidAtDate: '2025-10-31', note: 'Dev milestone — Oct', forPeriod: '2025-10' },
+        { amountINR: 3000, paidAtDate: '2026-01-15', note: 'Dev milestone — Jan final', forPeriod: '2026-01' },
+      ]},
+      { uid: ID.uShabd, role: C, amountINR: 1000, payments: [
+        { amountINR: 1000, paidAtDate: '2025-10-31', note: 'Dev milestone — Oct', forPeriod: '2025-10' },
+      ]},
+    ], 54001, 20501, 'Platform development (Sep 2025 – Feb 2026). Maintenance via contract from Feb 27 — Sidhak at 40% of retainer (₹6k/mo Feb–May) then 50% at ₹24k from Jun.'),
+    project(ID.pShivmani, 'Shivmanicreations Website', 'SP-SHIVMANI', ID.cSP, 'COMPLETED', '2025-09-01', '2025-09-18', [{ uid: ID.uShivam, role: L, amountINR: 1000, paidINR: 1000, paidAtDate: '2025-09-18' }], 3500, 2500, 'Website development — Shivam 1k paid'),
+    project(ID.pShivAiTelerad, 'ShivAiTelerad Website', 'SHIVAI', ID.cShivAiTelerad, 'COMPLETED', '2025-09-19', '2025-11-22', [{ uid: ID.uGeetanjali, role: L, amountINR: 1000, paidINR: 1000, paidAtDate: '2025-09-30' }], 6500, 5500, 'Website development — Geetanjali 1k paid'),
+    project(ID.pSWBuild, 'SW Build Website', 'SWBUILD', ID.cSWBuild, 'COMPLETED', '2025-09-27', '2025-09-27', [{ uid: ID.uSidhak, role: L, amountINR: 1500, paidINR: 1500, paidAtDate: '2025-09-27' }], 3500, 2000, 'Website development — Sidhak 1.5k paid'),
+    project(ID.pDhawada, 'Dhawada E-commerce Website', 'DHAWADA', ID.cDhawada, 'ACTIVE', '2025-10-06', null, [
+      { uid: ID.uJaya, role: L, amountINR: 6000, payments: [
+        { amountINR: 2000, paidAtDate: '2025-11-30', note: 'Milestone Nov' },
+        { amountINR: 4000, paidAtDate: '2025-12-31', note: 'Milestone Dec' },
+      ]},
+      { uid: ID.uShabd, role: C, amountINR: 6000, payments: [
+        { amountINR: 2000, paidAtDate: '2025-11-30', note: 'Milestone Nov' },
+        { amountINR: 2000, paidAtDate: '2025-12-31', note: 'Milestone Dec' },
+        { amountINR: 2000, paidAtDate: '2026-04-30', note: 'Milestone Apr' },
+      ]},
+    ], 56500, 36500, 'E-commerce website — 12.5k pending from client; Jaya 6k (Nov+Dec), Shabd 6k (Nov+Dec+Apr); logo by Shubham Jain (freelancer); Figma by Sampreet (freelancer)'),
     project(ID.pSkoal, 'Skoal Website', 'SKOAL', ID.cSkoal, 'ON_HOLD', '2025-11-22', null, [{ uid: ID.uJaya, role: C, amountINR: 2500, paidINR: 2500, paidAtDate: '2026-03-27' }, { uid: ID.uSidhak, role: L, amountINR: 2500, paidINR: 2500, paidAtDate: '2026-04-01' }], 20000, 6000, 'Client ghosted — Jaya 2.5k (Mar 27) + Sidhak 2.5k (Apr 1). Work delivered; 14k written off.'),
-    project(ID.pLandingPages, 'NJ Graphica 2 Landing Pages', 'NJG-LANDING', ID.cNJG, 'COMPLETED', '2025-10-01', '2025-10-09', [{ uid: ID.uSidhak, role: L }, { uid: ID.uJaya, role: C }], 5500, 3500, '2 landing pages design & development'),
-    project(ID.pSoulnamaste, 'Soulnamaste Website', 'SP-SOULNAMASTE', ID.cSP, 'COMPLETED', '2025-10-01', '2025-10-13', [{ uid: ID.uSidhak, role: L }], 5000, 2500, 'Website development'),
+    project(ID.pLandingPages, 'NJ Graphica 2 Landing Pages', 'NJG-LANDING', ID.cNJG, 'COMPLETED', '2025-10-01', '2025-10-09', [
+      { uid: ID.uSidhak, role: L, amountINR: 1000, paidINR: 1000, paidAtDate: '2025-10-09' },
+      { uid: ID.uJaya,   role: C, amountINR: 1000, paidINR: 1000, paidAtDate: '2025-10-09' },
+    ], 5500, 3500, '2 landing pages — Sidhak 1k + Jaya 1k paid'),
+    project(ID.pSoulnamaste, 'Soulnamaste Website', 'SP-SOULNAMASTE', ID.cSP, 'COMPLETED', '2025-10-01', '2025-10-13', [{ uid: ID.uSidhak, role: L, amountINR: 2500, paidINR: 2500, paidAtDate: '2025-10-13' }], 5000, 2500, 'Website development — Sidhak 2.5k paid'),
     project(ID.pGiftParty, 'GiftParty Shopify Website', 'NJG-GIFTPARTY', ID.cNJG, 'COMPLETED', '2025-11-01', '2025-11-11', [{ uid: ID.uKanish, role: L }], 8000, 8000, 'Shopify website development'),
-    project(ID.pMrVeg, 'Mr Veg Website', 'SP-MRVEG', ID.cSP, 'COMPLETED', '2025-11-01', '2025-11-04', [{ uid: ID.uJaya, role: L }, { uid: ID.uSidhak, role: C }], 10000, 6000, 'Website development'),
-    project(ID.pSPNov25, 'Social Parindee Website Maintenance Nov 2025', 'SP-NOV25', ID.cSP, 'COMPLETED', '2025-11-25', '2025-11-25', [{ uid: ID.uSidhak, role: L }], 1600, 800, 'Small website maintenance'),
-    project(ID.pUttrakhand, 'Uttrakhand News Website', 'SP-UTTRAKHAND', ID.cSP, 'COMPLETED', '2025-12-01', '2025-12-14', [{ uid: ID.uSidhak, role: L }], 3300, 1800, 'News website development'),
-    project(ID.pGoLaundry, 'Go Laundry Website', 'GOLAUNDRY', ID.cSculpt, 'COMPLETED', '2025-12-01', '2026-01-15', [{ uid: ID.uGeetanjali, role: L }, { uid: ID.uJaya, role: C }], 14500, 9200, 'Website development for Sculpt Agency'),
+    project(ID.pMrVeg, 'Mr Veg Website', 'SP-MRVEG', ID.cSP, 'COMPLETED', '2025-11-01', '2025-11-04', [
+      { uid: ID.uJaya,   role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2025-11-04' },
+      { uid: ID.uSidhak, role: C, amountINR: 2000, paidINR: 2000, paidAtDate: '2025-11-04' },
+    ], 10000, 6000, 'Website development — Jaya 2k + Sidhak 2k paid'),
+    project(ID.pSPNov25, 'Social Parindee Website Maintenance Nov 2025', 'SP-NOV25', ID.cSP, 'COMPLETED', '2025-11-25', '2025-11-25', [{ uid: ID.uSidhak, role: L, amountINR: 800, paidINR: 800, paidAtDate: '2025-11-25' }], 1600, 800, 'Small website maintenance — Sidhak 800 paid'),
+    project(ID.pUttrakhand, 'Uttrakhand News Website', 'SP-UTTRAKHAND', ID.cSP, 'COMPLETED', '2025-12-01', '2025-12-14', [{ uid: ID.uSidhak, role: L, amountINR: 1500, paidINR: 1500, paidAtDate: '2025-12-14' }], 3300, 1800, 'News website development — Sidhak 1.5k paid'),
+    project(ID.pGoLaundry, 'Go Laundry Website', 'GOLAUNDRY', ID.cSculpt, 'COMPLETED', '2025-12-01', '2026-01-15', [
+      { uid: ID.uGeetanjali, role: L, amountINR: 2500, paidINR: 2500, paidAtDate: '2025-12-31' },
+      { uid: ID.uJaya,       role: C, amountINR: 2800, paidINR: 2800, paidAtDate: '2025-12-31' },
+    ], 14500, 9200, 'Website development for Sculpt Agency — Geetanjali 2.5k + Jaya 2.8k paid'),
     project(ID.pGKGIndustries, 'GKG Industries Website', 'SP-GKG', ID.cSP, 'COMPLETED', '2025-12-15', '2025-12-30', [{ uid: ID.uGeetanjali, role: L, amountINR: 1800, paidINR: 1800, paidAtDate: '2025-12-30' }], 5000, 3200, 'Industries website development — 1.8k paid to Geetanjali'),
     project(ID.pStudycrux, 'Studycrux LMS', 'STUDYCRUX', ID.cStartiffy, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L, amountINR: 22000, paidINR: 7000, payments: [{ amountINR: 1500, paidAtDate: '2026-02-01', note: 'Initial payment' }, { amountINR: 5500, paidAtDate: '2026-05-01', note: 'Second payment' }] }], 50000, 28000, 'LMS development — dev cost 22k; Shivam budgeted 22k, paid 7k (1.5k Feb 1 + 5.5k May 1); 15k pending from client'),
     project(ID.pDigitalMandir, 'Digital Mandir App', 'DIGITALMANDIR', ID.cDigitalMandir, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uGeetanjali, role: L, amountINR: 9000, paidINR: 9000, payments: [{ amountINR: 4500, paidAtDate: '2026-02-01', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-05-01', note: 'Payment 2' }] }], 15000, 4000, 'Android app + admin panel. Total: ₹15k. Client: 10% advance (1.5k Feb 1) + 50% milestone (7.5k Feb 28) = 9k received. 40% (6k) pending.'),
@@ -374,11 +436,25 @@ async function main() {
     project(ID.pHiristan, 'Hiristan Website', 'HIRISTAN', ID.cDhawada, 'ACTIVE', '2026-05-01', null, [{ uid: ID.uKanish, role: L }], 8000, 2000, 'Part of Dhawada group — 6k pending from client'),
     project(ID.pSoulSurf, 'SoulSurf Website', 'NJG-SOULSURF', ID.cNJG, 'COMPLETED', '2026-02-15', '2026-03-06', [{ uid: ID.uShivam, role: L, amountINR: 4500, paidINR: 4500, paidAtDate: '2026-03-06' }], 12000, 7500, 'Website for NJ Graphica — 4.5k paid to Shivam on March 6'),
     project(ID.pResto, 'Resto Shopify Website', 'NJG-RESTO', ID.cNJG, 'COMPLETED', '2026-04-01', '2026-04-21', [{ uid: ID.uGeetanjali, role: L, amountINR: 5000, paidINR: 5000, paidAtDate: '2026-04-21' }], 12000, 7000, 'Shopify website for NJ Graphica'),
-    project(ID.pGPower, 'G-Power & Jouelcube Website', 'GPOWER-JOUELCUBE', ID.cNamit, 'ACTIVE', '2026-02-12', null, [{ uid: ID.uJaya, role: L, amountINR: 4000, paidINR: 4000, paidAtDate: '2026-06-03' }, { uid: ID.uSidhak, role: L, amountINR: 2500, paidINR: 2500, paidAtDate: '2026-05-01' }, { uid: ID.uHarshika, role: C, amountINR: 2000, paidINR: 2000, payments: [{ amountINR: 1000, paidAtDate: '2026-02-12', note: 'G-Power initial' }, { amountINR: 1000, paidAtDate: '2026-06-09', note: 'G-Power final' }] }], 22000, 14500, 'Combined G-Power & Jouelcube project for Namit; Jaya 4k (Jun 3), Sidhak 2.5k (May), Harshika 2k project (1k Feb 12 + 1k Jun 9)'),
+    project(ID.pGPower, 'G-Power & Jouelcube Website', 'GPOWER-JOUELCUBE', ID.cNamit, 'ACTIVE', '2026-02-12', null, [
+      { uid: ID.uJaya,     role: L, amountINR: 4000, paidINR: 4000, paidAtDate: '2026-06-03' },
+      { uid: ID.uSidhak,   role: L, amountINR: 2500, paidINR: 2500, paidAtDate: '2026-05-01' },
+      { uid: ID.uHarshika, role: C, amountINR: 3000, payments: [
+        { amountINR: 1000, paidAtDate: '2026-02-12', note: 'G-Power initial' },
+        { amountINR: 1000, paidAtDate: '2026-06-09', note: 'Jouelcube final' },
+        { amountINR: 1000, paidAtDate: '2026-06-09', note: 'G-Power final' },
+      ]},
+    ], 22000, 14500, 'Combined G-Power & Jouelcube project for Namit; Jaya 4k (Jun 3), Sidhak 2.5k (May), Harshika 3k (1k Feb 12 + 1k Jouelcube + 1k G-Power Jun 9)'),
   ]);
 
   // ── INVOICES (client → agency) ───────────────────────────────────────────────
   const invoices: object[] = [];
+
+  // Pre-reserve explicit invoice numbers so auto-counter never collides with them.
+  // Explicit 2025: ZLK-2025-0019, 0020  → start auto at 0021
+  // Explicit 2026: ZLK-2026-0009, 0010, 0021–0030 → start auto at 0031
+  _invCounters[2025] = 20;
+  _invCounters[2026] = 30;
 
   const inv = (
     cid: Types.ObjectId,
@@ -617,11 +693,11 @@ async function main() {
     [payment('2026-06-13', 6000, 'UPI Transfer', 'Final payment')],
     '2026-06-13', 'PAID'));
 
-  // HR Book (240000 total, 67500 received, 172500 pending)
+  // HR Book (240000 total contract; 67.5k received — advance + M2; M3 ₹57k pending next)
   inv(ID.cHorizon, ID.pHRBook, 'HR Book HRMS Development', 240000,
     [payment('2026-02-23', 10000, 'Bank Transfer', 'Advance'), payment('2026-05-01', 57500, 'Bank Transfer', 'Milestone 2')], '2026-02-23', 'PARTIALLY_PAID');
 
-  // Firstrank (530000 total, 85000 received, 445000 pending)
+  // Firstrank (530000 total contract; 85k received — advance + M2 + M3; M4 ₹63k pending next)
   inv(ID.cFirstrank, ID.pFirstrank, 'Firstrank Website & Platform Development', 530000,
     [payment('2026-03-06', 10000, 'Bank Transfer', 'Advance'), payment('2026-04-04', 25000, 'Bank Transfer', 'Milestone 2'), payment('2026-06-02', 50000, 'Bank Transfer', 'Milestone 3')], '2026-03-06', 'PARTIALLY_PAID');
 
@@ -686,16 +762,6 @@ async function main() {
   invoices.push(invoice('ZLK-2026-0028', ID.cFoody, undefined, ID.cFoodyContract,
     'Monthly Development Contract — 2026-06', 22000,
     [], '2026-06-20', 'SENT'));
-
-  // Firstrank — next milestone invoice ₹63k (unpaid)
-  invoices.push(invoice('ZLK-2026-0029', ID.cFirstrank, ID.pFirstrank, undefined,
-    'Firstrank Website & Platform — Milestone 4', 63000,
-    [], '2026-06-24', 'SENT'));
-
-  // HR Book — milestone invoice ₹57k (unpaid)
-  invoices.push(invoice('ZLK-2026-0030', ID.cHorizon, ID.pHRBook, undefined,
-    'HR Book HRMS Development — Milestone 3', 57000,
-    [], '2026-06-25', 'SENT'));
 
   // Hostinger Affiliate / Referral Income (agency income — kept as agency not personal)
   inv(ID.cHostinger, undefined, 'Hostinger Referral Affiliate Income Nov 2025', 4992.94,
@@ -765,7 +831,7 @@ async function main() {
     ['2026-02', ID.uShivam,     8500], // Studycrux 1.5k (Feb 1) + BroBuzz 4.5k (Feb 20) + unknown 2.5k
     ['2026-02', ID.uJaya,      12500], // BroBuzz 6.5k + Mending Mind 6k
     ['2026-02', ID.uGeetanjali, 4500], // Digital Mandir (4.5k)
-    ['2026-02', ID.uSidhak,     12000], // Sellercircle2 6k (Feb 27) + Gessure maintenance 6k
+    ['2026-02', ID.uSidhak,     6000], // Gessure maintenance 6k (Sellercircle2 6k was wrong transaction)
     // Mar 2026
     ['2026-03', ID.uAnjali,   1500], // Stipend
     ['2026-03', ID.uHarshika, 1000], // Stipend (before increment)
@@ -794,7 +860,7 @@ async function main() {
     ['2026-05', ID.uAmit,        1000], // Stipend
     ['2026-05', ID.uHarshika,    3000], // Increment
     ['2026-05', ID.uGeetanjali,  4500], // Digital Mandir (May 1)
-    ['2026-05', ID.uSidhak,      10500], // Gessure 6k (late) + Dhawada NGO 2k + G-Power 2.5k (May end)
+    ['2026-05', ID.uSidhak,      4500], // Dhawada NGO 2k + G-Power 2.5k (Gessure May was late, paid in Jun)
     // Jun 2026
     ['2026-06', ID.uJaya,       17500], // Firstrank 10k + BroBuzz 6.5k + G-Power 4k
     ['2026-06', ID.uSidhak,     9000],  // Gessure 12k (increased rate) — 3k contributed to Claude subscription, net paid 9k

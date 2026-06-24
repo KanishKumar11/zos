@@ -20,6 +20,7 @@ export interface MemberPaymentEntry {
   paidAt: string;
   amountPaise: number;
   note: string;
+  forPeriod?: string;
 }
 export interface ProjectMemberRow {
   userId: string;
@@ -28,6 +29,16 @@ export interface ProjectMemberRow {
   amountPaise: number;
   payments: MemberPaymentEntry[];
 }
+export interface MilestoneRow {
+  _id: string;
+  name: string;
+  amountPaise: number;
+  dueDate?: string;
+  status: 'PENDING' | 'INVOICED' | 'COLLECTED';
+  invoiceId?: string;
+  note: string;
+}
+
 export interface ProjectRow {
   _id: string;
   name: string;
@@ -38,6 +49,7 @@ export interface ProjectRow {
   endDate?: string;
   brief?: string;
   members: ProjectMemberRow[];
+  milestones: MilestoneRow[];
   // OWNER-only (will be undefined/redacted for non-OWNERs)
   clientId?: string;
   clientBudgetPaise?: number;
@@ -49,6 +61,19 @@ export interface MemberCostRow {
   userId: string;
   name: string;
   totalPaidPaise: number;
+}
+
+export interface ProjectBalance {
+  collectedPaise: number;
+  disbursedPaise: number;
+  inHandPaise: number;
+  memberBalances: {
+    userId: string;
+    name: string;
+    budgetedPaise: number;
+    disbursedPaise: number;
+    pendingPaise: number;
+  }[];
 }
 
 const projectsApi = {
@@ -70,6 +95,13 @@ const projectsApi = {
     unwrap<ProjectRow>(api.post(`/projects/${id}/members/${userId}/payments`, body)),
   removeMemberPayment: (id: string, userId: string, paymentId: string) =>
     unwrap<ProjectRow>(api.delete(`/projects/${id}/members/${userId}/payments/${paymentId}`)),
+  balance: (id: string) => unwrap<ProjectBalance>(api.get(`/projects/${id}/balance`)),
+  addMilestone: (id: string, body: { name: string; amountPaise: number; dueDate?: string; note?: string }) =>
+    unwrap<ProjectRow>(api.post(`/projects/${id}/milestones`, body)),
+  updateMilestone: (id: string, milestoneId: string, body: Record<string, unknown>) =>
+    unwrap<ProjectRow>(api.patch(`/projects/${id}/milestones/${milestoneId}`, body)),
+  removeMilestone: (id: string, milestoneId: string) =>
+    unwrap<{ ok: boolean }>(api.delete(`/projects/${id}/milestones/${milestoneId}`)),
 };
 
 export function useProjects(q: ListProjectsQuery = {}) {
@@ -130,7 +162,7 @@ export function useAddMemberPayment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; userId: string } & AddMemberPaymentInput) =>
-      projectsApi.addMemberPayment(vars.id, vars.userId, { amountPaise: vars.amountPaise, paidAt: vars.paidAt, note: vars.note }),
+      projectsApi.addMemberPayment(vars.id, vars.userId, { amountPaise: vars.amountPaise, paidAt: vars.paidAt, note: vars.note, forPeriod: (vars as any).forPeriod }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
       qc.invalidateQueries({ queryKey: qk.projects.all() });
@@ -167,5 +199,52 @@ export function useRemoveProjectMember() {
   return useMutation({
     mutationFn: (vars: { id: string; userId: string }) => projectsApi.removeMember(vars.id, vars.userId),
     onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) }),
+  });
+}
+
+export function useProjectBalance(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? ['projects', id, 'balance'] : ['projects', 'none', 'balance'],
+    queryFn: () => projectsApi.balance(id!),
+    enabled: !!id,
+  });
+}
+
+export function useAddMilestone() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; name: string; amountPaise: number; dueDate?: string; note?: string }) =>
+      projectsApi.addMilestone(vars.id, { name: vars.name, amountPaise: vars.amountPaise, dueDate: vars.dueDate, note: vars.note }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['projects', vars.id] });
+      toast.success('Milestone added');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useUpdateMilestone() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; milestoneId: string; body: Record<string, unknown> }) =>
+      projectsApi.updateMilestone(vars.id, vars.milestoneId, vars.body),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['projects', vars.id] });
+      toast.success('Milestone updated');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useRemoveMilestone() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; milestoneId: string }) =>
+      projectsApi.removeMilestone(vars.id, vars.milestoneId),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['projects', vars.id] });
+      toast.success('Milestone removed');
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 }

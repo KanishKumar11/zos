@@ -9,8 +9,20 @@ export class MemberPayment {
   @Prop({ type: Date, required: true }) paidAt!: Date;
   @Prop({ type: Number, required: true }) amountPaise!: number;
   @Prop({ type: String, default: '' }) note!: string;
+  @Prop({ type: String }) forPeriod?: string;
 }
 export const MemberPaymentSchema = SchemaFactory.createForClass(MemberPayment);
+
+@Schema({ _id: true })
+export class ProjectMilestone {
+  @Prop({ required: true }) name!: string;
+  @Prop({ type: Number, required: true, default: 0 }) amountPaise!: number;
+  @Prop({ type: Date }) dueDate?: Date;
+  @Prop({ type: String, enum: ['PENDING', 'INVOICED', 'COLLECTED'], default: 'PENDING' }) status!: string;
+  @Prop({ type: MS.Types.ObjectId, ref: 'Invoice' }) invoiceId?: Types.ObjectId;
+  @Prop({ type: String, default: '' }) note!: string;
+}
+export const ProjectMilestoneSchema = SchemaFactory.createForClass(ProjectMilestone);
 
 @Schema({ _id: false })
 export class ProjectMember {
@@ -35,6 +47,7 @@ export class Project {
   @Prop({ type: Date }) startDate?: Date;
   @Prop({ type: Date }) endDate?: Date;
   @Prop({ type: [ProjectMemberSchema], default: [] }) members!: ProjectMember[];
+  @Prop({ type: [ProjectMilestoneSchema], default: [] }) milestones!: ProjectMilestone[];
   @Prop({ default: '' }) brief!: string;
 
   // ---- OWNER-only financials (stripped by SerializeInterceptor for non-OWNERs) ----

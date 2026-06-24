@@ -2,6 +2,7 @@
 import { Global, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { Invoice, InvoiceSchema } from '../invoices/schemas/invoice.schema';
 import { PayrollRun, PayrollRunSchema } from '../payroll/schemas/payroll-run.schema';
 import { Payslip, PayslipSchema } from '../payroll/schemas/payslip.schema';
 import { User, UserSchema } from '../users/schemas/user.schema';
@@ -17,6 +18,7 @@ import { Project, ProjectSchema } from './schemas/project.schema';
       { name: PayrollRun.name, schema: PayrollRunSchema },
       { name: Payslip.name, schema: PayslipSchema },
       { name: User.name, schema: UserSchema },
+      { name: Invoice.name, schema: InvoiceSchema },
     ]),
   ],
   controllers: [ProjectsController],

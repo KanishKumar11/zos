@@ -4,16 +4,20 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import {
   Role,
   addMemberPaymentSchema,
+  createMilestoneSchema,
   createProjectSchema,
   listProjectsQuerySchema,
   projectMemberInputSchema,
   setMemberCostSchema,
+  updateMilestoneSchema,
   updateProjectSchema,
   type AddMemberPaymentInput,
+  type CreateMilestoneInput,
   type CreateProjectInput,
   type ListProjectsQuery,
   type ProjectMemberInput,
   type SetMemberCostInput,
+  type UpdateMilestoneInput,
   type UpdateProjectInput,
 } from '@agency/shared';
 
@@ -102,7 +106,7 @@ export class ProjectsController {
     @Param('userId', ObjectIdPipe) userId: string,
     @Body(new ZodValidationPipe(addMemberPaymentSchema)) body: AddMemberPaymentInput,
   ) {
-    return this.svc.addMemberPayment(id, userId, { amountPaise: body.amountPaise, paidAt: new Date(body.paidAt), note: body.note });
+    return this.svc.addMemberPayment(id, userId, { amountPaise: body.amountPaise, paidAt: new Date(body.paidAt), note: body.note, forPeriod: body.forPeriod });
   }
 
   @Roles(Role.OWNER)
@@ -119,6 +123,40 @@ export class ProjectsController {
   @Get(':id/member-costs')
   memberCosts(@Param('id', ObjectIdPipe) id: string) {
     return this.svc.memberCosts(id);
+  }
+
+  @Roles(Role.OWNER)
+  @Get(':id/balance')
+  projectBalance(@Param('id', ObjectIdPipe) id: string) {
+    return this.svc.projectBalance(id);
+  }
+
+  @Roles(Role.OWNER)
+  @Post(':id/milestones')
+  addMilestone(
+    @Param('id', ObjectIdPipe) id: string,
+    @Body(new ZodValidationPipe(createMilestoneSchema)) body: CreateMilestoneInput,
+  ) {
+    return this.svc.addMilestone(id, body);
+  }
+
+  @Roles(Role.OWNER)
+  @Patch(':id/milestones/:milestoneId')
+  updateMilestone(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('milestoneId', ObjectIdPipe) milestoneId: string,
+    @Body(new ZodValidationPipe(updateMilestoneSchema)) body: UpdateMilestoneInput,
+  ) {
+    return this.svc.updateMilestone(id, milestoneId, body);
+  }
+
+  @Roles(Role.OWNER)
+  @Delete(':id/milestones/:milestoneId')
+  removeMilestone(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('milestoneId', ObjectIdPipe) milestoneId: string,
+  ) {
+    return this.svc.removeMilestone(id, milestoneId).then(() => ({ ok: true }));
   }
 
   @Roles(Role.OWNER, Role.ADMIN)
