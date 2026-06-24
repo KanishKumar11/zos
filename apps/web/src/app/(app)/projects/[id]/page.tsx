@@ -59,6 +59,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const cur = p.currency ?? 'INR';
   const totalDevCost = (p.clientBudgetPaise ?? 0) - (p.agencyMarginPaise ?? 0);
   const invList = invoices.data ?? [];
+  const invoiceMap = new Map(invList.map((i) => [i._id, i]));
   const invoiceTotal = invList.reduce((s, i) => s + i.totalPaise, 0);
   const clientReceived = invList.reduce((s, i) => s + i.paidPaise, 0);
   const memberBudgeted = p.members.reduce((s, m) => s + (m.amountPaise ?? 0), 0);
@@ -132,12 +133,21 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Milestones</CardTitle>
-            {!addingMilestone && (
-              <Button size="sm" variant="outline" onClick={() => setAddingMilestone(true)}>+ Add</Button>
-            )}
+            <div className="flex gap-2">
+              {!addingMilestone && !addingInvoice && (
+                <Button size="sm" variant="outline" onClick={() => setAddingMilestone(true)}>+ Add</Button>
+              )}
+              {!addingInvoice && !addingMilestone && (
+                <Button size="sm" variant="outline" onClick={() => {
+                  setInvDesc(p.name);
+                  setInvAmount(p.clientBudgetPaise ? String(Math.round(p.clientBudgetPaise / 100)) : '');
+                  setAddingInvoice(true);
+                }}>+ Invoice</Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {(p.milestones ?? []).length === 0 && !addingMilestone && (
+            {(p.milestones ?? []).length === 0 && !addingMilestone && !addingInvoice && (
               <p className="text-xs text-muted-foreground">No milestones defined. Add milestones to track the payment schedule.</p>
             )}
             {(p.milestones ?? []).map((ms: any) => (
@@ -145,6 +155,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 key={ms._id}
                 milestone={ms}
                 currency={cur}
+                invoice={ms.invoiceId ? (invoiceMap.get(ms.invoiceId) ?? undefined) : undefined}
                 onUpdate={(body) => updateMilestone.mutate({ id, milestoneId: ms._id, body })}
                 onRemove={() => removeMilestone.mutate({ id, milestoneId: ms._id })}
               />
@@ -179,6 +190,41 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     });
                   }}>Add Milestone</Button>
                   <Button size="sm" variant="ghost" onClick={() => setAddingMilestone(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+            {addingInvoice && (
+              <div className="rounded border p-3 space-y-3 bg-muted/40">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">New Invoice</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Issue Date</label>
+                    <Input type="date" value={invDate} onChange={(e) => setInvDate(e.target.value)} className="h-8 text-sm" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Amount (₹)</label>
+                    <Input type="number" min={1} value={invAmount} onChange={(e) => setInvAmount(e.target.value)} className="h-8 text-sm" placeholder="e.g. 50000" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Description</label>
+                    <Input value={invDesc} onChange={(e) => setInvDesc(e.target.value)} className="h-8 text-sm" placeholder="e.g. Website development" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" disabled={createInvoice.isPending} onClick={() => {
+                    const paise = Math.round(parseFloat(invAmount) * 100);
+                    if (!p.clientId || isNaN(paise) || paise <= 0) return;
+                    const count = (invoices.data?.length ?? 0) + 1;
+                    createInvoice.mutate({
+                      clientId: p.clientId,
+                      projectId: id,
+                      number: `PRJ-${p.code}-${String(count).padStart(2, '0')}`,
+                      issueDate: new Date(invDate),
+                      lineItems: [{ description: invDesc || p.name, qty: 1, unitPaise: paise }],
+                      currency: p.currency ?? 'INR',
+                    }, { onSuccess: () => setAddingInvoice(false) });
+                  }}>{createInvoice.isPending ? 'Creating…' : 'Create Invoice'}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setAddingInvoice(false)}>Cancel</Button>
                 </div>
               </div>
             )}
@@ -250,99 +296,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         />
       )}
 
-      {isOwner && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle>Client Payments</CardTitle>
-            {!addingInvoice && (
-              <Button size="sm" variant="outline" onClick={() => {
-                setInvDesc(p.name);
-                setInvAmount(p.clientBudgetPaise ? String(Math.round(p.clientBudgetPaise / 100)) : '');
-                setAddingInvoice(true);
-              }}>+ Add Invoice</Button>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {addingInvoice && (
-              <div className="rounded border p-3 space-y-3 bg-muted/40">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">New Invoice</p>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-muted-foreground">Issue Date</label>
-                    <Input type="date" value={invDate} onChange={(e) => setInvDate(e.target.value)} className="h-8 text-sm" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-muted-foreground">Amount (₹)</label>
-                    <Input type="number" min={1} value={invAmount} onChange={(e) => setInvAmount(e.target.value)} className="h-8 text-sm" placeholder="e.g. 50000" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-muted-foreground">Description</label>
-                    <Input value={invDesc} onChange={(e) => setInvDesc(e.target.value)} className="h-8 text-sm" placeholder="e.g. Website development" />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" disabled={createInvoice.isPending} onClick={() => {
-                    const paise = Math.round(parseFloat(invAmount) * 100);
-                    if (!p.clientId || isNaN(paise) || paise <= 0) return;
-                    const count = (invoices.data?.length ?? 0) + 1;
-                    createInvoice.mutate({
-                      clientId: p.clientId,
-                      projectId: id,
-                      number: `PRJ-${p.code}-${String(count).padStart(2, '0')}`,
-                      issueDate: new Date(invDate),
-                      lineItems: [{ description: invDesc || p.name, qty: 1, unitPaise: paise }],
-                      currency: p.currency ?? 'INR',
-                    }, { onSuccess: () => setAddingInvoice(false) });
-                  }}>{createInvoice.isPending ? 'Creating…' : 'Create Invoice'}</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setAddingInvoice(false)}>Cancel</Button>
-                </div>
-              </div>
-            )}
-            {(invoices.data ?? []).map((inv) => {
-              const outstanding = inv.totalPaise - inv.paidPaise;
-              return (
-                <div key={inv._id} className="rounded border p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <a href={`/invoices/${inv._id}`} className="text-sm font-medium hover:underline text-blue-600">
-                      {inv.number}
-                    </a>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground">
-                        Total: {formatPaise(inv.totalPaise, inv.currency)}
-                      </span>
-                      <InvoiceStatusBadge status={inv.status} />
-                      <a href={`/invoices/${inv._id}`} className="text-xs text-blue-600 hover:underline">
-                        View →
-                      </a>
-                    </div>
-                  </div>
-                  {inv.payments.length > 0 ? (
-                    <div className="space-y-1">
-                      {inv.payments.map((pay) => (
-                        <div key={pay._id} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            {new Date(pay.paidAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            {pay.reference ? ` · ${pay.reference}` : ''}
-                          </span>
-                          <span className="font-medium text-green-700">+{formatPaise(pay.amountPaise, inv.currency)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">No payments received yet</p>
-                  )}
-                  {outstanding > 0 && (
-                    <div className="flex justify-between text-sm border-t pt-2">
-                      <span className="text-muted-foreground">Outstanding</span>
-                      <span className="font-semibold text-amber-600">{formatPaise(outstanding, inv.currency)}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      )}
 
       {isOwner && freelancerList.length > 0 && (
         <Card>
@@ -751,11 +704,13 @@ function MemberPaymentBlock({
 function MilestoneBlock({
   milestone,
   currency,
+  invoice,
   onUpdate,
   onRemove,
 }: {
-  milestone: { _id: string; name: string; amountPaise: number; dueDate?: string; status: string; note: string };
+  milestone: { _id: string; name: string; amountPaise: number; dueDate?: string; status: string; note: string; invoiceId?: string };
   currency: string;
+  invoice?: { _id: string; number: string; status: string; totalPaise: number; paidPaise: number; currency: string; payments: { _id: string; paidAt: string; amountPaise: number; reference?: string; method?: string }[] };
   onUpdate: (body: Record<string, unknown>) => void;
   onRemove: () => void;
 }) {
@@ -765,34 +720,62 @@ function MilestoneBlock({
     COLLECTED: 'bg-green-100 text-green-700',
   };
   return (
-    <div className="flex items-center justify-between rounded border p-3">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-medium">{milestone.name}</span>
-          <span className={`rounded px-2 py-0.5 text-xs font-medium ${statusColors[milestone.status] ?? statusColors.PENDING}`}>
-            {milestone.status}
-          </span>
-          {milestone.dueDate && (
-            <span className="text-xs text-muted-foreground">
-              Due {new Date(milestone.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+    <div className="rounded border p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-medium">{milestone.name}</span>
+            <span className={`rounded px-2 py-0.5 text-xs font-medium ${statusColors[milestone.status] ?? statusColors.PENDING}`}>
+              {milestone.status}
             </span>
+            {milestone.dueDate && (
+              <span className="text-xs text-muted-foreground">
+                Due {new Date(milestone.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+            )}
+          </div>
+          {milestone.note && <p className="text-xs text-muted-foreground mt-0.5">{milestone.note}</p>}
+        </div>
+        <div className="flex items-center gap-3 ml-4 shrink-0">
+          <span className="text-sm font-semibold">{formatPaise(milestone.amountPaise, currency)}</span>
+          <select
+            value={milestone.status}
+            onChange={(e) => onUpdate({ status: e.target.value })}
+            className="rounded border bg-background px-1.5 py-0.5 text-xs"
+          >
+            <option value="PENDING">PENDING</option>
+            <option value="INVOICED">INVOICED</option>
+            <option value="COLLECTED">COLLECTED</option>
+          </select>
+          <button onClick={onRemove} className="text-xs text-muted-foreground hover:text-red-500" title="Remove">✕</button>
+        </div>
+      </div>
+      {invoice && (
+        <div className="border-t pt-2 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <a href={`/invoices/${invoice._id}`} className="text-xs font-semibold text-blue-600 hover:underline">{invoice.number}</a>
+            <InvoiceStatusBadge status={invoice.status} />
+            <span className="text-xs text-muted-foreground">₹{(invoice.totalPaise / 100).toLocaleString('en-IN')}</span>
+            <a href={`/invoices/${invoice._id}`} className="text-xs text-blue-500 hover:underline ml-auto">View →</a>
+          </div>
+          {invoice.payments.length > 0 ? (
+            <div className="space-y-0.5 pl-1">
+              {invoice.payments.map((pay) => (
+                <div key={pay._id} className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    {new Date(pay.paidAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {pay.reference ? ` · ${pay.reference}` : ''}
+                    {pay.method ? ` · ${pay.method}` : ''}
+                  </span>
+                  <span className="font-medium text-green-700">+{formatPaise(pay.amountPaise, invoice.currency)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground pl-1">No payments received yet</p>
           )}
         </div>
-        {milestone.note && <p className="text-xs text-muted-foreground mt-0.5">{milestone.note}</p>}
-      </div>
-      <div className="flex items-center gap-3 ml-4 shrink-0">
-        <span className="text-sm font-semibold">{formatPaise(milestone.amountPaise, currency)}</span>
-        <select
-          value={milestone.status}
-          onChange={(e) => onUpdate({ status: e.target.value })}
-          className="rounded border bg-background px-1.5 py-0.5 text-xs"
-        >
-          <option value="PENDING">PENDING</option>
-          <option value="INVOICED">INVOICED</option>
-          <option value="COLLECTED">COLLECTED</option>
-        </select>
-        <button onClick={onRemove} className="text-xs text-muted-foreground hover:text-red-500" title="Remove">✕</button>
-      </div>
+      )}
     </div>
   );
 }
