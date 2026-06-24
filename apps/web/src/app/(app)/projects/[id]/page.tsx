@@ -20,7 +20,6 @@ import {
   useAddMemberPayment, useRemoveMemberPayment,
   useProjectBalance, useAddMilestone, useUpdateMilestone, useRemoveMilestone,
   type MemberPaymentEntry,
-  type MilestoneRow,
 } from '@/features/projects/projects.hooks';
 import { useTeamList } from '@/features/team/team.hooks';
 import { useFreelancerPaymentsByProject } from '@/features/freelancer-payments/freelancer-payments.hooks';
