@@ -428,8 +428,9 @@ async function main() {
     project(ID.pBroBuzz, 'Bro Buzz App', 'BROBUZZ', ID.cBroBuzz, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L, amountINR: 9000, paidINR: 9000, payments: [{ amountINR: 4500, paidAtDate: '2026-02-20', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-03-06', note: 'Payment 2' }] }, { uid: ID.uJaya, role: C, amountINR: 13000, paidINR: 13000, payments: [{ amountINR: 6500, paidAtDate: '2026-02-01', note: 'Payment 1' }, { amountINR: 6500, paidAtDate: '2026-06-02', note: 'Payment 2' }] }], 60000, 42000, 'App development — Shivam 9k (Feb 20: 4.5k + Mar 6: 4.5k), Jaya 13k (Feb: 6.5k + Jun 2: 6.5k); 30k pending from client'),
     project(ID.pVelotra, 'Velotra Website', 'VELOTRA', ID.cVelotra, 'ACTIVE', '2026-02-20', null, [{ uid: ID.uShivam, role: L, amountINR: 20000, payments: [
       { amountINR: 5000, paidAtDate: '2026-05-06', note: 'Payment 1' },
-      { amountINR: 2000, paidAtDate: '2026-06-23', note: 'Payment 2' },
-    ] }], 20000, 15000, 'Website development — ongoing, 20k total received from client; 7k of 20k paid to Shivam (5k May 6 + 2k Jun 23); 13k balance pending'),
+      { amountINR: 3000, paidAtDate: '2026-06-12', note: 'Payment 2' },
+      { amountINR: 2000, paidAtDate: '2026-06-23', note: 'Payment 3' },
+    ] }], 20000, 15000, 'Website development — ongoing, 20k total received from client; 10k of 20k paid to Shivam (5k May 6 + 3k Jun 12 + 2k Jun 23); 10k balance pending'),
     project(ID.pArowai, 'Arowai Website', 'AROWAI', ID.cArowai, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L, amountINR: 1500, paidINR: 1500, paidAtDate: '2026-05-18' }], 3000, 1500, 'Website development'),
     project(ID.pBitaminNaturals, 'Bitamin Naturals Website', 'BITAMINNATURALS', ID.cBitaminNaturals, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L, amountINR: 1500, paidINR: 1500, paidAtDate: '2026-05-18' }], 0, -1500, 'Client had payment issues — agency covered 1.5k cost from Arowai payment'),
     project(ID.pDhawadaNGO, 'Dhawada NGO Website', 'DHAWADA-NGO', ID.cDhawada, 'ACTIVE', '2026-05-01', null, [{ uid: ID.uSidhak, role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2026-05-01' }], 8000, 6000, 'NGO website — fully paid'),
@@ -864,7 +865,7 @@ async function main() {
     // Jun 2026
     ['2026-06', ID.uJaya,       17500], // Firstrank 10k + BroBuzz 6.5k + G-Power 4k
     ['2026-06', ID.uSidhak,     9000],  // Gessure 12k (increased rate) — 3k contributed to Claude subscription, net paid 9k
-    ['2026-06', ID.uShivam,     2000],  // Velotra (Jun 23)
+    ['2026-06', ID.uShivam,     5000],  // Velotra 3k (Jun 12) + 2k (Jun 23)
     ['2026-06', ID.uHarshika,   5000],  // Stipend advance 3k + Jouelcube 1k + G-Power 1k
     ['2026-06', ID.uSanjana,    3000],  // Stipend (June 9)
     ['2026-06', ID.uYatin,      3000],  // Stipend (June 3)
