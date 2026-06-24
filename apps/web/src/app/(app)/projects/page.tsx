@@ -36,7 +36,8 @@ import { useCreateProject, useProjects } from '@/features/projects/projects.hook
 
 export default function ProjectsPage() {
   const [page, setPage] = useState(1);
-  const list = useProjects({ page, pageSize: 20 });
+  const [statusFilter, setStatusFilter] = useState<ProjectStatus | ''>('');
+  const list = useProjects({ page, pageSize: 20, status: statusFilter || undefined });
   const role = useAuthStore((s) => s.user?.role);
   const isOwner = role === Role.OWNER;
   const [open, setOpen] = useState(false);
@@ -112,8 +113,18 @@ export default function ProjectsPage() {
       />
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>All projects</CardTitle>
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value as ProjectStatus | ''); setPage(1); }}
+            className="rounded border bg-background px-2 py-1 text-sm"
+          >
+            <option value="">All statuses</option>
+            {Object.values(ProjectStatus).map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
         </CardHeader>
         <CardContent>
           <Table>

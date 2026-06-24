@@ -114,7 +114,7 @@ export default function DashboardPage() {
                       <YAxis hide />
                       <Tooltip
                         contentStyle={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                        formatter={(v: number) => [`₹${Math.round(v / 100).toLocaleString('en-IN')}`, '']}
+                        formatter={(v: number) => [`₹${Math.round(v).toLocaleString('en-IN')}`, '']}
                       />
                       <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
                       <Line type="monotone" dataKey="Revenue" stroke="var(--foreground)" strokeWidth={2} dot={false} isAnimationActive={false} />
@@ -136,7 +136,7 @@ export default function DashboardPage() {
                 value={owner.isLoading ? '—' : owner.data?.activeSows.toString() ?? '0'}
               />
               <StatBlock
-                title={`Expenses — ${new Date().toLocaleString('en-IN', { month: 'short' })} ${new Date().getFullYear()}`}
+                title={`Costs — ${new Date().toLocaleString('en-IN', { month: 'short' })} ${new Date().getFullYear()}`}
                 value={owner.isLoading ? '—' : formatPaise(owner.data?.expensesThisMonth ?? 0, 'INR')}
               />
               <StatBlock
@@ -167,10 +167,12 @@ export default function DashboardPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barSize={12} barGap={4}>
+                      <XAxis dataKey="month" hide />
                       <Tooltip
                         contentStyle={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                        formatter={(v: number) => [`₹${Math.round(v / 100).toLocaleString('en-IN')}`, '']}
+                        formatter={(v: number) => [`₹${Math.round(v).toLocaleString('en-IN')}`, '']}
                       />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
                       <Bar dataKey="Payroll" fill="var(--foreground)" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="Expenses" fill="var(--muted-foreground)" opacity={0.4} radius={[4, 4, 0, 0]} />
                     </BarChart>

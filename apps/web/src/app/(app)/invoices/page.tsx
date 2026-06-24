@@ -2,11 +2,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 
 import { InvoiceStatus, Role } from '@agency/shared';
 
 import { RoleGate } from '@/components/auth/role-gate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select } from '@/components/ui/select';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { env } from '@/lib/env';
 import { formatPaise } from '@/lib/formatters';
@@ -27,7 +29,12 @@ export default function InvoicesPage() {
 }
 
 function Inner() {
-  const list = useInvoices();
+  const [statusFilter, setStatusFilter] = useState<InvoiceStatus | ''>('');
+  const [clientFilter, setClientFilter] = useState('');
+  const list = useInvoices({
+    status: statusFilter || undefined,
+    clientId: clientFilter || undefined,
+  });
   const dash = useInvoiceDashboard();
   const aging = useInvoiceAging();
   const clients = useClients();
@@ -103,8 +110,30 @@ function Inner() {
         </CardContent>
       </Card>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
           <CardTitle>All invoices</CardTitle>
+          <div className="flex gap-2 flex-wrap">
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as InvoiceStatus | '')}
+              className="text-sm"
+            >
+              <option value="">All statuses</option>
+              {Object.values(InvoiceStatus).map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </Select>
+            <Select
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              className="text-sm"
+            >
+              <option value="">All clients</option>
+              {(clients.data ?? []).map((c) => (
+                <option key={c._id} value={c._id}>{c.name}</option>
+              ))}
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>

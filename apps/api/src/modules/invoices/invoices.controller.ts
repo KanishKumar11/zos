@@ -13,6 +13,7 @@ import {
   type UpdateInvoiceInput,
 } from '@agency/shared';
 
+import { RequestTimeout } from '@/common/decorators/request-timeout.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { ObjectIdPipe } from '@/common/pipes/object-id.pipe';
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe';
@@ -50,6 +51,7 @@ export class InvoicesController {
   }
 
   @Get(':id/pdf')
+  @RequestTimeout(60_000)
   async pdf(@Param('id', ObjectIdPipe) id: string, @Res() res: Response) {
     const { buffer, filename } = await this.svc.invoicePdf(id);
     res.setHeader('Content-Type', 'application/pdf');

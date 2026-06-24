@@ -65,7 +65,7 @@ export class DashboardService {
         : new Date(now.getFullYear() - 1, 3, 1);
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    const [activeProjects, activeSows, invoiceAgg, lastRun, revThisMonth, revThisFY, payThisMonth, payThisFY, expThisMonth, expNextMonth, expThisFY, freThisMonth, freThisFY] = await Promise.all([
+    const [activeProjects, activeSows, invoiceAgg, lastRun, revThisMonth, revThisFY, payThisMonth, payThisFY, expThisMonth, expNextMonth, expThisFY, freThisMonth, freThisFY, allPayThisMonth] = await Promise.all([
       this.projects.countDocuments({ deletedAt: { $exists: false }, status: 'ACTIVE' }),
       this.sows.countDocuments({ deletedAt: { $exists: false } }),
       this.invoices
@@ -128,6 +128,11 @@ export class DashboardService {
         { $match: { 'payments.date': { $gte: fyStart } } },
         { $group: { _id: null, total: { $sum: '$payments.amountPaise' } } },
       ]).exec(),
+      // All payroll this month (any status — includes DRAFT/pending) for costs stat
+      this.runs.aggregate([
+        { $match: { month: currentMonthStr } },
+        { $group: { _id: null, total: { $sum: '$totalNetPaise' } } },
+      ]).exec(),
     ]);
 
     const byStatus = Object.fromEntries(
@@ -153,6 +158,7 @@ export class DashboardService {
     const eFY = (expThisFY as Array<{ total: number }>)[0]?.total ?? 0;
     const fMonth = (freThisMonth as Array<{ total: number }>)[0]?.total ?? 0;
     const fFY = (freThisFY as Array<{ total: number }>)[0]?.total ?? 0;
+    const allPMonth = (allPayThisMonth as Array<{ total: number }>)[0]?.total ?? 0;
 
     return {
       activeProjects,
@@ -163,7 +169,7 @@ export class DashboardService {
         : null,
       revenueThisMonth: rMonth,
       revenueThisFinancialYear: rFY,
-      expensesThisMonth: eMonth,
+      expensesThisMonth: eMonth + allPMonth,
       expensesNextMonth: eNextMonth,
       profitThisMonth: rMonth - pMonth - eMonth - fMonth,
       profitThisFinancialYear: rFY - pFY - eFY - fFY,
