@@ -19,7 +19,7 @@ import {
   useProject, useSetMemberCost,
   useAddMemberPayment, useRemoveMemberPayment,
   useProjectBalance, useAddMilestone, useUpdateMilestone, useRemoveMilestone,
-  type MemberPaymentEntry,
+  type MemberPaymentEntry, type MilestoneRow,
 } from '@/features/projects/projects.hooks';
 import { useTeamList } from '@/features/team/team.hooks';
 import { useFreelancerPaymentsByProject } from '@/features/freelancer-payments/freelancer-payments.hooks';
@@ -156,14 +156,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             {(p.milestones ?? []).length === 0 && !addingMilestone && !addingInvoice && (
               <p className="text-xs text-muted-foreground">No milestones defined. Add milestones to track the payment schedule.</p>
             )}
-            {(p.milestones ?? []).map((ms: any) => {
+            {(p.milestones ?? []).map((ms: MilestoneRow) => {
               const isCanonical = ms.invoiceId && canonicalMsForInvoice.get(ms.invoiceId) === ms._id;
               return (
                 <MilestoneBlock
                   key={ms._id}
                   milestone={ms}
                   currency={cur}
-                  invoice={isCanonical ? (invoiceMap.get(ms.invoiceId) ?? undefined) : undefined}
+                  invoice={isCanonical ? (invoiceMap.get(ms.invoiceId!) ?? undefined) : undefined}
                   onUpdate={(body) => updateMilestone.mutate({ id, milestoneId: ms._id, body })}
                   onRemove={() => removeMilestone.mutate({ id, milestoneId: ms._id })}
                 />
@@ -229,7 +229,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       issueDate: new Date(invDate),
                       lineItems: [{ description: invDesc || p.name, qty: 1, unitPaise: paise }],
                       currency: p.currency ?? 'INR',
-                    }, { onSuccess: () => setAddingInvoice(false) });
+                    }, { onSuccess: () => {
+                      setAddingInvoice(false);
+                      setInvAmount('');
+                      setInvDesc('');
+                      setInvDate(new Date().toISOString().slice(0, 10));
+                    } });
                   }}>{createInvoice.isPending ? 'Creating…' : 'Create Invoice'}</Button>
                   <Button size="sm" variant="ghost" onClick={() => setAddingInvoice(false)}>Cancel</Button>
                 </div>
@@ -628,7 +633,7 @@ function MemberPaymentBlock({
   const save = () => {
     const paise = Math.round(parseFloat(amount) * 100);
     if (isNaN(paise) || paise <= 0) return;
-    add.mutate({ id: projectId, userId: member.userId, amountPaise: paise, paidAt: date, note: note || undefined, forPeriod: forPeriod || undefined } as any);
+    add.mutate({ id: projectId, userId: member.userId, amountPaise: paise, paidAt: date, note: note || undefined, forPeriod: forPeriod || undefined });
     setAdding(false);
     setAmount('');
     setNote('');
@@ -762,7 +767,7 @@ function MilestoneBlock({
           <div className="flex items-center gap-2">
             <a href={`/invoices/${invoice._id}`} className="text-xs font-semibold text-blue-600 hover:underline">{invoice.number}</a>
             <InvoiceStatusBadge status={invoice.status} />
-            <span className="text-xs text-muted-foreground">₹{(invoice.totalPaise / 100).toLocaleString('en-IN')}</span>
+            <span className="text-xs text-muted-foreground">{formatPaise(invoice.totalPaise, invoice.currency)}</span>
             <a href={`/invoices/${invoice._id}`} className="text-xs text-blue-500 hover:underline ml-auto">View →</a>
           </div>
           {invoice.payments.length > 0 ? (

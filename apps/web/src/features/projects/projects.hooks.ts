@@ -141,7 +141,11 @@ export function useAddProjectMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; body: ProjectMemberInput }) => projectsApi.addMember(vars.id, vars.body),
-    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
+      toast.success('Member added');
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 }
 export function useSetMemberCost() {
@@ -161,11 +165,12 @@ export function useSetMemberCost() {
 export function useAddMemberPayment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { id: string; userId: string } & AddMemberPaymentInput) =>
-      projectsApi.addMemberPayment(vars.id, vars.userId, { amountPaise: vars.amountPaise, paidAt: vars.paidAt, note: vars.note, forPeriod: (vars as any).forPeriod }),
+    mutationFn: (vars: { id: string; userId: string; forPeriod?: string } & AddMemberPaymentInput) =>
+      projectsApi.addMemberPayment(vars.id, vars.userId, { amountPaise: vars.amountPaise, paidAt: vars.paidAt, note: vars.note, forPeriod: vars.forPeriod }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
       qc.invalidateQueries({ queryKey: qk.projects.all() });
+      qc.invalidateQueries({ queryKey: ['payroll'] });
       toast.success('Payment recorded');
     },
     onError: (err: Error) => toast.error(err.message),
@@ -180,6 +185,7 @@ export function useRemoveMemberPayment() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
       qc.invalidateQueries({ queryKey: qk.projects.all() });
+      qc.invalidateQueries({ queryKey: ['payroll'] });
       toast.success('Payment removed');
     },
     onError: (err: Error) => toast.error(err.message),
@@ -198,7 +204,11 @@ export function useRemoveProjectMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; userId: string }) => projectsApi.removeMember(vars.id, vars.userId),
-    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
+      toast.success('Member removed');
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 }
 
@@ -216,7 +226,7 @@ export function useAddMilestone() {
     mutationFn: (vars: { id: string; name: string; amountPaise: number; dueDate?: string; note?: string }) =>
       projectsApi.addMilestone(vars.id, { name: vars.name, amountPaise: vars.amountPaise, dueDate: vars.dueDate, note: vars.note }),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['projects', vars.id] });
+      qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
       toast.success('Milestone added');
     },
     onError: (err: Error) => toast.error(err.message),
@@ -229,7 +239,7 @@ export function useUpdateMilestone() {
     mutationFn: (vars: { id: string; milestoneId: string; body: Record<string, unknown> }) =>
       projectsApi.updateMilestone(vars.id, vars.milestoneId, vars.body),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['projects', vars.id] });
+      qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
       toast.success('Milestone updated');
     },
     onError: (err: Error) => toast.error(err.message),
@@ -242,7 +252,7 @@ export function useRemoveMilestone() {
     mutationFn: (vars: { id: string; milestoneId: string }) =>
       projectsApi.removeMilestone(vars.id, vars.milestoneId),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['projects', vars.id] });
+      qc.invalidateQueries({ queryKey: qk.projects.byId(vars.id) });
       toast.success('Milestone removed');
     },
     onError: (err: Error) => toast.error(err.message),

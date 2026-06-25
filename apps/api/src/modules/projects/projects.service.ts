@@ -127,7 +127,7 @@ export class ProjectsService {
   async addMember(id: string, input: ProjectMemberInput): Promise<ProjectDocument> {
     const doc = await this.model
       .findOneAndUpdate(
-        { _id: id, 'members.userId': { $ne: new Types.ObjectId(input.userId) } },
+        { _id: id, deletedAt: { $exists: false }, 'members.userId': { $ne: new Types.ObjectId(input.userId) } },
         {
           $push: {
             members: {
@@ -146,8 +146,8 @@ export class ProjectsService {
 
   async removeMember(id: string, userId: string): Promise<ProjectDocument> {
     const doc = await this.model
-      .findByIdAndUpdate(
-        id,
+      .findOneAndUpdate(
+        { _id: id, deletedAt: { $exists: false } },
         { $pull: { members: { userId: new Types.ObjectId(userId) } } },
         { new: true },
       )
@@ -335,7 +335,7 @@ export class ProjectsService {
     const doc = await this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec();
     if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
     const ms = (doc.milestones as any[]).find((m: any) => m._id.toString() === milestoneId);
-    if (!ms) throw new NotFoundException({ message: 'Milestone not found' });
+    if (!ms) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Milestone not found' });
     if (input.name !== undefined) ms.name = input.name;
     if (input.amountPaise !== undefined) ms.amountPaise = input.amountPaise;
     if (input.dueDate !== undefined) ms.dueDate = new Date(input.dueDate);
