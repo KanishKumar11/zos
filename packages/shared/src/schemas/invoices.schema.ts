@@ -12,7 +12,7 @@ export const invoiceLineItemSchema = z.object({
 export type InvoiceLineItemInput = z.infer<typeof invoiceLineItemSchema>;
 
 export const createInvoiceSchema = z.object({
-  number: z.string().min(2).max(40),
+  number: z.string().min(2).max(40).optional(),
   clientId: objectIdSchema,
   projectId: objectIdSchema.optional(),
   contractId: objectIdSchema.optional(),

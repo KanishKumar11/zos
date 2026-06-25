@@ -60,6 +60,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const totalDevCost = (p.clientBudgetPaise ?? 0) - (p.agencyMarginPaise ?? 0);
   const invList = invoices.data ?? [];
   const invoiceMap = new Map(invList.map((i) => [i._id, i]));
+  // For milestones sharing the same invoice, only show the invoice card on the last milestone
+  // that references it (avoids the same invoice appearing under Advance + M2 + M3).
+  const canonicalMsForInvoice = new Map<string, string>();
+  (p.milestones ?? []).forEach((ms: any) => {
+    if (ms.invoiceId) canonicalMsForInvoice.set(ms.invoiceId, ms._id);
+  });
   const invoiceTotal = invList.reduce((s, i) => s + i.totalPaise, 0);
   const clientReceived = invList.reduce((s, i) => s + i.paidPaise, 0);
   const memberBudgeted = p.members.reduce((s, m) => s + (m.amountPaise ?? 0), 0);
@@ -150,16 +156,19 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             {(p.milestones ?? []).length === 0 && !addingMilestone && !addingInvoice && (
               <p className="text-xs text-muted-foreground">No milestones defined. Add milestones to track the payment schedule.</p>
             )}
-            {(p.milestones ?? []).map((ms: any) => (
-              <MilestoneBlock
-                key={ms._id}
-                milestone={ms}
-                currency={cur}
-                invoice={ms.invoiceId ? (invoiceMap.get(ms.invoiceId) ?? undefined) : undefined}
-                onUpdate={(body) => updateMilestone.mutate({ id, milestoneId: ms._id, body })}
-                onRemove={() => removeMilestone.mutate({ id, milestoneId: ms._id })}
-              />
-            ))}
+            {(p.milestones ?? []).map((ms: any) => {
+              const isCanonical = ms.invoiceId && canonicalMsForInvoice.get(ms.invoiceId) === ms._id;
+              return (
+                <MilestoneBlock
+                  key={ms._id}
+                  milestone={ms}
+                  currency={cur}
+                  invoice={isCanonical ? (invoiceMap.get(ms.invoiceId) ?? undefined) : undefined}
+                  onUpdate={(body) => updateMilestone.mutate({ id, milestoneId: ms._id, body })}
+                  onRemove={() => removeMilestone.mutate({ id, milestoneId: ms._id })}
+                />
+              );
+            })}
             {addingMilestone && (
               <div className="rounded border p-3 space-y-3 bg-muted/40">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">New Milestone</p>
@@ -214,11 +223,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   <Button size="sm" disabled={createInvoice.isPending} onClick={() => {
                     const paise = Math.round(parseFloat(invAmount) * 100);
                     if (!p.clientId || isNaN(paise) || paise <= 0) return;
-                    const count = (invoices.data?.length ?? 0) + 1;
                     createInvoice.mutate({
                       clientId: p.clientId,
                       projectId: id,
-                      number: `PRJ-${p.code}-${String(count).padStart(2, '0')}`,
                       issueDate: new Date(invDate),
                       lineItems: [{ description: invDesc || p.name, qty: 1, unitPaise: paise }],
                       currency: p.currency ?? 'INR',
