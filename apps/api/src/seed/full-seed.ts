@@ -39,6 +39,10 @@ const ID = {
   iHRBook: oid(), iHRBook2: oid(),
   iDhawada: oid(), iRewardzy: oid(),
   iRealEstate: oid(), iInnoWebsite: oid(), iStudycrux: oid(),
+  iDigitalMandir1: oid(), iDigitalMandir2: oid(), iDigitalMandir3: oid(),
+  iEldeco: oid(),
+  iGPower: oid(), iGPower2: oid(),
+  iDhawadaNGO: oid(),
   iMendingMindPlatform: oid(), iBroBuzz: oid(),
   // Contracts
   cFoodyContract: oid(), cGessureContract: oid(),
@@ -447,7 +451,12 @@ async function main() {
         { name: 'Milestone 2', amountINR: 20000, dueDate: '2026-05-22', status: 'COLLECTED', invoiceId: ID.iStudycrux, note: 'Milestone 2 — May 22' },
         { name: 'Final',       amountINR: 25000, status: 'PENDING',     invoiceId: ID.iStudycrux, note: 'Final 50% pending' },
       ]),
-    project(ID.pDigitalMandir, 'Digital Mandir App', 'DIGITALMANDIR', ID.cDigitalMandir, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uGeetanjali, role: L, amountINR: 9000, paidINR: 9000, payments: [{ amountINR: 4500, paidAtDate: '2026-02-01', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-05-01', note: 'Payment 2' }] }], 15000, 4000, 'Android app + admin panel. Total: ₹15k. Client: 10% advance (1.5k Feb 1) + 50% milestone (7.5k Feb 28) = 9k received. 40% (6k) pending.'),
+    project(ID.pDigitalMandir, 'Digital Mandir App', 'DIGITALMANDIR', ID.cDigitalMandir, 'COMPLETED', '2026-02-01', '2026-06-13', [{ uid: ID.uGeetanjali, role: L, amountINR: 9000, paidINR: 9000, payments: [{ amountINR: 4500, paidAtDate: '2026-02-01', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-05-01', note: 'Payment 2' }] }], 15000, 4000, 'Android app + admin panel. Fully paid — 10% advance (1.5k Feb 1) + 50% milestone (7.5k Feb 28) + 40% final (6k Jun 13).',
+      [
+        { name: 'Advance (10%)',    amountINR: 1500, dueDate: '2026-02-01', status: 'COLLECTED', invoiceId: ID.iDigitalMandir1, note: 'Advance 10% — Feb 1' },
+        { name: 'Milestone (50%)', amountINR: 7500, dueDate: '2026-02-28', status: 'COLLECTED', invoiceId: ID.iDigitalMandir2, note: '50% milestone — Feb 28' },
+        { name: 'Final (40%)',     amountINR: 6000, dueDate: '2026-06-13', status: 'COLLECTED', invoiceId: ID.iDigitalMandir3, note: 'Final 40% — Jun 13' },
+      ]),
     project(ID.pHRBook, 'HR Book HRMS', 'HRBOOK', ID.cHorizon, 'ACTIVE', '2026-02-23', null, [{ uid: ID.uJaya, role: L, amountINR: 20000, paidINR: 10000, paidAtDate: '2026-05-01' }, { uid: ID.uSidhak, role: C, amountINR: 20000, paidINR: 0 }], 240000, 82500, 'HRMS platform — 172.5k pending from client; 70k to Jyoti (freelancer, 17.5k paid), 20k to Jaya (10k paid on May 1, 10k pending), 20k to Sidhak pending',
       [
         { name: 'Advance',     amountINR: 10000,  dueDate: '2026-02-23', status: 'COLLECTED', invoiceId: ID.iHRBook, note: 'Advance — Feb 23' },
@@ -483,7 +492,11 @@ async function main() {
       ]),
     project(ID.pNavisha, 'Navisha Website', 'SP-NAVISHA', ID.cSP, 'COMPLETED', '2026-03-15', '2026-03-27', [{ uid: ID.uJaya, role: L, amountINR: 5000, paidINR: 5000, paidAtDate: '2026-03-27' }], 12000, 7000, 'Website development — 5k paid to Jaya on Mar 27'),
     project(ID.pAvcoEnergy, 'Avco Energy Website', 'AVCO-ENERGY', ID.cStartiffy, 'COMPLETED', '2026-04-01', '2026-04-30', [{ uid: ID.uJaya, role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2026-04-19' }, { uid: ID.uSidhak, role: C, amountINR: 2000, paidINR: 2000, paidAtDate: '2026-04-30' }], 8000, 4000, 'Website development'),
-    project(ID.pEldeco, 'Eldeco Website', 'ELDECO', ID.cEldeco, 'ACTIVE', '2026-04-28', null, [{ uid: ID.uShivam, role: L, amountINR: 3500, paidINR: 3500, payments: [{ amountINR: 1500, paidAtDate: '2026-04-28', note: 'Advance' }, { amountINR: 2000, paidAtDate: '2026-05-20', note: 'Final' }] }], 3500, 2500, 'Website development — fully paid (1.5k Apr 28 + 2k May 20)'),
+    project(ID.pEldeco, 'Eldeco Website', 'ELDECO', ID.cEldeco, 'COMPLETED', '2026-04-28', '2026-05-20', [{ uid: ID.uShivam, role: L, amountINR: 3500, paidINR: 3500, payments: [{ amountINR: 1500, paidAtDate: '2026-04-28', note: 'Advance' }, { amountINR: 2000, paidAtDate: '2026-05-20', note: 'Final' }] }], 3500, 2500, 'Website development — fully paid (1.5k Apr 28 + 2k May 20).',
+      [
+        { name: 'Advance', amountINR: 1500, dueDate: '2026-04-28', status: 'COLLECTED', invoiceId: ID.iEldeco, note: 'Advance — Apr 28' },
+        { name: 'Final',   amountINR: 2000, dueDate: '2026-05-20', status: 'COLLECTED', invoiceId: ID.iEldeco, note: 'Final — May 20' },
+      ]),
     project(ID.pBroBuzz, 'Bro Buzz App', 'BROBUZZ', ID.cBroBuzz, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L, amountINR: 9000, paidINR: 9000, payments: [{ amountINR: 4500, paidAtDate: '2026-02-20', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-03-06', note: 'Payment 2' }] }, { uid: ID.uJaya, role: C, amountINR: 13000, paidINR: 13000, payments: [{ amountINR: 6500, paidAtDate: '2026-02-01', note: 'Payment 1' }, { amountINR: 6500, paidAtDate: '2026-06-02', note: 'Payment 2' }] }], 60000, 42000, 'App development — Shivam 9k (Feb 20: 4.5k + Mar 6: 4.5k), Jaya 13k (Feb: 6.5k + Jun 2: 6.5k); 30k pending from client',
       [
         { name: 'Advance', amountINR: 30000, dueDate: '2026-05-22', status: 'COLLECTED', invoiceId: ID.iBroBuzz, note: 'Advance 50% — May 22' },
@@ -496,7 +509,10 @@ async function main() {
     ] }], 20000, 15000, 'Website development — ongoing, 20k total received from client; 10k of 20k paid to Shivam (5k May 6 + 3k Jun 12 + 2k Jun 23); 10k balance pending'),
     project(ID.pArowai, 'Arowai Website', 'AROWAI', ID.cArowai, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L, amountINR: 1500, paidINR: 1500, paidAtDate: '2026-05-18' }], 3000, 1500, 'Website development'),
     project(ID.pBitaminNaturals, 'Bitamin Naturals Website', 'BITAMINNATURALS', ID.cBitaminNaturals, 'COMPLETED', '2026-05-10', '2026-05-18', [{ uid: ID.uShivam, role: L, amountINR: 1500, paidINR: 1500, paidAtDate: '2026-05-18' }], 0, -1500, 'Client had payment issues — agency covered 1.5k cost from Arowai payment'),
-    project(ID.pDhawadaNGO, 'Dhawada NGO Website', 'DHAWADA-NGO', ID.cDhawada, 'ACTIVE', '2026-05-01', null, [{ uid: ID.uSidhak, role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2026-05-01' }], 8000, 6000, 'NGO website — fully paid'),
+    project(ID.pDhawadaNGO, 'Dhawada NGO Website', 'DHAWADA-NGO', ID.cDhawada, 'COMPLETED', '2026-05-01', '2026-05-22', [{ uid: ID.uSidhak, role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2026-05-01' }], 8000, 6000, 'NGO website — fully paid (₹8k received May 22).',
+      [
+        { name: 'Full Payment', amountINR: 8000, dueDate: '2026-05-22', status: 'COLLECTED', invoiceId: ID.iDhawadaNGO, note: 'Full payment — May 22' },
+      ]),
     project(ID.pHiristan, 'Hiristan Website', 'HIRISTAN', ID.cDhawada, 'ACTIVE', '2026-05-01', null, [{ uid: ID.uKanish, role: L }], 8000, 2000, 'Part of Dhawada group — 6k pending from client'),
     project(ID.pSoulSurf, 'SoulSurf Website', 'NJG-SOULSURF', ID.cNJG, 'COMPLETED', '2026-02-15', '2026-03-06', [{ uid: ID.uShivam, role: L, amountINR: 4500, paidINR: 4500, paidAtDate: '2026-03-06' }], 12000, 7500, 'Website for NJ Graphica — 4.5k paid to Shivam on March 6'),
     project(ID.pResto, 'Resto Shopify Website', 'NJG-RESTO', ID.cNJG, 'COMPLETED', '2026-04-01', '2026-04-21', [{ uid: ID.uGeetanjali, role: L, amountINR: 5000, paidINR: 5000, paidAtDate: '2026-04-21' }], 12000, 7000, 'Shopify website for NJ Graphica'),
@@ -508,7 +524,11 @@ async function main() {
         { amountINR: 1000, paidAtDate: '2026-06-09', note: 'Jouelcube final' },
         { amountINR: 1000, paidAtDate: '2026-06-09', note: 'G-Power final' },
       ]},
-    ], 22000, 14500, 'Combined G-Power & Jouelcube project for Namit; Jaya 4k (Jun 3), Sidhak 2.5k (May), Harshika 3k (1k Feb 12 + 1k Jouelcube + 1k G-Power Jun 9)'),
+    ], 22000, 14500, 'Combined G-Power & Jouelcube project for Namit; Jaya 4k (Jun 3), Sidhak 2.5k (May), Harshika 3k (1k Feb 12 + 1k Jouelcube + 1k G-Power Jun 9); ₹20k balance invoice raised Jun 26.',
+      [
+        { name: 'Advance',       amountINR: 2000,  dueDate: '2026-02-12', status: 'COLLECTED', invoiceId: ID.iGPower,  note: 'Advance — Feb 12' },
+        { name: 'Final Balance', amountINR: 20000, dueDate: '2026-06-26', status: 'INVOICED',  invoiceId: ID.iGPower2, note: 'Final balance — Jun 26' },
+      ]),
   ]);
 
   // ── INVOICES (client → agency) ───────────────────────────────────────────────
@@ -743,20 +763,19 @@ async function main() {
   inv(ID.cStartiffy, ID.pStudycrux, 'Studycrux LMS Development', 50000,
     [payment('2026-02-01', 5000), payment('2026-05-22', 20000)], '2026-02-01', 'PARTIALLY_PAID', undefined, ID.iStudycrux);
 
-  // Digital Mandir — two invoices (total project ₹15k, ₹9k received; ₹6k pending)
+  // Digital Mandir — three milestone invoices (total ₹15k, fully paid)
   invoices.push(invoice('ZLK-2026-0009', ID.cDigitalMandir, ID.pDigitalMandir, undefined,
     'Digital Mandir App Development — Advance Payment (10%)', 1500,
     [payment('2026-02-01', 1500, 'UPI Transfer', 'T2602011444211734427575')],
-    '2026-02-01', 'PAID'));
+    '2026-02-01', 'PAID', 'INR', ID.iDigitalMandir1));
   invoices.push(invoice('ZLK-2026-0010', ID.cDigitalMandir, ID.pDigitalMandir, undefined,
     'Digital Mandir App Development — 50% Project Completion', 7500,
     [payment('2026-02-25', 6000, 'UPI', 'T2602252309205945592246'), payment('2026-02-28', 1500, 'UPI', 'UTR: 398077738704')],
-    '2026-02-28', 'PAID'));
-  // Remaining 40% (₹6,000) — paid June 13, 2026
+    '2026-02-28', 'PAID', 'INR', ID.iDigitalMandir2));
   invoices.push(invoice('ZLK-2026-0027', ID.cDigitalMandir, ID.pDigitalMandir, undefined,
     'Digital Mandir App Development — Final 40%', 6000,
     [payment('2026-06-13', 6000, 'UPI Transfer', 'Final payment')],
-    '2026-06-13', 'PAID'));
+    '2026-06-13', 'PAID', 'INR', ID.iDigitalMandir3));
 
   // HR Book (240000 total contract; 67.5k received — advance + M2; M3 ₹57k pending next)
   inv(ID.cHorizon, ID.pHRBook, 'HR Book HRMS Development', 240000,
@@ -789,9 +808,9 @@ async function main() {
   inv(ID.cStartiffy, ID.pAvcoEnergy, 'Avco Energy Website', 8000,
     [payment('2026-04-19', 8000)], '2026-04-19', 'PAID');
 
-  // Eldeco (3500 total, 3500 received)
+  // Eldeco (3500 total, 3500 received — fully paid)
   inv(ID.cEldeco, ID.pEldeco, 'Eldeco Website Development', 3500,
-    [payment('2026-04-28', 1500, 'Bank Transfer', 'Advance'), payment('2026-05-20', 2000)], '2026-04-28', 'PAID');
+    [payment('2026-04-28', 1500, 'Bank Transfer', 'Advance'), payment('2026-05-20', 2000)], '2026-04-28', 'PAID', undefined, ID.iEldeco);
 
   // Bro Buzz App (60000 total, 30000 received, 30000 pending)
   inv(ID.cBroBuzz, ID.pBroBuzz, 'Bro Buzz App Development', 60000,
@@ -805,9 +824,9 @@ async function main() {
   inv(ID.cArowai, ID.pArowai, 'Arowai Website', 3000,
     [payment('2026-05-18', 3000)], '2026-05-18', 'PAID');
 
-  // Dhawada NGO
+  // Dhawada NGO (8000, PAID May 22)
   inv(ID.cDhawada, ID.pDhawadaNGO, 'Dhawada NGO Website', 8000,
-    [payment('2026-05-22', 8000)], '2026-05-22', 'PAID');
+    [payment('2026-05-22', 8000)], '2026-05-22', 'PAID', undefined, ID.iDhawadaNGO);
   inv(ID.cDhawada, ID.pHiristan, 'Hiristan Website', 8000,
     [payment('2026-05-22', 2000)], '2026-05-22', 'PARTIALLY_PAID');
 
@@ -819,9 +838,11 @@ async function main() {
   inv(ID.cNJG, ID.pResto, 'Resto Shopify Website', 12000,
     [payment('2026-04-21', 12000)], '2026-04-21', 'PAID');
 
-  // G-Power & Jouelcube Combined (22000 total, 2000 received)
-  inv(ID.cNamit, ID.pGPower, 'G-Power & Jouelcube Website Development', 22000,
-    [payment('2026-02-12', 2000, 'Bank Transfer', 'Advance')], '2026-02-12', 'PARTIALLY_PAID');
+  // G-Power & Jouelcube (22000 total; advance ₹2k paid Feb 12; ₹20k balance invoiced Jun 26)
+  inv(ID.cNamit, ID.pGPower, 'G-Power & Jouelcube Website Development — Advance', 2000,
+    [payment('2026-02-12', 2000, 'Bank Transfer', 'Advance')], '2026-02-12', 'PAID', undefined, ID.iGPower);
+  inv(ID.cNamit, ID.pGPower, 'G-Power & Jouelcube Website Development — Final Balance', 20000,
+    [], '2026-06-26', 'SENT', undefined, ID.iGPower2);
 
   // FoodyQueen — June 2026 monthly contract (unpaid)
   invoices.push(invoice('ZLK-2026-0028', ID.cFoody, undefined, ID.cFoodyContract,

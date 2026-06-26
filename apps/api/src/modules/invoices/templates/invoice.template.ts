@@ -76,83 +76,91 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
 </style>
 </head>
 <body>
-<div style="padding:40px 44px;max-width:800px;margin:0 auto">
+
+<!-- Brand accent bar -->
+<div style="height:5px;background:linear-gradient(to right,#f85f00,#ff9d4d)"></div>
+
+<div style="padding:36px 44px 40px;max-width:800px;margin:0 auto">
 
   <!-- Header: Logo left · Invoice meta right -->
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:36px;padding-bottom:28px;border-bottom:1px solid #e5e7eb">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid #f0f0f0">
     <div>
       ${LOGO_SVG}
       <p style="font-size:10px;color:#9ca3af;letter-spacing:0.04em;margin-top:4px;padding-left:1px">Software &amp; Design Services</p>
     </div>
-    <div style="text-align:right">
-      <h1 style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.14em;margin-bottom:6px">Invoice</h1>
+    <div style="text-align:right;padding-top:4px">
+      <p style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.14em;margin-bottom:8px">Invoice</p>
+      <div style="font-size:22px;font-weight:800;color:#111827;letter-spacing:-0.02em;margin-bottom:10px">${data.number}</div>
       <div style="display:inline-block;padding:4px 14px;border-radius:9999px;background:${statusBg};margin-bottom:10px">
-        <span style="font-size:11px;font-weight:700;color:${statusColor};text-transform:uppercase;letter-spacing:0.07em">${statusLabel}</span>
+        <span style="font-size:10px;font-weight:700;color:${statusColor};text-transform:uppercase;letter-spacing:0.08em">${statusLabel}</span>
       </div>
-      <div style="font-size:22px;font-weight:800;color:#111827;letter-spacing:-0.02em;margin-bottom:6px">${data.number}</div>
-      <div style="font-size:11px;color:#6b7280">Issued <strong style="color:#111827">${fmtDate(data.issueDate)}</strong></div>
-      ${data.dueDate ? `<div style="font-size:11px;color:#6b7280;margin-top:2px">Due <strong style="color:#111827">${fmtDate(data.dueDate)}</strong></div>` : ''}
+      <div style="font-size:11px;color:#6b7280">Issued <strong style="color:#374151">${fmtDate(data.issueDate)}</strong></div>
+      ${data.dueDate ? `<div style="font-size:11px;color:#6b7280;margin-top:3px">Due <strong style="color:#374151">${fmtDate(data.dueDate)}</strong></div>` : ''}
+    </div>
+  </div>
+
+  <!-- Billing parties -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:28px;border:1px solid #f0f0f0;border-radius:14px;overflow:hidden">
+    <div style="padding:20px 24px;border-right:1px solid #f0f0f0">
+      <p style="font-size:9px;font-weight:700;color:#f85f00;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px">Billed To</p>
+      <p style="font-size:15px;font-weight:700;color:#111827;line-height:1.3">${data.client.company ?? data.client.name}</p>
+      ${data.client.company ? `<p style="font-size:12px;color:#6b7280;margin-top:3px">${data.client.name}</p>` : ''}
+      ${data.client.address ? `<p style="font-size:11px;color:#6b7280;margin-top:3px;line-height:1.5">${data.client.address}</p>` : ''}
+      ${data.client.gstin ? `<p style="font-size:11px;color:#6b7280;font-family:monospace;margin-top:3px">GSTIN: ${data.client.gstin}</p>` : ''}
+    </div>
+    <div style="padding:20px 24px">
+      <p style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px">From</p>
+      <p style="font-size:15px;font-weight:700;color:#111827;line-height:1.3">${data.agency.name}</p>
+      <p style="font-size:12px;color:#6b7280;margin-top:3px">Software &amp; Design Services</p>
+      ${data.agency.gstin ? `<p style="font-size:11px;color:#6b7280;font-family:monospace;margin-top:3px">GSTIN: ${data.agency.gstin}</p>` : ''}
+      ${data.agency.pan ? `<p style="font-size:11px;color:#6b7280;font-family:monospace;margin-top:3px">PAN: ${data.agency.pan}</p>` : ''}
     </div>
   </div>
 
   <!-- Amount hero -->
-  <div style="background:#fafafa;border:1px solid #e5e7eb;border-radius:16px;padding:28px 32px;margin-bottom:24px">
-    <div style="text-align:center;padding-bottom:24px;margin-bottom:24px;border-bottom:1px solid #e5e7eb">
-      <p style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.14em;margin-bottom:14px">
-        ${isPaid ? 'Amount Received' : balance < data.totalPaise ? 'Total · Balance Due' : 'Total Amount'}
-      </p>
-      <div style="display:flex;align-items:flex-start;justify-content:center;gap:3px">
-        <span class="amount-num" style="font-size:32px;font-weight:700;color:#f85f00;margin-top:8px;line-height:1">₹</span>
-        <span class="amount-num" style="font-size:84px;font-weight:700;color:#f85f00;line-height:1;letter-spacing:-0.04em">${fmtNum(data.totalPaise)}</span>
-      </div>
-      ${balance > 0 && balance < data.totalPaise ? `<p style="font-size:12px;color:#d97706;font-weight:600;margin-top:8px">₹${fmtNum(balance)} remaining</p>` : ''}
+  <div style="text-align:center;padding:28px 32px;margin-bottom:28px;border-radius:16px;background:linear-gradient(135deg,#fff8f4 0%,#fff5ef 100%);border:1px solid #fde8d8">
+    <p style="font-size:9px;font-weight:700;color:#f85f00;text-transform:uppercase;letter-spacing:0.16em;margin-bottom:14px">
+      ${isPaid ? 'Amount Received' : balance < data.totalPaise ? 'Total Amount' : 'Total Amount'}
+    </p>
+    <div style="display:flex;align-items:flex-start;justify-content:center;gap:3px">
+      <span class="amount-num" style="font-size:30px;font-weight:700;color:#f85f00;margin-top:8px;line-height:1">₹</span>
+      <span class="amount-num" style="font-size:80px;font-weight:700;color:#f85f00;line-height:1;letter-spacing:-0.04em">${fmtNum(data.totalPaise)}</span>
     </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
-      <div>
-        <p style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">Billed To</p>
-        <p style="font-size:15px;font-weight:700;color:#111827">${data.client.company ?? data.client.name}</p>
-        ${data.client.company ? `<p style="font-size:12px;color:#6b7280;margin-top:2px">${data.client.name}</p>` : ''}
-        ${data.client.address ? `<p style="font-size:11px;color:#6b7280;margin-top:2px">${data.client.address}</p>` : ''}
-        ${data.client.gstin ? `<p style="font-size:11px;color:#6b7280;font-family:monospace;margin-top:2px">GSTIN: ${data.client.gstin}</p>` : ''}
-      </div>
-      <div>
-        <p style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">Issued By</p>
-        <p style="font-size:15px;font-weight:700;color:#111827">${data.agency.name}</p>
-        <p style="font-size:12px;color:#6b7280;margin-top:2px">Software &amp; Design Services</p>
-        ${data.agency.gstin ? `<p style="font-size:11px;color:#6b7280;font-family:monospace;margin-top:2px">GSTIN: ${data.agency.gstin}</p>` : ''}
-        ${data.agency.pan ? `<p style="font-size:11px;color:#6b7280;font-family:monospace;margin-top:2px">PAN: ${data.agency.pan}</p>` : ''}
-      </div>
-    </div>
+    ${balance > 0 && balance < data.totalPaise ? `
+    <div style="display:inline-flex;align-items:center;gap:12px;margin-top:14px;padding:8px 20px;background:white;border-radius:9999px;border:1px solid #fde8d8">
+      <span style="font-size:11px;color:#16a34a;font-weight:600">Paid ₹${fmtNum(data.paidPaise)}</span>
+      <span style="color:#e5e7eb">·</span>
+      <span style="font-size:11px;color:#d97706;font-weight:600">Due ₹${fmtNum(balance)}</span>
+    </div>` : ''}
   </div>
 
   <!-- Line items -->
   <div style="margin-bottom:24px">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <div style="width:3px;height:14px;background:linear-gradient(to bottom,#f85f00,#ec4899);border-radius:2px"></div>
-      <p style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.12em">Details</p>
-      <div style="flex:1;height:1px;background:#e5e7eb"></div>
+      <div style="width:3px;height:14px;background:linear-gradient(to bottom,#f85f00,#ff9d4d);border-radius:2px"></div>
+      <p style="font-size:9px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.14em">Details</p>
+      <div style="flex:1;height:1px;background:#f0f0f0"></div>
     </div>
 
-    <div style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+    <div style="border:1px solid #f0f0f0;border-radius:12px;overflow:hidden">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead>
-          <tr style="background:#f9fafb">
-            <th style="padding:10px 16px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#6b7280;font-weight:700;border-bottom:1px solid #e5e7eb">Description</th>
-            <th style="padding:10px 16px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#6b7280;font-weight:700;border-bottom:1px solid #e5e7eb;width:60px">Qty</th>
-            <th style="padding:10px 16px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#6b7280;font-weight:700;border-bottom:1px solid #e5e7eb;width:100px">Unit</th>
-            <th style="padding:10px 16px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#6b7280;font-weight:700;border-bottom:1px solid #e5e7eb;width:110px">Amount</th>
+          <tr style="background:#fafafa">
+            <th style="padding:10px 16px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;border-bottom:1px solid #f0f0f0">Description</th>
+            <th style="padding:10px 16px;text-align:right;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;border-bottom:1px solid #f0f0f0;width:60px">Qty</th>
+            <th style="padding:10px 16px;text-align:right;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;border-bottom:1px solid #f0f0f0;width:100px">Unit</th>
+            <th style="padding:10px 16px;text-align:right;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;border-bottom:1px solid #f0f0f0;width:110px">Amount</th>
           </tr>
         </thead>
         <tbody>${lineItemsHtml}</tbody>
         <tfoot>
-          ${data.gstPercent ? `<tr><td colspan="3" style="padding:10px 16px;text-align:right;font-size:12px;color:#6b7280">GST (${data.gstPercent}%)</td><td style="padding:10px 16px;text-align:right;font-size:13px;color:#374151">₹${fmtNum(data.gstPaise)}</td></tr>` : ''}
-          <tr style="background:#f9fafb">
-            <td colspan="3" style="padding:12px 16px;text-align:right;font-weight:700;color:#111827;border-top:1px solid #e5e7eb">Total</td>
-            <td style="padding:12px 16px;text-align:right;font-size:15px;font-weight:800;color:#111827;border-top:1px solid #e5e7eb">₹${fmtNum(data.totalPaise)}</td>
+          ${data.gstPercent ? `<tr><td colspan="3" style="padding:10px 16px;text-align:right;font-size:12px;color:#6b7280;border-top:1px solid #f0f0f0">GST (${data.gstPercent}%)</td><td style="padding:10px 16px;text-align:right;font-size:13px;color:#374151;border-top:1px solid #f0f0f0">₹${fmtNum(data.gstPaise)}</td></tr>` : ''}
+          <tr style="background:#fafafa">
+            <td colspan="3" style="padding:12px 16px;text-align:right;font-weight:700;color:#111827;border-top:1px solid #f0f0f0">Total</td>
+            <td style="padding:12px 16px;text-align:right;font-size:15px;font-weight:800;color:#111827;border-top:1px solid #f0f0f0">₹${fmtNum(data.totalPaise)}</td>
           </tr>
-          ${data.paidPaise > 0 ? `<tr><td colspan="3" style="padding:9px 16px;text-align:right;font-size:12px;color:#16a34a">Paid</td><td style="padding:9px 16px;text-align:right;font-size:13px;color:#16a34a;font-weight:700">−₹${fmtNum(data.paidPaise)}</td></tr>` : ''}
-          ${balance > 0 ? `<tr style="background:#fff8f5"><td colspan="3" style="padding:12px 16px;text-align:right;font-weight:700;color:#f85f00">Balance Due</td><td style="padding:12px 16px;text-align:right;font-size:16px;font-weight:800;color:#f85f00">₹${fmtNum(balance)}</td></tr>` : ''}
+          ${data.paidPaise > 0 && balance > 0 ? `<tr><td colspan="3" style="padding:9px 16px;text-align:right;font-size:12px;color:#16a34a">Paid</td><td style="padding:9px 16px;text-align:right;font-size:13px;color:#16a34a;font-weight:700">−₹${fmtNum(data.paidPaise)}</td></tr>` : ''}
+          ${balance > 0 ? `<tr style="background:#fff8f4"><td colspan="3" style="padding:12px 16px;text-align:right;font-weight:700;color:#f85f00">Balance Due</td><td style="padding:12px 16px;text-align:right;font-size:16px;font-weight:800;color:#f85f00">₹${fmtNum(balance)}</td></tr>` : ''}
         </tfoot>
       </table>
     </div>
@@ -160,23 +168,24 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
 
   ${paymentsHtml}
 
-  ${data.notes ? `<p style="font-size:11px;color:#9ca3af;margin-top:16px">${data.notes}</p>` : ''}
+  ${data.notes ? `
+  <div style="margin-top:20px;padding:14px 18px;background:#fafafa;border-radius:10px;border-left:3px solid #f85f00">
+    <p style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px">Notes</p>
+    <p style="font-size:12px;color:#6b7280;line-height:1.6">${data.notes}</p>
+  </div>` : ''}
 
   <!-- Footer -->
-  <div style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:flex-end">
+  <div style="margin-top:40px;padding-top:20px;border-top:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:flex-end">
     <div>
       <p style="font-size:14px;font-weight:700;color:#111827">Kanish Kumar</p>
-      <p style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px">Founder, Zlaark</p>
+      <p style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-top:3px">Founder, Zlaark</p>
+      <p style="font-size:10px;color:#c4c4c4;margin-top:16px;letter-spacing:0.03em">Payment due upon receipt · UPI or Bank Transfer</p>
     </div>
     <div style="text-align:right">
-      <p style="font-size:10px;color:#9ca3af;margin-bottom:4px">Need help?</p>
-      <p style="font-size:12px;font-weight:700;color:#f85f00">kanish@zlaark.com</p>
-      <p style="font-size:10px;color:#9ca3af;font-family:monospace;margin-top:2px">+91 75086 70783</p>
+      <p style="font-size:10px;color:#9ca3af;margin-bottom:4px">Questions? Get in touch</p>
+      <p style="font-size:13px;font-weight:700;color:#f85f00">kanish@zlaark.com</p>
+      <p style="font-size:10px;color:#9ca3af;margin-top:3px">+91 75086 70783</p>
     </div>
-  </div>
-
-  <div style="margin-top:20px;text-align:center">
-    <p style="font-size:9px;color:#c4c4c4;letter-spacing:0.04em">Payment due upon receipt · UPI or Bank Transfer</p>
   </div>
 
 </div>

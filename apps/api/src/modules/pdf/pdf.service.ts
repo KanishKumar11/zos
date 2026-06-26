@@ -27,7 +27,10 @@ export class PdfService implements OnModuleDestroy {
       const buf = await page.pdf({
         format: 'A4',
         printBackground: true,
-        margin: { top: '20mm', right: '15mm', bottom: '20mm', left: '15mm' },
+        displayHeaderFooter: true,
+        headerTemplate: '<span></span>',
+        footerTemplate: '<div style="width:100%;font-size:9px;color:#9ca3af;text-align:center;font-family:\'Plus Jakarta Sans\',sans-serif;padding-bottom:6px">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>',
+        margin: { top: '0', right: '0', bottom: '10mm', left: '0' },
       });
       return Buffer.from(buf);
     } finally {
