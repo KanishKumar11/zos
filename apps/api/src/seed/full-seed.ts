@@ -534,11 +534,7 @@ async function main() {
   // ── INVOICES (client → agency) ───────────────────────────────────────────────
   const invoices: object[] = [];
 
-  // Pre-reserve explicit invoice numbers so auto-counter never collides with them.
-  // Explicit 2025: ZLK-2025-0019, 0020  → start auto at 0021
-  // Explicit 2026: ZLK-2026-0009, 0010, 0021–0030 → start auto at 0031
-  _invCounters[2025] = 20;
-  _invCounters[2026] = 30;
+  // Invoice numbers are auto-sequential per year (ZLK-YYYY-NNNN starting from 0001).
 
   const inv = (
     cid: Types.ObjectId,
@@ -664,44 +660,35 @@ async function main() {
   inv(ID.cNJG, ID.pElectricMarshmallow, 'Electric Marshmallow Design & Development', 7500,
     [payment('2025-08-11', 2250), payment('2025-09-09', 5250)], '2025-08-11', 'PAID');
 
-  // Gessure — Development milestones (project invoices; numbers preserve original agency doc sequence)
-  invoices.push(invoice('ZLK-2025-0019', ID.cGessure, ID.pGessure, undefined,
-    'Gessure — Project Kickoff', 4001,
+  // Gessure — Development milestones
+  inv(ID.cGessure, ID.pGessure, 'Gessure — Project Kickoff', 4001,
     [payment('2025-09-17', 4001, 'UPI', 'Payment received for project kickoff')],
-    '2025-09-17', 'PAID'));
-  invoices.push(invoice('ZLK-2025-0020', ID.cGessure, ID.pGessure, undefined,
-    'Gessure — Development Milestone 1', 10000,
+    '2025-09-17', 'PAID');
+  inv(ID.cGessure, ID.pGessure, 'Gessure — Development Milestone 1', 10000,
     [payment('2025-10-19', 10000, 'UPI', 'Payment received for milestone 1')],
-    '2025-10-19', 'PAID'));
-  invoices.push(invoice(nextInv('2025-11-09'), ID.cGessure, ID.pGessure, undefined,
-    'Gessure — Development Milestone 2 & 3', 10000,
-    [payment('2025-11-09', 10000)],
-    '2025-11-09', 'PAID'));
-  invoices.push(invoice('ZLK-2026-0021', ID.cGessure, ID.pGessure, undefined,
-    'Gessure — Development Milestone 4', 15000,
+    '2025-10-19', 'PAID');
+  inv(ID.cGessure, ID.pGessure, 'Gessure — Development Milestone 2 & 3', 10000,
+    [payment('2025-11-09', 10000)], '2025-11-09', 'PAID');
+  inv(ID.cGessure, ID.pGessure, 'Gessure — Development Milestone 4', 15000,
     [payment('2026-01-05', 15000, 'UPI', 'T2601052030175278059313 / UTR: 105340297039')],
-    '2026-01-05', 'PAID'));
-  invoices.push(invoice('ZLK-2026-0022', ID.cGessure, ID.pGessure, undefined,
-    'Gessure — Development Milestone 5', 15000,
+    '2026-01-05', 'PAID');
+  inv(ID.cGessure, ID.pGessure, 'Gessure — Development Milestone 5', 15000,
     [payment('2026-01-30', 15000, 'UPI', 'T2601302201596556293975 / UTR: 255766393455')],
-    '2026-01-30', 'PAID'));
+    '2026-01-30', 'PAID');
 
   // Gessure — Maintenance invoices (contract)
-  invoices.push(invoice('ZLK-2026-0023', ID.cGessure, undefined, ID.cGessureContract,
-    'Gessure — Support & Maintenance', 15000,
+  inv(ID.cGessure, undefined, 'Gessure — Support & Maintenance', 15000,
     [payment('2026-02-27', 15000, 'UPI', 'T2602271931483945575954 / UTR: 621314791177')],
-    '2026-02-27', 'PAID'));
-  invoices.push(invoice('ZLK-2026-0024', ID.cGessure, undefined, ID.cGessureContract,
-    'Gessure — Support & Maintenance — March 2026', 15000,
+    '2026-02-27', 'PAID', ID.cGessureContract);
+  inv(ID.cGessure, undefined, 'Gessure — Support & Maintenance — March 2026', 15000,
     [payment('2026-03-31', 15000, 'UPI', 'T2603311222106893406313 | UTR: 013971040394')],
-    '2026-03-31', 'PAID'));
-  invoices.push(invoice('ZLK-2026-0025', ID.cGessure, undefined, ID.cGessureContract,
-    'Gessure — Support & Maintenance — April 2026', 15000,
+    '2026-03-31', 'PAID', ID.cGessureContract);
+  inv(ID.cGessure, undefined, 'Gessure — Support & Maintenance — April 2026', 15000,
     [payment('2026-04-30', 15000, 'UPI', 'T2604300606554460125994 | UTR: 244261982743')],
-    '2026-04-30', 'PAID'));
-  invoices.push(invoice('ZLK-2026-0026', ID.cGessure, undefined, ID.cGessureContract,
-    'Gessure — Support & Maintenance — May 2026', 24000,
-    [payment('2026-06-03', 24000, 'UPI', 'June payment')], '2026-06-01', 'PAID'));
+    '2026-04-30', 'PAID', ID.cGessureContract);
+  inv(ID.cGessure, undefined, 'Gessure — Support & Maintenance — May 2026', 24000,
+    [payment('2026-06-03', 24000, 'UPI', 'June payment')],
+    '2026-06-01', 'PAID', ID.cGessureContract);
 
   // Shivmanicreations (3500, PAID)
   inv(ID.cSP, ID.pShivmani, 'Shivmanicreations Website', 3500,
@@ -764,18 +751,18 @@ async function main() {
     [payment('2026-02-01', 5000), payment('2026-05-22', 20000)], '2026-02-01', 'PARTIALLY_PAID', undefined, ID.iStudycrux);
 
   // Digital Mandir — three milestone invoices (total ₹15k, fully paid)
-  invoices.push(invoice('ZLK-2026-0009', ID.cDigitalMandir, ID.pDigitalMandir, undefined,
+  inv(ID.cDigitalMandir, ID.pDigitalMandir,
     'Digital Mandir App Development — Advance Payment (10%)', 1500,
     [payment('2026-02-01', 1500, 'UPI Transfer', 'T2602011444211734427575')],
-    '2026-02-01', 'PAID', 'INR', ID.iDigitalMandir1));
-  invoices.push(invoice('ZLK-2026-0010', ID.cDigitalMandir, ID.pDigitalMandir, undefined,
+    '2026-02-01', 'PAID', undefined, ID.iDigitalMandir1);
+  inv(ID.cDigitalMandir, ID.pDigitalMandir,
     'Digital Mandir App Development — 50% Project Completion', 7500,
     [payment('2026-02-25', 6000, 'UPI', 'T2602252309205945592246'), payment('2026-02-28', 1500, 'UPI', 'UTR: 398077738704')],
-    '2026-02-28', 'PAID', 'INR', ID.iDigitalMandir2));
-  invoices.push(invoice('ZLK-2026-0027', ID.cDigitalMandir, ID.pDigitalMandir, undefined,
+    '2026-02-28', 'PAID', undefined, ID.iDigitalMandir2);
+  inv(ID.cDigitalMandir, ID.pDigitalMandir,
     'Digital Mandir App Development — Final 40%', 6000,
     [payment('2026-06-13', 6000, 'UPI Transfer', 'Final payment')],
-    '2026-06-13', 'PAID', 'INR', ID.iDigitalMandir3));
+    '2026-06-13', 'PAID', undefined, ID.iDigitalMandir3);
 
   // HR Book (240000 total contract; 67.5k received — advance + M2; M3 ₹57k pending next)
   inv(ID.cHorizon, ID.pHRBook, 'HR Book HRMS Development', 240000,
@@ -845,9 +832,8 @@ async function main() {
     [], '2026-06-26', 'SENT', undefined, ID.iGPower2);
 
   // FoodyQueen — June 2026 monthly contract (unpaid)
-  invoices.push(invoice('ZLK-2026-0028', ID.cFoody, undefined, ID.cFoodyContract,
-    'Monthly Development Contract — 2026-06', 22000,
-    [], '2026-06-20', 'SENT'));
+  inv(ID.cFoody, undefined, 'Monthly Development Contract — 2026-06', 22000,
+    [], '2026-06-20', 'SENT', ID.cFoodyContract);
 
   // Hostinger Affiliate / Referral Income (agency income — kept as agency not personal)
   inv(ID.cHostinger, undefined, 'Hostinger Referral Affiliate Income Nov 2025', 4992.94,

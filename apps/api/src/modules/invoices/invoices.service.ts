@@ -80,11 +80,15 @@ export class InvoicesService {
     const year = issueDate.getFullYear();
     let number = input.number;
     if (!number) {
-      const yearCount = await this.model.countDocuments({
-        deletedAt: { $exists: false },
-        issueDate: { $gte: new Date(year, 0, 1), $lt: new Date(year + 1, 0, 1) },
-      }).exec();
-      number = `ZLK-${year}-${String(yearCount + 1).padStart(4, '0')}`;
+      const prefix = `ZLK-${year}-`;
+      const last = await this.model
+        .findOne({ number: { $regex: `^ZLK-${year}-\\d+$` } })
+        .sort({ number: -1 })
+        .select('number')
+        .lean()
+        .exec();
+      const seq = last?.number ? parseInt(last.number.slice(prefix.length), 10) + 1 : 1;
+      number = `${prefix}${String(seq).padStart(4, '0')}`;
     }
     const doc = new this.model({
       ...input,
