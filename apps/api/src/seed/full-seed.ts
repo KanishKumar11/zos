@@ -43,7 +43,7 @@ const ID = {
   iEldeco: oid(),
   iGPower: oid(), iGPower2: oid(),
   iDhawadaNGO: oid(),
-  iMendingMindPlatform: oid(), iBroBuzz: oid(),
+  iMendingMindPlatform: oid(), iMendingMindBalance: oid(), iBroBuzz: oid(),
   // Contracts
   cFoodyContract: oid(), cGessureContract: oid(),
   // Projects
@@ -362,7 +362,7 @@ async function main() {
         { name: 'Payment 1', amountINR: 5000,  dueDate: '2025-10-04', status: 'COLLECTED', invoiceId: ID.iMendingMindPlatform, note: 'Oct 2025' },
         { name: 'Payment 2', amountINR: 5000,  dueDate: '2025-12-07', status: 'COLLECTED', invoiceId: ID.iMendingMindPlatform, note: 'Dec 2025' },
         { name: 'Payment 3', amountINR: 10000, dueDate: '2026-02-11', status: 'COLLECTED', invoiceId: ID.iMendingMindPlatform, note: 'Feb 2026' },
-        { name: 'Balance',   amountINR: 18000, status: 'PENDING',     invoiceId: ID.iMendingMindPlatform, note: 'Balance ₹18,000 pending' },
+        { name: 'Balance',   amountINR: 18000, status: 'INVOICED',    invoiceId: ID.iMendingMindBalance,  note: 'Balance ₹18,000 — invoice raised' },
       ]),
     project(ID.pAllWheel, 'AllWheelDriving School Website', 'ALLWHEEL', ID.cAllWheel, 'COMPLETED', '2025-04-01', '2025-04-18', [{ uid: ID.uKanish, role: L }], 5500, 5500, 'WordPress website done by Kanish'),
     project(ID.pSocialSecurity, 'Social Security Website', 'SP-SECSEC', ID.cSP, 'COMPLETED', '2025-04-15', '2025-04-23', [{ uid: ID.uSidhak, role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2025-04-23' }], 5500, 3500, 'Social security website development — Sidhak 2k paid'),
@@ -620,13 +620,16 @@ async function main() {
       payment('2025-06-12', 1100),
       payment('2025-07-20', 600),
     ], '2025-04-15', 'PAID');
-  // Mending Mind — Platform (38000 total, 20000 received, 18000 pending)
-  inv(ID.cMendingMind, ID.pMendingMindPlatform, 'Mending Mind Platform Development', 38000,
+  // Mending Mind — Platform collected (₹20k, PAID)
+  inv(ID.cMendingMind, ID.pMendingMindPlatform, 'Mending Mind Platform Development — Advance + M1 + M2', 20000,
     [
       payment('2025-10-04', 5000),
       payment('2025-12-07', 5000),
       payment('2026-02-11', 10000),
-    ], '2025-10-04', 'PARTIALLY_PAID', undefined, ID.iMendingMindPlatform);
+    ], '2025-10-04', 'PAID', undefined, ID.iMendingMindPlatform);
+  // Mending Mind — Platform balance invoice (₹18k, SENT)
+  inv(ID.cMendingMind, ID.pMendingMindPlatform, 'Mending Mind Platform Development — Balance', 18000,
+    [], '2026-06-26', 'SENT', undefined, ID.iMendingMindBalance);
 
   // AllWheelDriving (5500, PAID)
   inv(ID.cAllWheel, ID.pAllWheel, 'AllWheelDriving School WordPress Website', 5500,
@@ -703,12 +706,13 @@ async function main() {
     [payment('2025-09-27', 3500)], '2025-09-27', 'PAID');
 
   // Dhawada E-commerce (56500 total, 44000 received, 12500 pending)
-  inv(ID.cDhawada, ID.pDhawada, 'Dhawada E-commerce Website', 56500,
+  // Dhawada E-commerce (44000 collected; remaining 12500 not yet invoiced)
+  inv(ID.cDhawada, ID.pDhawada, 'Dhawada E-commerce Website — Advance + M2 + M3', 44000,
     [
       payment('2025-10-06', 12500, 'Bank Transfer', 'Advance'),
       payment('2025-11-02', 12500, 'Bank Transfer', 'Milestone 2'),
       payment('2025-12-14', 19000, 'Bank Transfer', 'Milestone 3 + Logo'),
-    ], '2025-10-06', 'PARTIALLY_PAID', undefined, ID.iDhawada);
+    ], '2025-10-06', 'PAID', undefined, ID.iDhawada);
 
   // Skoal (20000 total, 6000 received — client ghosted; 14k written off)
   inv(ID.cSkoal, ID.pSkoal, 'Skoal Website Development', 20000,
@@ -746,9 +750,9 @@ async function main() {
   inv(ID.cSculpt, ID.pGoLaundry, 'Go Laundry Website Development', 14500,
     [payment('2026-01-15', 14500)], '2025-12-01', 'PAID');
 
-  // Studycrux (50000 total, 25000 received, 25000 pending)
-  inv(ID.cStartiffy, ID.pStudycrux, 'Studycrux LMS Development', 50000,
-    [payment('2026-02-01', 5000), payment('2026-05-22', 20000)], '2026-02-01', 'PARTIALLY_PAID', undefined, ID.iStudycrux);
+  // Studycrux (25000 collected; remaining 25000 not yet invoiced)
+  inv(ID.cStartiffy, ID.pStudycrux, 'Studycrux LMS Development — Advance + Milestone 1', 25000,
+    [payment('2026-02-01', 5000), payment('2026-05-22', 20000)], '2026-02-01', 'PAID', undefined, ID.iStudycrux);
 
   // Digital Mandir — three milestone invoices (total ₹15k, fully paid)
   inv(ID.cDigitalMandir, ID.pDigitalMandir,
@@ -772,20 +776,20 @@ async function main() {
   inv(ID.cFirstrank, ID.pFirstrank, 'Firstrank Website & Platform — Advance + M2 + M3', 85000,
     [payment('2026-03-06', 10000, 'Bank Transfer', 'Advance'), payment('2026-04-04', 25000, 'Bank Transfer', 'Milestone 2'), payment('2026-06-02', 50000, 'Bank Transfer', 'Milestone 3')], '2026-03-06', 'PAID', undefined, ID.iFirstrank);
 
-  // Rewardzy (30000 total, 21000 received, 9000 pending)
-  inv(ID.cAnshulGlobal, ID.pRewardzy, 'Rewardzy Platform Development', 30000,
-    [payment('2026-03-13', 9000, 'Bank Transfer', 'Advance'), payment('2026-04-19', 12000, 'Bank Transfer', 'Milestone 2')], '2026-03-13', 'PARTIALLY_PAID', undefined, ID.iRewardzy);
+  // Rewardzy (21000 collected; remaining 9000 not yet invoiced)
+  inv(ID.cAnshulGlobal, ID.pRewardzy, 'Rewardzy Platform Development — Advance + M2', 21000,
+    [payment('2026-03-13', 9000, 'Bank Transfer', 'Advance'), payment('2026-04-19', 12000, 'Bank Transfer', 'Milestone 2')], '2026-03-13', 'PAID', undefined, ID.iRewardzy);
 
-  // Onebox (40000 total, 12000 received, 28000 pending)
-  inv(ID.cOnebox, ID.pOnebox, 'Onebox Project Development', 40000,
-    [payment('2026-03-14', 12000, 'Bank Transfer', 'Advance')], '2026-03-14', 'PARTIALLY_PAID');
+  // Onebox (12000 collected; remaining 28000 not yet invoiced)
+  inv(ID.cOnebox, ID.pOnebox, 'Onebox Project Development — Advance', 12000,
+    [payment('2026-03-14', 12000, 'Bank Transfer', 'Advance')], '2026-03-14', 'PAID');
 
-  // Inno Transventive Real Estate App (87000 total, 26050 received, 60950 pending)
-  inv(ID.cInnoTrans, ID.pRealEstate, 'Real Estate App Development', 87000,
-    [payment('2026-04-06', 13050, 'Bank Transfer', 'Advance'), payment('2026-05-21', 13000, 'Bank Transfer', 'Milestone 2')], '2026-04-06', 'PARTIALLY_PAID', undefined, ID.iRealEstate);
-  // Inno Transventive Website (30000 total, 5000 received, 25000 pending)
-  inv(ID.cInnoTrans, ID.pInnoWebsite, 'Website Development', 30000,
-    [payment('2026-05-21', 5000, 'Bank Transfer', 'Milestone 1')], '2026-04-06', 'PARTIALLY_PAID', undefined, ID.iInnoWebsite);
+  // Inno Transventive Real Estate App (26050 collected; remaining not yet invoiced)
+  inv(ID.cInnoTrans, ID.pRealEstate, 'Real Estate App Development — Advance + M2', 26050,
+    [payment('2026-04-06', 13050, 'Bank Transfer', 'Advance'), payment('2026-05-21', 13000, 'Bank Transfer', 'Milestone 2')], '2026-04-06', 'PAID', undefined, ID.iRealEstate);
+  // Inno Transventive Website (5000 collected; remaining not yet invoiced)
+  inv(ID.cInnoTrans, ID.pInnoWebsite, 'Website Development — Milestone 1', 5000,
+    [payment('2026-05-21', 5000, 'Bank Transfer', 'Milestone 1')], '2026-04-06', 'PAID', undefined, ID.iInnoWebsite);
 
   // Navisha (12000, PAID)
   inv(ID.cSP, ID.pNavisha, 'Navisha Website', 12000,
@@ -799,9 +803,9 @@ async function main() {
   inv(ID.cEldeco, ID.pEldeco, 'Eldeco Website Development', 3500,
     [payment('2026-04-28', 1500, 'Bank Transfer', 'Advance'), payment('2026-05-20', 2000)], '2026-04-28', 'PAID', undefined, ID.iEldeco);
 
-  // Bro Buzz App (60000 total, 30000 received, 30000 pending)
-  inv(ID.cBroBuzz, ID.pBroBuzz, 'Bro Buzz App Development', 60000,
-    [payment('2026-05-22', 30000)], '2026-05-22', 'PARTIALLY_PAID', undefined, ID.iBroBuzz);
+  // Bro Buzz App (30000 collected; remaining 30000 not yet invoiced)
+  inv(ID.cBroBuzz, ID.pBroBuzz, 'Bro Buzz App Development — Advance', 30000,
+    [payment('2026-05-22', 30000)], '2026-05-22', 'PAID', undefined, ID.iBroBuzz);
 
   // Velotra (20000 received so far)
   inv(ID.cVelotra, ID.pVelotra, 'Velotra Website Development', 20000,
@@ -814,8 +818,8 @@ async function main() {
   // Dhawada NGO (8000, PAID May 22)
   inv(ID.cDhawada, ID.pDhawadaNGO, 'Dhawada NGO Website', 8000,
     [payment('2026-05-22', 8000)], '2026-05-22', 'PAID', undefined, ID.iDhawadaNGO);
-  inv(ID.cDhawada, ID.pHiristan, 'Hiristan Website', 8000,
-    [payment('2026-05-22', 2000)], '2026-05-22', 'PARTIALLY_PAID');
+  inv(ID.cDhawada, ID.pHiristan, 'Hiristan Website — Advance', 2000,
+    [payment('2026-05-22', 2000)], '2026-05-22', 'PAID');
 
   // SoulSurf (12000, PAID)
   inv(ID.cNJG, ID.pSoulSurf, 'SoulSurf Website', 12000,

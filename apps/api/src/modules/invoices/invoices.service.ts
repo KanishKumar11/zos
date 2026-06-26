@@ -259,8 +259,9 @@ export class InvoicesService {
       { range: '90+', max: Infinity, count: 0, paise: 0 },
     ];
     for (const inv of open) {
-      if (!inv.dueDate) continue;
-      const days = Math.max(0, Math.floor((now - new Date(inv.dueDate).getTime()) / 86_400_000));
+      const anchor = inv.dueDate ?? inv.issueDate;
+      if (!anchor) continue;
+      const days = Math.max(0, Math.floor((now - new Date(anchor).getTime()) / 86_400_000));
       const bucket = buckets.find((b) => days <= b.max)!;
       bucket.count++;
       bucket.paise += inv.totalPaise - inv.paidPaise;
