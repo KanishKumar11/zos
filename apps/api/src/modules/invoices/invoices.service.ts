@@ -235,9 +235,11 @@ export class InvoicesService {
       if (inv.status === InvoiceStatus.DRAFT) continue;
       billed += inv.totalPaise;
       collected += inv.paidPaise;
-      const open = inv.totalPaise - inv.paidPaise;
-      outstanding += open;
-      if (inv.status === InvoiceStatus.OVERDUE) overdue += open;
+      if (inv.status !== InvoiceStatus.WRITTEN_OFF) {
+        const open = Math.max(0, inv.totalPaise - inv.paidPaise);
+        outstanding += open;
+        if (inv.status === InvoiceStatus.OVERDUE) overdue += open;
+      }
     }
     return { billedPaise: billed, collectedPaise: collected, outstandingPaise: outstanding, overduePaise: overdue, counts };
   }

@@ -764,13 +764,13 @@ async function main() {
     [payment('2026-06-13', 6000, 'UPI Transfer', 'Final payment')],
     '2026-06-13', 'PAID', undefined, ID.iDigitalMandir3);
 
-  // HR Book (240000 total contract; 67.5k received — advance + M2; M3 ₹57k pending next)
-  inv(ID.cHorizon, ID.pHRBook, 'HR Book HRMS Development', 240000,
-    [payment('2026-02-23', 10000, 'Bank Transfer', 'Advance'), payment('2026-05-01', 57500, 'Bank Transfer', 'Milestone 2')], '2026-02-23', 'PARTIALLY_PAID', undefined, ID.iHRBook);
+  // HR Book — Advance + Milestone 2 collected (67.5k, PAID); M3 is a separate invoice
+  inv(ID.cHorizon, ID.pHRBook, 'HR Book HRMS Development — Advance + Milestone 2', 67500,
+    [payment('2026-02-23', 10000, 'Bank Transfer', 'Advance'), payment('2026-05-01', 57500, 'Bank Transfer', 'Milestone 2')], '2026-02-23', 'PAID', undefined, ID.iHRBook);
 
-  // Firstrank (530000 total; 85k received — Advance + M2 + M3; ₹4,45,000 balance pending)
-  inv(ID.cFirstrank, ID.pFirstrank, 'Firstrank Website & Platform Development', 530000,
-    [payment('2026-03-06', 10000, 'Bank Transfer', 'Advance'), payment('2026-04-04', 25000, 'Bank Transfer', 'Milestone 2'), payment('2026-06-02', 50000, 'Bank Transfer', 'Milestone 3')], '2026-03-06', 'PARTIALLY_PAID', undefined, ID.iFirstrank);
+  // Firstrank — Advance + M2 + M3 collected (85k, PAID); M4 is a separate invoice
+  inv(ID.cFirstrank, ID.pFirstrank, 'Firstrank Website & Platform — Advance + M2 + M3', 85000,
+    [payment('2026-03-06', 10000, 'Bank Transfer', 'Advance'), payment('2026-04-04', 25000, 'Bank Transfer', 'Milestone 2'), payment('2026-06-02', 50000, 'Bank Transfer', 'Milestone 3')], '2026-03-06', 'PAID', undefined, ID.iFirstrank);
 
   // Rewardzy (30000 total, 21000 received, 9000 pending)
   inv(ID.cAnshulGlobal, ID.pRewardzy, 'Rewardzy Platform Development', 30000,
