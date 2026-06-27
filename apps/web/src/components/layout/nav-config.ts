@@ -58,6 +58,7 @@ export const NAV: readonly NavSection[] = [
   {
     label: 'Finance',
     items: [
+      { label: 'My Payslips', href: '/payroll/payslips', icon: Wallet, allow: [Role.LEAD, Role.MEMBER, Role.INTERN] },
       { label: 'Payroll', href: '/payroll', icon: Wallet, allow: [Role.OWNER, Role.ADMIN] },
       { label: 'Clients', href: '/clients', icon: Building2, allow: [Role.OWNER] },
       { label: 'Pipeline', href: '/crm', icon: BarChart3, allow: [Role.OWNER] },
