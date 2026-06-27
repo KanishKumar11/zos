@@ -24,6 +24,31 @@ const fmtNum = (paise: number): string => {
 const fmtDate = (d?: Date) =>
   d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 
+// Indian-system rupee amount in words (e.g. "Rupees Eighteen Thousand Only").
+const amountToWords = (paise: number): string => {
+  const rupees = Math.round(paise / 100);
+  if (rupees <= 0) return 'Rupees Zero Only';
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const two = (n: number): string =>
+    n < 20 ? (ones[n] ?? '') : (tens[Math.floor(n / 10)] ?? '') + (n % 10 ? ' ' + (ones[n % 10] ?? '') : '');
+  const three = (n: number): string => {
+    const h = Math.floor(n / 100);
+    const r = n % 100;
+    return (h ? (ones[h] ?? '') + ' Hundred' + (r ? ' ' : '') : '') + (r ? two(r) : '');
+  };
+  let n = rupees;
+  let w = '';
+  const crore = Math.floor(n / 10000000); n %= 10000000;
+  const lakh = Math.floor(n / 100000); n %= 100000;
+  const thousand = Math.floor(n / 1000); n %= 1000;
+  if (crore) w += three(crore) + ' Crore ';
+  if (lakh) w += two(lakh) + ' Lakh ';
+  if (thousand) w += two(thousand) + ' Thousand ';
+  if (n) w += three(n);
+  return 'Rupees ' + w.trim().replace(/\s+/g, ' ') + ' Only';
+};
+
 // Zlaark logo — SVG inlined with cropped viewBox (0 118 370 134) to show only the logo area.
 const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 118 370 134" width="185" height="67" preserveAspectRatio="xMinYMid meet"><defs><g/><clipPath id="zlaark_clip"><rect x="0" width="361" y="0" height="134"/></clipPath></defs><g transform="matrix(1, 0, 0, 1, 0, 118)"><g clip-path="url(#zlaark_clip)"><g fill="#f85f00" fill-opacity="1"><g transform="translate(101.258174, 105.834575)"><g><path d="M 5.296875 -79.078125 L 20.234375 -79.078125 L 20.234375 0 L 5.296875 0 Z M 5.296875 -79.078125 "/></g></g></g><g fill="#f85f00" fill-opacity="1"><g transform="translate(125.815584, 105.834575)"><g><path d="M 61.015625 -53.65625 L 61.015625 0 L 48.140625 0 L 46.625 -5.734375 C 44.53125 -2.921875 42.023438 -1.046875 39.109375 -0.109375 C 36.191406 0.828125 33.144531 1.296875 29.96875 1.296875 C 26.144531 1.296875 22.628906 0.554688 19.421875 -0.921875 C 16.210938 -2.398438 13.414062 -4.414062 11.03125 -6.96875 C 8.65625 -9.53125 6.800781 -12.523438 5.46875 -15.953125 C 4.132812 -19.378906 3.46875 -23.039062 3.46875 -26.9375 C 3.46875 -30.832031 4.132812 -34.492188 5.46875 -37.921875 C 6.800781 -41.347656 8.65625 -44.335938 11.03125 -46.890625 C 13.414062 -49.453125 16.210938 -51.472656 19.421875 -52.953125 C 22.628906 -54.429688 26.144531 -55.171875 29.96875 -55.171875 C 33.425781 -55.171875 36.597656 -54.628906 39.484375 -53.546875 C 42.367188 -52.472656 44.75 -50.742188 46.625 -48.359375 L 48.140625 -53.65625 Z M 46.09375 -26.71875 C 46.09375 -29.53125 45.710938 -31.890625 44.953125 -33.796875 C 44.191406 -35.710938 43.179688 -37.265625 41.921875 -38.453125 C 40.660156 -39.648438 39.179688 -40.519531 37.484375 -41.0625 C 35.785156 -41.601562 33.96875 -41.875 32.03125 -41.875 C 30.082031 -41.875 28.257812 -41.472656 26.5625 -40.671875 C 24.863281 -39.878906 23.363281 -38.816406 22.0625 -37.484375 C 20.769531 -36.148438 19.757812 -34.5625 19.03125 -32.71875 C 18.3125 -30.882812 17.953125 -28.957031 17.953125 -26.9375 C 17.953125 -24.84375 18.3125 -22.894531 19.03125 -21.09375 C 19.757812 -19.289062 20.769531 -17.722656 22.0625 -16.390625 C 23.363281 -15.054688 24.863281 -13.992188 26.5625 -13.203125 C 28.257812 -12.410156 30.082031 -12.015625 32.03125 -12.015625 C 35.914062 -12.015625 39.210938 -13.21875 41.921875 -15.625 C 44.628906 -18.039062 46.019531 -21.738281 46.09375 -26.71875 Z M 46.09375 -26.71875 "/></g></g></g><g fill="#f85f00" fill-opacity="1"><g transform="translate(191.590486, 105.834575)"><g><path d="M 61.015625 -53.65625 L 61.015625 0 L 48.140625 0 L 46.625 -5.734375 C 44.53125 -2.921875 42.023438 -1.046875 39.109375 -0.109375 C 36.191406 0.828125 33.144531 1.296875 29.96875 1.296875 C 26.144531 1.296875 22.628906 0.554688 19.421875 -0.921875 C 16.210938 -2.398438 13.414062 -4.414062 11.03125 -6.96875 C 8.65625 -9.53125 6.800781 -12.523438 5.46875 -15.953125 C 4.132812 -19.378906 3.46875 -23.039062 3.46875 -26.9375 C 3.46875 -30.832031 4.132812 -34.492188 5.46875 -37.921875 C 6.800781 -41.347656 8.65625 -44.335938 11.03125 -46.890625 C 13.414062 -49.453125 16.210938 -51.472656 19.421875 -52.953125 C 22.628906 -54.429688 26.144531 -55.171875 29.96875 -55.171875 C 33.425781 -55.171875 36.597656 -54.628906 39.484375 -53.546875 C 42.367188 -52.472656 44.75 -50.742188 46.625 -48.359375 L 48.140625 -53.65625 Z M 46.09375 -26.71875 C 46.09375 -29.53125 45.710938 -31.890625 44.953125 -33.796875 C 44.191406 -35.710938 43.179688 -37.265625 41.921875 -38.453125 C 40.660156 -39.648438 39.179688 -40.519531 37.484375 -41.0625 C 35.785156 -41.601562 33.96875 -41.875 32.03125 -41.875 C 30.082031 -41.875 28.257812 -41.472656 26.5625 -40.671875 C 24.863281 -39.878906 23.363281 -38.816406 22.0625 -37.484375 C 20.769531 -36.148438 19.757812 -34.5625 19.03125 -32.71875 C 18.3125 -30.882812 17.953125 -28.957031 17.953125 -26.9375 C 17.953125 -24.84375 18.3125 -22.894531 19.03125 -21.09375 C 19.757812 -19.289062 20.769531 -17.722656 22.0625 -16.390625 C 23.363281 -15.054688 24.863281 -13.992188 26.5625 -13.203125 C 28.257812 -12.410156 30.082031 -12.015625 32.03125 -12.015625 C 35.914062 -12.015625 39.210938 -13.21875 41.921875 -15.625 C 44.628906 -18.039062 46.019531 -21.738281 46.09375 -26.71875 Z M 46.09375 -26.71875 "/></g></g></g><g fill="#f85f00" fill-opacity="1"><g transform="translate(257.365387, 105.834575)"><g><path d="M 19.578125 -46.203125 C 20.296875 -47.347656 21.125 -48.441406 22.0625 -49.484375 C 23.007812 -50.535156 24.128906 -51.472656 25.421875 -52.296875 C 26.722656 -53.128906 28.203125 -53.796875 29.859375 -54.296875 C 31.515625 -54.804688 33.390625 -55.0625 35.484375 -55.0625 C 37.929688 -55.0625 40.78125 -54.628906 44.03125 -53.765625 L 42.625 -40.46875 C 41.832031 -40.601562 41.039062 -40.78125 40.25 -41 C 39.59375 -41.144531 38.867188 -41.269531 38.078125 -41.375 C 37.285156 -41.488281 36.566406 -41.546875 35.921875 -41.546875 C 33.609375 -41.546875 31.457031 -41.21875 29.46875 -40.5625 C 27.488281 -39.914062 25.773438 -39.015625 24.328125 -37.859375 C 22.890625 -36.710938 21.738281 -35.328125 20.875 -33.703125 C 20.007812 -32.078125 19.578125 -30.328125 19.578125 -28.453125 L 19.578125 0 L 4.65625 0 L 4.65625 -53.65625 L 18.171875 -53.65625 Z M 19.578125 -46.203125 "/></g></g></g><g fill="#f85f00" fill-opacity="1"><g transform="translate(301.936538, 105.834575)"><g><path d="M 34.625 -31.375 L 57.234375 0 L 39.375 0 L 25.203125 -21.421875 L 19.90625 -15.6875 L 19.90625 0 L 4.984375 0 L 4.984375 -78.984375 L 19.90625 -78.984375 L 19.90625 -35.15625 L 37.328125 -53.65625 L 55.5 -53.65625 Z M 34.625 -31.375 "/></g></g></g><path fill="#f85f00" d="M 59.886719 54.808594 C 67.789062 46.933594 75.625 39.121094 83.609375 31.160156 C 87.292969 34.972656 90.949219 38.757812 94.546875 42.480469 C 72.667969 64.363281 50.835938 86.199219 29.113281 107.929688 C 25.417969 104.296875 21.695312 100.632812 17.769531 96.769531 C 31.722656 82.867188 45.773438 68.871094 59.886719 54.808594 Z M 59.886719 54.808594 " fill-opacity="1" fill-rule="nonzero"/><path fill="#f85f00" d="M 48.554688 95.152344 C 48.554688 94.503906 48.554688 93.984375 48.554688 93.390625 C 62.953125 93.390625 77.230469 93.390625 91.621094 93.390625 C 91.621094 98.101562 91.621094 102.835938 91.621094 107.644531 C 77.3125 107.644531 62.992188 107.644531 48.554688 107.644531 C 48.554688 103.472656 48.554688 99.378906 48.554688 95.152344 Z M 48.554688 95.152344 " fill-opacity="1" fill-rule="nonzero"/><path fill="#f85f00" d="M 21 43.222656 C 21 39.433594 21 35.777344 21 32.035156 C 35.339844 32.035156 49.578125 32.035156 63.875 32.035156 C 63.875 36.8125 63.875 41.519531 63.875 46.3125 C 49.644531 46.3125 35.414062 46.3125 21 46.3125 C 21 45.34375 21 44.347656 21 43.222656 Z M 21 43.222656 " fill-opacity="1" fill-rule="nonzero"/></g></g></svg>`;
 
@@ -71,6 +96,23 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
       </div>`
     : '';
 
+  const amountWords = amountToWords(data.totalPaise);
+
+  // Small status pill under the amount — adapts to paid / partial / unpaid.
+  const heroPill = isPartial
+    ? `<div style="display:inline-flex;align-items:center;gap:16px;margin-top:18px;padding:8px 22px;background:white;border-radius:9999px;border:1px solid #e5e7eb">
+        <span style="font-size:11px;color:#16a34a;font-weight:600">Paid ₹${fmtNum(data.paidPaise)}</span>
+        <span style="width:1px;height:12px;background:#e5e7eb;display:inline-block"></span>
+        <span style="font-size:11px;color:#d97706;font-weight:600">Due ₹${fmtNum(balance)}</span>
+      </div>`
+    : isPaid
+    ? `<div style="display:inline-flex;align-items:center;margin-top:18px;padding:7px 20px;background:white;border-radius:9999px;border:1px solid #dcfce7">
+        <span style="font-size:11px;color:#16a34a;font-weight:600">Paid in full${data.payments && data.payments.length ? ' · ' + fmtDate(data.payments[data.payments.length - 1]!.paidAt) : ''}</span>
+      </div>`
+    : `<div style="display:inline-flex;align-items:center;margin-top:18px;padding:7px 20px;background:white;border-radius:9999px;border:1px solid #fde2cf">
+        <span style="font-size:11px;color:#9a3412;font-weight:600">${data.dueDate ? 'Due by ' + fmtDate(data.dueDate) : 'Payment due on receipt'}</span>
+      </div>`;
+
   return `<!doctype html>
 <html>
 <head>
@@ -84,13 +126,7 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
 </style>
 </head>
 <body>
-<!-- Brand signature: three-segment orange bar, full bleed (from the Zlaark internship doc) -->
-<div style="display:flex;gap:4px;height:5px;width:100%">
-  <div style="flex:1;background:#f85f00"></div>
-  <div style="flex:1;background:#f85f00"></div>
-  <div style="flex:1;background:#f85f00"></div>
-</div>
-<div style="padding:40px 64px 36px;max-width:820px;margin:0 auto">
+<div style="padding:46px 84px 36px;max-width:820px;margin:0 auto">
 
   <!-- Header: Logo left · Invoice meta right (no heavy rule — breathing room carries it) -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:34px">
@@ -98,8 +134,8 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
       ${LOGO_SVG}
     </div>
     <div style="text-align:right">
-      <p style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.16em;margin-bottom:6px">Invoice</p>
-      <div style="font-size:26px;font-weight:800;color:#f85f00;letter-spacing:-0.02em;margin-bottom:10px">${data.number}</div>
+      <p style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.16em;margin-bottom:7px">Invoice</p>
+      <div class="amount-num" style="font-size:23px;font-weight:700;color:#f85f00;letter-spacing:0.02em;margin-bottom:10px">${data.number}</div>
       <!-- Pill badge with status dot -->
       <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:9999px;background:${statusBg};margin-bottom:10px">
         <span style="font-size:7px;color:${statusColor};line-height:1">●</span>
@@ -127,27 +163,34 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
     </div>
   </div>
 
-  <!-- Amount hero with ghost ₹ watermark -->
-  <div style="position:relative;overflow:hidden;text-align:center;padding:32px;margin-bottom:32px;border-radius:16px;background:radial-gradient(ellipse at 50% -10%,#fff2e8 0%,#fafafa 58%);border:1px solid #e5e7eb">
+  <!-- Amount hero — warm directional glow + ghost ₹ watermark -->
+  <div style="position:relative;overflow:hidden;text-align:center;padding:34px 28px;margin-bottom:14px;border-radius:16px;background:radial-gradient(125% 120% at 50% 0%,#ffe2c9 0%,#fff4ec 44%,#ffffff 82%);border:1px solid #f4e7db;box-shadow:inset 0 1px 0 rgba(255,255,255,0.85)">
+    <!-- Corner mark — small brand detail -->
+    <div style="position:absolute;top:14px;right:16px;display:flex;gap:3px;opacity:0.9">
+      <span style="display:inline-block;width:4px;height:4px;border-radius:50%;background:#f85f00;opacity:0.3"></span>
+      <span style="display:inline-block;width:4px;height:4px;border-radius:50%;background:#f85f00;opacity:0.6"></span>
+      <span style="display:inline-block;width:4px;height:4px;border-radius:50%;background:#f85f00"></span>
+    </div>
     <!-- Ghost ₹ watermark -->
     <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-      <span class="amount-num" style="font-size:260px;font-weight:800;color:rgba(248,95,0,0.05);line-height:1;user-select:none;margin-top:20px">₹</span>
+      <span class="amount-num" style="font-size:250px;font-weight:700;color:rgba(248,95,0,0.045);line-height:1;user-select:none;margin-top:18px">₹</span>
     </div>
     <div style="position:relative">
-      <p style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.16em;margin-bottom:16px">
+      <p style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.18em;margin-bottom:14px">
         ${isPaid ? 'Amount Received' : 'Total Amount'}
       </p>
       <div style="display:flex;align-items:flex-start;justify-content:center;gap:3px">
         <span class="amount-num" style="font-size:32px;font-weight:700;color:#f85f00;margin-top:8px;line-height:1">₹</span>
-        <span class="amount-num" style="font-size:84px;font-weight:700;color:#f85f00;line-height:1;letter-spacing:-0.04em">${fmtNum(data.totalPaise)}</span>
+        <span class="amount-num" style="font-size:82px;font-weight:700;color:#f85f00;line-height:1;letter-spacing:-0.04em">${fmtNum(data.totalPaise)}</span>
       </div>
-      ${balance > 0 && balance < data.totalPaise ? `
-      <div style="display:inline-flex;align-items:center;gap:16px;margin-top:16px;padding:8px 22px;background:white;border-radius:9999px;border:1px solid #e5e7eb">
-        <span style="font-size:11px;color:#16a34a;font-weight:600">Paid ₹${fmtNum(data.paidPaise)}</span>
-        <span style="width:1px;height:12px;background:#e5e7eb;display:inline-block"></span>
-        <span style="font-size:11px;color:#d97706;font-weight:600">Due ₹${fmtNum(balance)}</span>
-      </div>` : ''}
+      ${heroPill}
     </div>
+  </div>
+
+  <!-- Amount in words — small functional detail -->
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:30px;padding:11px 18px;border-radius:12px;background:#fafafa;border:1px solid #f0f0f0">
+    <span style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.14em;white-space:nowrap">In words</span>
+    <span style="font-size:12px;font-weight:600;color:#374151;text-align:right;line-height:1.4">${amountWords}</span>
   </div>
 
   <!-- Line items -->
