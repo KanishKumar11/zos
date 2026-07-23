@@ -46,6 +46,7 @@ import { StorageModule } from './modules/storage/storage.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { UsersModule } from './modules/users/users.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
+import { IncomeModule } from './modules/income/income.module';
 import { FreelancerPaymentsModule } from './modules/freelancer-payments/freelancer-payments.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { LettersModule } from './modules/letters/letters.module';
@@ -99,6 +100,7 @@ import { LettersModule } from './modules/letters/letters.module';
     SowModule,
     TasksModule,
     ExpensesModule,
+    IncomeModule,
     FreelancerPaymentsModule,
     ContractsModule,
     LettersModule,

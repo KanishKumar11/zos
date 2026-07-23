@@ -7,6 +7,7 @@ import {
   FreelancerPayment,
   FreelancerPaymentSchema,
 } from '../freelancer-payments/schemas/freelancer-payment.schema';
+import { Income, IncomeSchema } from '../income/schemas/income.schema';
 import { Invoice, InvoiceSchema } from '../invoices/schemas/invoice.schema';
 import {
   LeaveRequest,
@@ -35,6 +36,7 @@ import { DashboardService } from './dashboard.service';
       { name: Task.name, schema: TaskSchema },
       { name: LeaveRequest.name, schema: LeaveRequestSchema },
       { name: Expense.name, schema: ExpenseSchema },
+      { name: Income.name, schema: IncomeSchema },
       { name: FreelancerPayment.name, schema: FreelancerPaymentSchema },
       { name: User.name, schema: UserSchema },
     ]),

@@ -10,6 +10,7 @@ import {
   FreelancerPayment,
   type FreelancerPaymentDocument,
 } from '../freelancer-payments/schemas/freelancer-payment.schema';
+import { Income, type IncomeDocument } from '../income/schemas/income.schema';
 import { Invoice, type InvoiceDocument } from '../invoices/schemas/invoice.schema';
 import {
   LeaveRequest,
@@ -47,6 +48,7 @@ export class DashboardService {
     @InjectModel(Task.name) private readonly tasks: Model<TaskDocument>,
     @InjectModel(LeaveRequest.name) private readonly leaves: Model<LeaveRequestDocument>,
     @InjectModel(Expense.name) private readonly expenses: Model<ExpenseDocument>,
+    @InjectModel(Income.name) private readonly income: Model<IncomeDocument>,
     @InjectModel(FreelancerPayment.name)
     private readonly freelancerPayments: Model<FreelancerPaymentDocument>,
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
@@ -65,7 +67,7 @@ export class DashboardService {
         : new Date(now.getFullYear() - 1, 3, 1);
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    const [activeProjects, activeSows, invoiceAgg, lastRun, revThisMonth, revThisFY, payThisMonth, payThisFY, expThisMonth, expNextMonth, expThisFY, freThisMonth, freThisFY, allPayThisMonth] = await Promise.all([
+    const [activeProjects, activeSows, invoiceAgg, lastRun, revThisMonth, revThisFY, payThisMonth, payThisFY, expThisMonth, expNextMonth, expThisFY, freThisMonth, freThisFY, allPayThisMonth, incThisMonth, incThisFY] = await Promise.all([
       this.projects.countDocuments({ deletedAt: { $exists: false }, status: 'ACTIVE' }),
       this.sows.countDocuments({ deletedAt: { $exists: false } }),
       this.invoices
@@ -133,6 +135,16 @@ export class DashboardService {
         { $match: { month: currentMonthStr } },
         { $group: { _id: null, total: { $sum: '$totalNetPaise' } } },
       ]).exec(),
+      // Non-client income this month (affiliate, referral, etc.)
+      this.income.aggregate([
+        { $match: { deletedAt: { $exists: false }, date: { $gte: monthStart, $lt: monthEnd } } },
+        { $group: { _id: null, total: { $sum: '$amountPaise' } } },
+      ]).exec(),
+      // Non-client income this FY
+      this.income.aggregate([
+        { $match: { deletedAt: { $exists: false }, date: { $gte: fyStart } } },
+        { $group: { _id: null, total: { $sum: '$amountPaise' } } },
+      ]).exec(),
     ]);
 
     const byStatus = Object.fromEntries(
@@ -159,6 +171,8 @@ export class DashboardService {
     const fMonth = (freThisMonth as Array<{ total: number }>)[0]?.total ?? 0;
     const fFY = (freThisFY as Array<{ total: number }>)[0]?.total ?? 0;
     const allPMonth = (allPayThisMonth as Array<{ total: number }>)[0]?.total ?? 0;
+    const iMonth = (incThisMonth as Array<{ total: number }>)[0]?.total ?? 0;
+    const iFY = (incThisFY as Array<{ total: number }>)[0]?.total ?? 0;
 
     return {
       activeProjects,
@@ -169,10 +183,12 @@ export class DashboardService {
         : null,
       revenueThisMonth: rMonth,
       revenueThisFinancialYear: rFY,
+      otherIncomeThisMonth: iMonth,
+      otherIncomeThisFinancialYear: iFY,
       expensesThisMonth: eMonth + allPMonth,
       expensesNextMonth: eNextMonth,
-      profitThisMonth: rMonth - pMonth - eMonth - fMonth,
-      profitThisFinancialYear: rFY - pFY - eFY - fFY,
+      profitThisMonth: rMonth + iMonth - pMonth - eMonth - fMonth,
+      profitThisFinancialYear: rFY + iFY - pFY - eFY - fFY,
       fyLabel: `FY ${fyStart.getFullYear()}–${String(fyStart.getFullYear() + 1).slice(-2)}`,
     };
   }
@@ -203,7 +219,7 @@ export class DashboardService {
     const months = lastNMonths(12);
     const startDate = new Date(`${months[0]}-01`);
 
-    const [revenueAgg, payrollAgg, expenseAgg, freelancerAgg] = await Promise.all([
+    const [revenueAgg, payrollAgg, expenseAgg, freelancerAgg, incomeAgg] = await Promise.all([
       // Monthly collected revenue — unwind payment entries on invoices
       this.invoices
         .aggregate([
@@ -257,6 +273,18 @@ export class DashboardService {
           },
         ])
         .exec(),
+      // Monthly non-client income
+      this.income
+        .aggregate([
+          { $match: { deletedAt: { $exists: false }, date: { $gte: startDate } } },
+          {
+            $group: {
+              _id: { $dateToString: { format: '%Y-%m', date: '$date' } },
+              totalPaise: { $sum: '$amountPaise' },
+            },
+          },
+        ])
+        .exec(),
     ]);
 
     const toMap = <T extends { _id: string }>(arr: T[]) =>
@@ -270,6 +298,7 @@ export class DashboardService {
     const payMap = toMap(payrollAgg as PayRow[]);
     const expMap = toMap(expenseAgg as ExpRow[]);
     const freMap = toMap(freelancerAgg as ExpRow[]);
+    const incMap = toMap(incomeAgg as ExpRow[]);
 
     const revenueByMonth = months.map((m) => ({
       month: m,
@@ -288,16 +317,21 @@ export class DashboardService {
       month: m,
       totalPaise: freMap.get(m)?.totalPaise ?? 0,
     }));
+    const incomeByMonth = months.map((m) => ({
+      month: m,
+      totalPaise: incMap.get(m)?.totalPaise ?? 0,
+    }));
     const profitByMonth = months.map((m, i) => ({
       month: m,
       profitPaise:
-        (revenueByMonth[i]?.collectedPaise ?? 0) -
+        (revenueByMonth[i]?.collectedPaise ?? 0) +
+        (incomeByMonth[i]?.totalPaise ?? 0) -
         (payrollByMonth[i]?.totalNetPaise ?? 0) -
         (expensesByMonth[i]?.totalPaise ?? 0) -
         (freelancerByMonth[i]?.totalPaise ?? 0),
     }));
 
-    return { revenueByMonth, payrollByMonth, expensesByMonth, freelancerByMonth, profitByMonth };
+    return { revenueByMonth, payrollByMonth, expensesByMonth, freelancerByMonth, incomeByMonth, profitByMonth };
   }
 
   async notifications() {
