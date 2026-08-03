@@ -31,8 +31,8 @@ const COLUMNS: TaskStatus[] = [
 ];
 
 const COLUMN_META: Record<TaskStatus, { label: string; color: string }> = {
-  [TaskStatus.BACKLOG]:    { label: 'Backlog',    color: 'bg-slate-400' },
-  [TaskStatus.TODO]:       { label: 'To do',      color: 'bg-zinc-500' },
+  [TaskStatus.BACKLOG]:    { label: 'Backlog',    color: 'bg-muted-foreground/40' },
+  [TaskStatus.TODO]:       { label: 'To do',      color: 'bg-muted-foreground/70' },
   [TaskStatus.IN_PROGRESS]:{ label: 'In progress',color: 'bg-primary' },
   [TaskStatus.IN_REVIEW]:  { label: 'In review',  color: 'bg-amber-500' },
   [TaskStatus.BLOCKED]:    { label: 'Blocked',    color: 'bg-destructive' },

@@ -40,9 +40,9 @@ import { useClients } from '@/features/clients/clients.hooks';
 import { useInvoices } from '@/features/invoices/invoices.hooks';
 
 const STATUS_COLORS: Record<ContractStatus, string> = {
-  [ContractStatus.ACTIVE]: 'bg-green-100 text-green-800',
-  [ContractStatus.PAUSED]: 'bg-yellow-100 text-yellow-800',
-  [ContractStatus.COMPLETED]: 'bg-gray-100 text-gray-800',
+  [ContractStatus.ACTIVE]: 'bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]',
+  [ContractStatus.PAUSED]: 'bg-amber-600/10 text-amber-600',
+  [ContractStatus.COMPLETED]: 'bg-muted text-muted-foreground',
 };
 
 const STATUS_LABELS: Record<ContractStatus, string> = {
@@ -410,7 +410,7 @@ function Inner({ contractId }: { contractId: string }) {
                         {inv.projectId ? (
                           <Link
                             href={`/projects/${inv.projectId}`}
-                            className="text-blue-600 hover:underline"
+                            className="text-primary hover:underline"
                           >
                             View Project
                           </Link>
@@ -426,7 +426,7 @@ function Inner({ contractId }: { contractId: string }) {
                       <TD>
                         <Link
                           href={`/invoices/${inv._id}`}
-                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                         >
                           View <ArrowRight className="h-3 w-3" />
                         </Link>

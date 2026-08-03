@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { use, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { Role, UserStatus } from '@agency/shared';
 
@@ -34,6 +34,7 @@ import { teamApi } from '@/features/team/team.api';
 import { useMemberStats } from '@/features/dashboard/dashboard.hooks';
 import { useUserPayslips, type PayslipRow } from '@/features/payroll/payroll.hooks';
 import { useExpenses } from '@/features/expenses/expenses.hooks';
+import { ChartTooltip } from '@/components/ui/chart-tooltip';
 import { env } from '@/lib/env';
 
 export default function TeamMemberPage({ params }: { params: Promise<{ id: string }> }) {
@@ -106,6 +107,46 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
       {/* Earnings & Projects — OWNER only */}
       {me?.role === Role.OWNER && (
         <>
+          {(() => {
+            const lastSlip = payslips.data?.at(-1);
+            const pendingAcrossProjects = (stats.data?.projects ?? []).reduce((sum, p) => {
+              const paid = p.payments.reduce((s, pay) => s + pay.amountPaise, 0);
+              return sum + Math.max(0, p.amountPaise - paid);
+            }, 0);
+            const totalContributed = (contributions.data?.items ?? []).reduce((sum, e) => {
+              const mine = e.contributions.find((c) => c.userId === id);
+              return sum + (mine?.amountPaise ?? 0);
+            }, 0);
+            return (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Last Payslip Net</p>
+                    <p className="mt-2 text-xl font-semibold tabular-nums">
+                      {lastSlip ? formatPaise(lastSlip.netPaise, lastSlip.currency) : '—'}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Pending Project Payouts</p>
+                    <p className={`mt-2 text-xl font-semibold tabular-nums ${pendingAcrossProjects > 0 ? 'text-amber-600' : ''}`}>
+                      {formatPaise(pendingAcrossProjects, 'INR')}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Shared Cost Contributed</p>
+                    <p className="mt-2 text-xl font-semibold tabular-nums">
+                      {formatPaise(totalContributed, 'INR')}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
+
           <Card>
             <CardHeader>
               <CardTitle>Monthly Earnings — Last 12 Months</CardTitle>
@@ -126,16 +167,17 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
                       barSize={14}
                       barGap={2}
                     >
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                      <CartesianGrid stroke="var(--border)" horizontal vertical={false} />
                       <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} width={48}
                         tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`} />
                       <Tooltip
-                        contentStyle={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                        formatter={(v: number) => [`₹${v.toLocaleString('en-IN')}`, '']}
+                        content={<ChartTooltip formatValue={(v) => `₹${v.toLocaleString('en-IN')}`} />}
+                        cursor={{ fill: 'var(--muted)', opacity: 0.4 }}
                       />
-                      <Bar dataKey="Gross" fill="var(--muted-foreground)" opacity={0.3} radius={[2, 2, 0, 0]} />
-                      <Bar dataKey="Net" fill="var(--foreground)" radius={[2, 2, 0, 0]} />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'var(--muted-foreground)' }} iconType="circle" iconSize={8} />
+                      <Bar dataKey="Gross" fill="var(--muted-foreground)" opacity={0.4} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Net" fill="var(--foreground)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

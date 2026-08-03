@@ -284,7 +284,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <CardHeader>
             <CardTitle>Financials</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded border p-3">
               <p className="text-xs text-muted-foreground">Client</p>
               {p.clientId ? (
@@ -307,6 +307,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <p className="text-xs text-muted-foreground">Agency margin</p>
               <p className="text-lg font-semibold text-green-600">{formatPaise(p.agencyMarginPaise ?? 0, cur)}</p>
             </div>
+            {balance.data && (
+              <div className="rounded border p-3">
+                <p className="text-xs text-muted-foreground">In hand</p>
+                <p className={`text-lg font-semibold ${balance.data.inHandPaise >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                  {formatPaise(balance.data.inHandPaise, cur)}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -509,7 +517,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     <TD className="text-green-700 font-medium">{formatPaise(fp.paidPaise, fp.currency)}</TD>
                     <TD className="text-amber-600">{formatPaise(fp.pendingPaise, fp.currency)}</TD>
                     <TD>
-                      <span className={`text-xs px-2 py-1 rounded ${fp.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : fp.status === 'ACTIVE' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                      <span className={`text-xs px-2 py-1 rounded ${fp.status === 'COMPLETED' ? 'bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]' : fp.status === 'ACTIVE' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
                         {fp.status}
                       </span>
                     </TD>
@@ -741,14 +749,14 @@ function SyncCard({
 
 function InvoiceStatusBadge({ status }: { status: string }) {
   const variants: Record<string, string> = {
-    PAID: 'bg-green-100 text-green-800',
-    PARTIALLY_PAID: 'bg-amber-100 text-amber-800',
-    UNPAID: 'bg-slate-100 text-slate-700',
-    OVERDUE: 'bg-red-100 text-red-800',
-    WRITTEN_OFF: 'bg-gray-100 text-gray-500',
+    PAID: 'bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]',
+    PARTIALLY_PAID: 'bg-amber-600/10 text-amber-600',
+    UNPAID: 'bg-muted text-muted-foreground',
+    OVERDUE: 'bg-destructive/10 text-destructive',
+    WRITTEN_OFF: 'bg-muted text-muted-foreground/70',
   };
   return (
-    <span className={`rounded px-2 py-0.5 text-xs font-medium ${variants[status] ?? 'bg-slate-100 text-slate-700'}`}>
+    <span className={`rounded px-2 py-0.5 text-xs font-medium ${variants[status] ?? 'bg-muted text-muted-foreground'}`}>
       {status.replace('_', ' ')}
     </span>
   );
@@ -989,9 +997,9 @@ function MilestoneBlock({
   onRemove: () => void;
 }) {
   const statusColors: Record<string, string> = {
-    PENDING: 'bg-slate-100 text-slate-700',
-    INVOICED: 'bg-amber-100 text-amber-700',
-    COLLECTED: 'bg-green-100 text-green-700',
+    PENDING: 'bg-muted text-muted-foreground',
+    INVOICED: 'bg-amber-600/10 text-amber-600',
+    COLLECTED: 'bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]',
   };
   return (
     <div className="rounded border p-3 space-y-2">
@@ -1027,10 +1035,10 @@ function MilestoneBlock({
       {invoice && (
         <div className="border-t pt-2 space-y-1.5">
           <div className="flex items-center gap-2">
-            <a href={`/invoices/${invoice._id}`} className="text-xs font-semibold text-blue-600 hover:underline">{invoice.number}</a>
+            <a href={`/invoices/${invoice._id}`} className="text-xs font-semibold text-primary hover:underline">{invoice.number}</a>
             <InvoiceStatusBadge status={invoice.status} />
             <span className="text-xs text-muted-foreground">{formatPaise(invoice.totalPaise, invoice.currency)}</span>
-            <a href={`/invoices/${invoice._id}`} className="text-xs text-blue-500 hover:underline ml-auto">View →</a>
+            <a href={`/invoices/${invoice._id}`} className="text-xs text-primary hover:underline ml-auto">View →</a>
           </div>
           {invoice.payments.length > 0 ? (
             <div className="space-y-0.5 pl-1">

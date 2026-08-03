@@ -232,7 +232,7 @@ function Inner({ id }: { id: string }) {
                 {(projects.data?.items ?? []).map((p) => (
                   <TR key={p._id}>
                     <TD>
-                      <Link href={`/projects/${p._id}`} className="text-blue-600 hover:underline">
+                      <Link href={`/projects/${p._id}`} className="text-primary hover:underline">
                         {p.code}
                       </Link>
                     </TD>

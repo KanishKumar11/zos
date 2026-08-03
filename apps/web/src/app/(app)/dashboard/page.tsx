@@ -5,6 +5,7 @@ import { useState } from 'react';
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   Legend,
   Line,
   LineChart,
@@ -15,6 +16,7 @@ import {
 } from 'recharts';
 import { Role } from '@agency/shared';
 
+import { ChartTooltip } from '@/components/ui/chart-tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatPaise } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
@@ -27,6 +29,7 @@ import {
 } from '@/features/dashboard/dashboard.hooks';
 import { BillingReminders } from './billing-reminders';
 import { DashboardNotifications } from './dashboard-notifications';
+import { MoneyOverview } from './money-overview';
 
 const shortMonth = (m: string) => {
   const mo = m.split('-')[1] ?? '';
@@ -70,6 +73,7 @@ export default function DashboardPage() {
 
       {isOwner && <DashboardNotifications />}
       {isOwner && <BillingReminders />}
+      {isOwner && <MoneyOverview />}
 
       {isOwner && (
         <div className="border-t border-border">
@@ -138,15 +142,28 @@ export default function DashboardPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                      <CartesianGrid stroke="var(--border)" horizontal vertical={false} />
                       <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
                       <YAxis hide />
                       <Tooltip
-                        contentStyle={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                        formatter={(v: number) => [`₹${Math.round(v).toLocaleString('en-IN')}`, '']}
+                        content={<ChartTooltip formatValue={(v) => `₹${Math.round(v).toLocaleString('en-IN')}`} />}
+                        cursor={{ stroke: 'var(--border)', strokeWidth: 1 }}
                       />
-                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                      <Line type="monotone" dataKey="Revenue" stroke="var(--foreground)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                      <Line type="monotone" dataKey="Profit" stroke="#10b981" strokeWidth={2} dot={false} isAnimationActive={false} strokeDasharray="4 4" />
+                      <Legend
+                        wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'var(--muted-foreground)' }}
+                        iconType="plainline"
+                        iconSize={14}
+                      />
+                      <Line
+                        type="monotone" dataKey="Revenue" stroke="var(--foreground)" strokeWidth={2}
+                        strokeLinecap="round" strokeLinejoin="round" dot={false} isAnimationActive={false}
+                        activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--background)' }}
+                      />
+                      <Line
+                        type="monotone" dataKey="Profit" stroke="#10b981" strokeWidth={2}
+                        strokeLinecap="round" strokeLinejoin="round" dot={false} isAnimationActive={false} strokeDasharray="4 4"
+                        activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--background)' }}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
@@ -195,14 +212,15 @@ export default function DashboardPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barSize={12} barGap={4}>
-                      <XAxis dataKey="month" hide />
+                      <CartesianGrid stroke="var(--border)" horizontal vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
                       <Tooltip
-                        contentStyle={{ background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                        formatter={(v: number) => [`₹${Math.round(v).toLocaleString('en-IN')}`, '']}
+                        content={<ChartTooltip formatValue={(v) => `₹${Math.round(v).toLocaleString('en-IN')}`} />}
+                        cursor={{ fill: 'var(--muted)', opacity: 0.4 }}
                       />
-                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'var(--muted-foreground)' }} iconType="circle" iconSize={8} />
                       <Bar dataKey="Payroll" fill="var(--foreground)" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="Expenses" fill="var(--muted-foreground)" opacity={0.4} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Expenses" fill="var(--muted-foreground)" opacity={0.5} radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

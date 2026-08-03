@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import { api, unwrap } from '@/lib/api-client';
+import { api, unwrap, unwrapPaginated } from '@/lib/api-client';
 
 export interface ExpenseContribution {
   userId: string;
@@ -65,7 +65,7 @@ export interface ExpenseListParams {
 
 const expensesApi = {
   list: (params?: ExpenseListParams) =>
-    unwrap<ExpensePaginated>(api.get('/expenses', { params })),
+    unwrapPaginated<ExpenseRow>(api.get('/expenses', { params })),
   summary: (from?: string, to?: string) =>
     unwrap<ExpenseSummary>(api.get('/expenses/summary', { params: { from, to } })),
   byId: (id: string) => unwrap<ExpenseRow>(api.get(`/expenses/${id}`)),

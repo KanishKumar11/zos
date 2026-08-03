@@ -33,20 +33,20 @@ export function DashboardNotifications() {
       {birthdays.map((b) => (
         <div
           key={b.userId}
-          className="flex items-center justify-between border border-violet-200 bg-violet-50 dark:bg-violet-950/20 dark:border-violet-800 rounded-lg px-4 py-3"
+          className="flex items-center justify-between border border-rose-200 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-800 rounded-lg px-4 py-3"
         >
           <div>
-            <p className="text-sm font-semibold text-violet-900 dark:text-violet-200">
+            <p className="text-sm font-semibold text-rose-900 dark:text-rose-200">
               {b.daysUntil === 0 ? '🎂' : '🎉'}{' '}
               {b.daysUntil === 0
                 ? `Today is ${b.name}'s birthday!`
                 : `${b.name}'s birthday in ${b.daysUntil} day${b.daysUntil === 1 ? '' : 's'}`}
             </p>
-            <p className="text-xs text-violet-700 dark:text-violet-400 mt-0.5">{b.dateLabel}</p>
+            <p className="text-xs text-rose-700 dark:text-rose-400 mt-0.5">{b.dateLabel}</p>
           </div>
           <Link
             href={`/team/${b.userId}`}
-            className="ml-4 shrink-0 rounded-md bg-violet-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
+            className="ml-4 shrink-0 rounded-md bg-rose-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-rose-700"
           >
             View Profile →
           </Link>

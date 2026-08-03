@@ -890,9 +890,9 @@ async function main() {
   inv(ID.cNamit, ID.pGPower, 'G-Power & Jouelcube Website Development — Final Balance', 20000,
     [], '2026-06-26', 'SENT', undefined, ID.iGPower2);
 
-  // FoodyQueen — June 2026 monthly contract (unpaid)
+  // FoodyQueen — June 2026 monthly contract (paid Jul 7)
   inv(ID.cFoody, undefined, 'Monthly Development Contract — 2026-06', 22000,
-    [], '2026-06-20', 'SENT', ID.cFoodyContract);
+    [payment('2026-07-07', 22000)], '2026-06-20', 'PAID', ID.cFoodyContract);
 
   // Hostinger Affiliate / Referral Income (agency income — kept as agency not personal)
   inv(ID.cHostinger, undefined, 'Hostinger Referral Affiliate Income Nov 2025', 4992.94,

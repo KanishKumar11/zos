@@ -52,7 +52,7 @@ function Inner({ id }: { id: string }) {
 
       <Card>
         <CardContent className="pt-6 text-sm text-muted-foreground">
-          💡 For individual project payments and member payment tracking, view the <a href="/projects" className="text-blue-600 hover:underline">Projects</a> section.
+          💡 For individual project payments and member payment tracking, view the <a href="/projects" className="text-primary hover:underline">Projects</a> section.
         </CardContent>
       </Card>
 
@@ -83,14 +83,14 @@ function Inner({ id }: { id: string }) {
                     <TR>
                       <TD>
                         <div>
-                          <a href={`/team/${s.userId}`} className="text-blue-600 hover:underline font-medium">
+                          <a href={`/team/${s.userId}`} className="text-primary hover:underline font-medium">
                             {teamMap.get(s.userId) || s.userId}
                           </a>
                           {s.projectPayments && s.projectPayments.length > 0 && (
                             <div className="mt-1 space-y-0.5">
                               {s.projectPayments.map((pp: any, i: number) => (
                                 <div key={i} className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <a href={`/projects/${pp.projectId}`} className="hover:underline text-blue-500">
+                                  <a href={`/projects/${pp.projectId}`} className="hover:underline text-primary">
                                     {pp.projectName}
                                   </a>
                                   <span>— {formatPaise(pp.amountPaise, s.currency)}</span>

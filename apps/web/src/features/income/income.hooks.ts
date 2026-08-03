@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import { api, unwrap } from '@/lib/api-client';
+import { api, unwrap, unwrapPaginated } from '@/lib/api-client';
 
 export interface IncomeRow {
   _id: string;
@@ -38,7 +38,7 @@ export interface CreateIncomeInput {
 
 const incomeApi = {
   list: (params?: Record<string, string | number | undefined>) =>
-    unwrap<IncomePaginated>(api.get('/income', { params })),
+    unwrapPaginated<IncomeRow>(api.get('/income', { params })),
   summary: (from?: string, to?: string) =>
     unwrap<IncomeSummary>(api.get('/income/summary', { params: { from, to } })),
   create: (body: CreateIncomeInput) => unwrap<IncomeRow>(api.post('/income', body)),

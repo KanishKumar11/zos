@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import { api, unwrap } from '@/lib/api-client';
+import { api, unwrap, unwrapPaginated } from '@/lib/api-client';
 
 export interface FreelancerPaymentEntry {
   date: string;
@@ -58,7 +58,7 @@ export interface UpdateFreelancerPaymentInput {
 
 const fpApi = {
   list: (params?: Record<string, string | number | undefined>) =>
-    unwrap<FreelancerPaymentsPaginated>(api.get('/freelancer-payments', { params })),
+    unwrapPaginated<FreelancerPaymentRow>(api.get('/freelancer-payments', { params })),
   byId: (id: string) => unwrap<FreelancerPaymentRow>(api.get(`/freelancer-payments/${id}`)),
   byProjectId: (projectId: string) =>
     unwrap<FreelancerPaymentRow[]>(api.get(`/freelancer-payments/project/${projectId}`)),

@@ -36,9 +36,9 @@ import {
 } from '@/features/freelancer-payments/freelancer-payments.hooks';
 
 const STATUS_STYLE: Record<string, string> = {
-  ACTIVE: 'bg-blue-100 text-blue-700',
-  COMPLETED: 'bg-green-100 text-green-700',
-  CANCELLED: 'bg-red-100 text-red-700',
+  ACTIVE: 'bg-primary/10 text-primary',
+  COMPLETED: 'bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]',
+  CANCELLED: 'bg-destructive/10 text-destructive',
 };
 
 export default function FreelancerPaymentsPage() {

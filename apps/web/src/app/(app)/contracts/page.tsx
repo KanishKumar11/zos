@@ -412,7 +412,7 @@ function Inner() {
                   <TD className="max-w-xs truncate text-muted-foreground">{c.notes || '—'}</TD>
                   <TD>
                     <div className="flex items-center gap-3">
-                      <a href={`/contracts/${c._id}`} className="text-xs text-blue-600 hover:underline">
+                      <a href={`/contracts/${c._id}`} className="text-xs text-primary hover:underline">
                         View →
                       </a>
                       <button
