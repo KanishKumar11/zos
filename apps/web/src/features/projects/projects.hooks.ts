@@ -200,6 +200,18 @@ export function useProjectMemberCosts(id: string | undefined) {
   });
 }
 
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => projectsApi.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      toast.success('Project deleted');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
 export function useRemoveProjectMember() {
   const qc = useQueryClient();
   return useMutation({

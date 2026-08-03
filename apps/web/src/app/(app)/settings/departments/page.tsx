@@ -5,8 +5,9 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import { createDepartmentSchema, type CreateDepartmentInput } from '@agency/shared';
+import { Role, createDepartmentSchema, type CreateDepartmentInput } from '@agency/shared';
 
+import { useAuthStore } from '@/store/auth.store';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +29,8 @@ import {
 } from '@/features/org/org.hooks';
 
 export default function DepartmentsPage() {
+  const role = useAuthStore((s) => s.user?.role);
+  const canManage = role === Role.OWNER || role === Role.ADMIN;
   const dq = useDepartments();
   const create = useCreateDepartment();
   const remove = useDeleteDepartment();
@@ -48,7 +51,7 @@ export default function DepartmentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <PageHeader title="Departments" description="Org-level team groupings." />
-        <Button onClick={() => setOpen(true)}>Add department</Button>
+        {canManage && <Button onClick={() => setOpen(true)}>Add department</Button>}
       </div>
       <Card>
         <CardHeader>
@@ -65,15 +68,17 @@ export default function DepartmentsPage() {
                     <p className="font-medium">{d.name}</p>
                     {d.description && <p className="text-sm text-muted-foreground">{d.description}</p>}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (confirm(`Delete "${d.name}"?`)) remove.mutate(d._id);
-                    }}
-                  >
-                    Delete
-                  </Button>
+                  {canManage && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm(`Delete "${d.name}"?`)) remove.mutate(d._id);
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>

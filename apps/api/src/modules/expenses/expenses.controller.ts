@@ -23,6 +23,7 @@ export class ExpensesController {
     @Query('category') category?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('contributorId') contributorId?: string,
   ) {
     return this.svc.list({
       page: page ? +page : undefined,
@@ -30,6 +31,7 @@ export class ExpensesController {
       category,
       from,
       to,
+      contributorId,
     });
   }
 

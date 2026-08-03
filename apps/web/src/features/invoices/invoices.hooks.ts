@@ -54,6 +54,7 @@ export const invoicesApi = {
   send: (id: string) => unwrap<InvoiceRow>(api.post(`/invoices/${id}/send`)),
   pay: (id: string, body: RecordPaymentInput) =>
     unwrap<InvoiceRow>(api.post(`/invoices/${id}/payments`, body)),
+  remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/invoices/${id}`)),
   dashboard: () => unwrap<InvoiceDashboard>(api.get('/invoices/dashboard')),
   aging: () => unwrap<InvoiceAgingBucket[]>(api.get('/invoices/aging')),
 };
@@ -91,6 +92,29 @@ export function useCreateInvoice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.invoices.all() });
       toast.success('Invoice drafted');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+export function useUpdateInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; body: UpdateInvoiceInput }) => invoicesApi.update(vars.id, vars.body),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: qk.invoices.byId(vars.id) });
+      qc.invalidateQueries({ queryKey: qk.invoices.all() });
+      toast.success('Invoice updated');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+export function useDeleteInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => invoicesApi.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.invoices.all() });
+      toast.success('Invoice deleted');
     },
     onError: (err: Error) => toast.error(err.message),
   });

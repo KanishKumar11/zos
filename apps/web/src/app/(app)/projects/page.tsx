@@ -33,6 +33,7 @@ import { useAuthStore } from '@/store/auth.store';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { useCreateProject, useProjects } from '@/features/projects/projects.hooks';
+import { useClients } from '@/features/clients/clients.hooks';
 
 export default function ProjectsPage() {
   const [page, setPage] = useState(1);
@@ -42,6 +43,7 @@ export default function ProjectsPage() {
   const isOwner = role === Role.OWNER;
   const [open, setOpen] = useState(false);
   const create = useCreateProject();
+  const clients = useClients();
 
   const form = useForm<CreateProjectInput>({
     resolver: zodResolver(createProjectSchema),
@@ -89,16 +91,33 @@ export default function ProjectsPage() {
                   />
                 </div>
                 {isOwner && (
-                  <div className="grid grid-cols-2 gap-3">
+                  <>
                     <div className="space-y-1">
-                      <Label>Client budget (paise)</Label>
-                      <Input type="number" {...form.register('clientBudgetPaise', { valueAsNumber: true })} />
+                      <Label>Client</Label>
+                      <select
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        {...form.register('clientId')}
+                      >
+                        <option value="">No client (internal)</option>
+                        {(clients.data ?? []).map((c) => (
+                          <option key={c._id} value={c._id}>{c.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-muted-foreground">
+                        Required to create invoices against this project later.
+                      </p>
                     </div>
-                    <div className="space-y-1">
-                      <Label>Agency margin (paise)</Label>
-                      <Input type="number" {...form.register('agencyMarginPaise', { valueAsNumber: true })} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label>Client budget (paise)</Label>
+                        <Input type="number" {...form.register('clientBudgetPaise', { valueAsNumber: true })} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Agency margin (paise)</Label>
+                        <Input type="number" {...form.register('agencyMarginPaise', { valueAsNumber: true })} />
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
                 <DialogFooter>
                   <Button type="submit" disabled={create.isPending}>

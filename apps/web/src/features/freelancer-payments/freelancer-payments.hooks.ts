@@ -46,13 +46,26 @@ export interface AddPaymentEntryInput {
   note?: string;
 }
 
+export interface UpdateFreelancerPaymentInput {
+  freelancerName?: string;
+  email?: string;
+  projectRef?: string;
+  agreedTotalPaise?: number;
+  status?: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  currency?: string;
+  notes?: string;
+}
+
 const fpApi = {
   list: (params?: Record<string, string | number | undefined>) =>
     unwrap<FreelancerPaymentsPaginated>(api.get('/freelancer-payments', { params })),
+  byId: (id: string) => unwrap<FreelancerPaymentRow>(api.get(`/freelancer-payments/${id}`)),
   byProjectId: (projectId: string) =>
     unwrap<FreelancerPaymentRow[]>(api.get(`/freelancer-payments/project/${projectId}`)),
   create: (body: CreateFreelancerPaymentInput) =>
     unwrap<FreelancerPaymentRow>(api.post('/freelancer-payments', body)),
+  update: (id: string, body: UpdateFreelancerPaymentInput) =>
+    unwrap<FreelancerPaymentRow>(api.patch(`/freelancer-payments/${id}`, body)),
   addPayment: (id: string, body: AddPaymentEntryInput) =>
     unwrap<FreelancerPaymentRow>(api.post(`/freelancer-payments/${id}/pay`, body)),
   remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/freelancer-payments/${id}`)),
@@ -81,6 +94,19 @@ export function useCreateFreelancerPayment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['freelancer-payments'] });
       toast.success('Contract added');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateFreelancerPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateFreelancerPaymentInput }) =>
+      fpApi.update(id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['freelancer-payments'] });
+      toast.success('Contract updated');
     },
     onError: (e: Error) => toast.error(e.message),
   });

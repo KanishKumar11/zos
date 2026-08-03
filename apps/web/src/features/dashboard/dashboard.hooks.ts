@@ -16,6 +16,8 @@ export interface OwnerDashboard {
   lastPayrollRun: { month: string; totalNetPaise: number; memberCount: number } | null;
   revenueThisMonth: number;
   revenueThisFinancialYear: number;
+  otherIncomeThisMonth: number;
+  otherIncomeThisFinancialYear: number;
   expensesThisMonth: number;
   expensesNextMonth: number;
   profitThisMonth: number;

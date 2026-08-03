@@ -93,7 +93,20 @@ export function useUpdateClient() {
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: qk.clients.byId(vars.id) });
       qc.invalidateQueries({ queryKey: qk.clients.all() });
+      toast.success('Client updated');
     },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+export function useDeleteClient() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => clientsApi.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.clients.all() });
+      toast.success('Client deleted');
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 }
 
@@ -117,5 +130,35 @@ export function useMoveOpportunity() {
     mutationFn: (vars: { id: string; body: MoveOpportunityInput }) =>
       crmApi.move(vars.id, vars.body),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.crm.pipeline() }),
+  });
+}
+export function useOpportunity(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? ['crm', 'opportunity', id] : ['crm', 'opportunity', 'undefined'],
+    queryFn: () => crmApi.byId(id!),
+    enabled: !!id,
+  });
+}
+export function useUpdateOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; body: UpdateOpportunityInput }) =>
+      crmApi.update(vars.id, vars.body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.crm.pipeline() });
+      toast.success('Opportunity updated');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+export function useDeleteOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => crmApi.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.crm.pipeline() });
+      toast.success('Opportunity removed');
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 }

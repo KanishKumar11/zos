@@ -1,9 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
+import { Role } from '@agency/shared';
+
+import { RoleGate } from '@/components/auth/role-gate';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,15 +20,19 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination } from '@/components/ui/pagination';
 import { formatDate, formatPaise } from '@/lib/formatters';
 
 import {
   type AddPaymentEntryInput,
   type CreateFreelancerPaymentInput,
   type FreelancerPaymentRow,
+  type UpdateFreelancerPaymentInput,
   useAddFreelancerPayment,
   useCreateFreelancerPayment,
+  useDeleteFreelancerPayment,
   useFreelancerPayments,
+  useUpdateFreelancerPayment,
 } from '@/features/freelancer-payments/freelancer-payments.hooks';
 
 const STATUS_STYLE: Record<string, string> = {
@@ -35,9 +42,21 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export default function FreelancerPaymentsPage() {
+  return (
+    <RoleGate allow={[Role.OWNER]} fallback={<p className="text-sm text-muted-foreground">Restricted.</p>}>
+      <Inner />
+    </RoleGate>
+  );
+}
+
+function Inner() {
   const [createOpen, setCreateOpen] = useState(false);
-  const list = useFreelancerPayments();
+  const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const list = useFreelancerPayments({ page, limit: 20, ...(statusFilter ? { status: statusFilter } : {}) });
   const create = useCreateFreelancerPayment();
+
+  useEffect(() => { setPage(1); }, [statusFilter]);
 
   const form = useForm<CreateFreelancerPaymentInput>({
     defaultValues: { freelancerName: '', projectRef: '', agreedTotalPaise: 0, currency: 'INR' },
@@ -124,6 +143,18 @@ export default function FreelancerPaymentsPage() {
 
       {/* Contract cards */}
       <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-8 rounded border bg-background px-2 text-sm"
+          >
+            <option value="">All statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
         {list.isLoading && (
           <p className="text-sm text-muted-foreground">Loading…</p>
         )}
@@ -137,6 +168,15 @@ export default function FreelancerPaymentsPage() {
         {items.map((row) => (
           <ContractCard key={row._id} row={row} />
         ))}
+        {list.data && list.data.meta.totalPages > 1 && (
+          <Pagination
+            page={list.data.meta.page}
+            totalPages={list.data.meta.totalPages}
+            total={list.data.meta.total}
+            onPage={setPage}
+            className="pt-2"
+          />
+        )}
       </div>
     </div>
   );
@@ -145,10 +185,26 @@ export default function FreelancerPaymentsPage() {
 function ContractCard({ row }: { row: FreelancerPaymentRow }) {
   const [expanded, setExpanded] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const addPayment = useAddFreelancerPayment();
+  const updateContract = useUpdateFreelancerPayment();
+  const deleteContract = useDeleteFreelancerPayment();
 
   const form = useForm<AddPaymentEntryInput>({
     defaultValues: { date: new Date().toISOString().slice(0, 10), amountPaise: 0 },
+  });
+
+  const editForm = useForm<UpdateFreelancerPaymentInput>({
+    defaultValues: {
+      freelancerName: row.freelancerName,
+      email: row.email,
+      projectRef: row.projectRef,
+      agreedTotalPaise: row.agreedTotalPaise,
+      status: row.status,
+      currency: row.currency,
+      notes: row.notes,
+    },
   });
 
   const onPay = form.handleSubmit((values) =>
@@ -156,6 +212,10 @@ function ContractCard({ row }: { row: FreelancerPaymentRow }) {
       { id: row._id, body: values },
       { onSuccess: () => { setPayOpen(false); form.reset(); } },
     ),
+  );
+
+  const onEditSubmit = editForm.handleSubmit((values) =>
+    updateContract.mutate({ id: row._id, body: values }, { onSuccess: () => setEditOpen(false) }),
   );
 
   const pct = row.agreedTotalPaise > 0 ? (row.paidPaise / row.agreedTotalPaise) * 100 : 0;
@@ -208,8 +268,78 @@ function ContractCard({ row }: { row: FreelancerPaymentRow }) {
                 </DialogContent>
               </Dialog>
             )}
+            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>Edit</Button>
+            <Button size="sm" variant="outline" onClick={() => setConfirmDelete(true)}>Delete</Button>
           </div>
         </div>
+
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit contract — {row.freelancerName}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={onEditSubmit} className="grid gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Freelancer name</Label>
+                  <Input {...editForm.register('freelancerName')} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Email</Label>
+                  <Input type="email" {...editForm.register('email')} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Project / work ref</Label>
+                <Input {...editForm.register('projectRef')} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Agreed total (paise)</Label>
+                  <Input type="number" {...editForm.register('agreedTotalPaise', { valueAsNumber: true })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Status</Label>
+                  <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" {...editForm.register('status')}>
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Notes</Label>
+                <Input {...editForm.register('notes')} />
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={updateContract.isPending}>
+                  {updateContract.isPending ? 'Saving…' : 'Save changes'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete contract</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Delete the contract with <span className="font-medium text-foreground">{row.freelancerName}</span>? This cannot be undone.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                disabled={deleteContract.isPending}
+                onClick={() => deleteContract.mutate(row._id, { onSuccess: () => setConfirmDelete(false) })}
+              >
+                {deleteContract.isPending ? 'Deleting…' : 'Delete'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Progress bar */}
         <div className="mt-3 space-y-1">

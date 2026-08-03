@@ -1,7 +1,23 @@
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsMongoId,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 
 import { ExpenseCategory } from '../schemas/expense.schema';
+
+export class ExpenseContributionDto {
+  @IsMongoId() userId!: string;
+  @IsNumber() @IsPositive() @Type(() => Number) amountPaise!: number;
+  @IsOptional() @IsString() note?: string;
+}
 
 export class CreateExpenseDto {
   @IsString() title!: string;
@@ -12,6 +28,11 @@ export class CreateExpenseDto {
   @IsOptional() @IsString() vendor?: string;
   @IsOptional() @IsString() receiptRef?: string;
   @IsOptional() @IsString() currency?: string;
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExpenseContributionDto)
+  contributions?: ExpenseContributionDto[];
 }
 
 export class UpdateExpenseDto {
@@ -23,4 +44,9 @@ export class UpdateExpenseDto {
   @IsOptional() @IsString() vendor?: string;
   @IsOptional() @IsString() receiptRef?: string;
   @IsOptional() @IsString() currency?: string;
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExpenseContributionDto)
+  contributions?: ExpenseContributionDto[];
 }

@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import { updateSettingsSchema, type UpdateSettingsInput } from '@agency/shared';
+import { Role, updateSettingsSchema, type UpdateSettingsInput } from '@agency/shared';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,8 +14,11 @@ import { Label } from '@/components/ui/label';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { useSettings, useUpdateSettings } from '@/features/settings/settings.hooks';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function GeneralSettingsPage() {
+  const role = useAuthStore((s) => s.user?.role);
+  const canManage = role === Role.OWNER || role === Role.ADMIN;
   const settings = useSettings();
   const update = useUpdateSettings();
 
@@ -49,8 +52,12 @@ export default function GeneralSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="General settings" description="Workspace name, currency, and locale." />
+      <PageHeader
+        title="General settings"
+        description={canManage ? 'Workspace name, currency, and locale.' : 'Workspace name, currency, and locale. (View only)'}
+      />
       <form onSubmit={onSubmit} className="space-y-6">
+        <fieldset disabled={!canManage} className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Workspace</CardTitle>
@@ -88,12 +95,15 @@ export default function GeneralSettingsPage() {
             <Field label="PAN" {...form.register('pan')} />
           </CardContent>
         </Card>
+        </fieldset>
 
-        <div className="flex justify-end">
-          <Button type="submit" disabled={update.isPending}>
-            {update.isPending ? 'Saving…' : 'Save changes'}
-          </Button>
-        </div>
+        {canManage && (
+          <div className="flex justify-end">
+            <Button type="submit" disabled={update.isPending}>
+              {update.isPending ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        )}
       </form>
     </div>
   );

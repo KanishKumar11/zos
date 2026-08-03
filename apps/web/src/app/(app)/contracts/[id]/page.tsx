@@ -2,21 +2,40 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import type { z } from 'zod';
 import { ArrowRight, Calendar, DollarSign, FileText, Plus } from 'lucide-react';
 
-import { ContractStatus, Role } from '@agency/shared';
+import { ContractStatus, Role, updateContractSchema } from '@agency/shared';
+
+type UpdateContractForm = z.input<typeof updateContractSchema>;
 
 import { RoleGate } from '@/components/auth/role-gate';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatPaise, formatDate } from '@/lib/formatters';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { useContract, useGenerateContractInvoice } from '@/features/contracts/contracts.hooks';
+import {
+  useContract,
+  useDeleteContract,
+  useGenerateContractInvoice,
+  useUpdateContract,
+} from '@/features/contracts/contracts.hooks';
 import { useClients } from '@/features/clients/clients.hooks';
 import { useInvoices } from '@/features/invoices/invoices.hooks';
 
@@ -52,8 +71,37 @@ function Inner({ contractId }: { contractId: string }) {
   const clients = useClients();
   const invoices = useInvoices({ contractId });
   const generateInvoice = useGenerateContractInvoice();
+  const update = useUpdateContract();
+  const del = useDeleteContract();
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const editForm = useForm<UpdateContractForm>({
+    resolver: zodResolver(updateContractSchema) as never,
+  });
+
+  useEffect(() => {
+    if (contract.data) {
+      editForm.reset({
+        name: contract.data.name,
+        clientId: contract.data.clientId,
+        description: contract.data.description,
+        monthlyAmountPaise: contract.data.monthlyAmountPaise,
+        currency: contract.data.currency,
+        status: contract.data.status,
+        startDate: contract.data.startDate?.slice(0, 10),
+        endDate: contract.data.endDate?.slice(0, 10),
+        notes: contract.data.notes,
+        billingDay: contract.data.billingDay,
+      } as never);
+    }
+  }, [contract.data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onEditSubmit = editForm.handleSubmit((values) => {
+    update.mutate({ id: contractId, body: values as never }, { onSuccess: () => setEditOpen(false) });
+  });
 
   const clientName = clients.data?.find((c) => c._id === contract.data?.clientId)?.name;
   const contractInvoices = invoices.data || [];
@@ -106,9 +154,126 @@ function Inner({ contractId }: { contractId: string }) {
               <Plus className="mr-1 h-4 w-4" />
               {generateInvoice.isPending ? 'Generating…' : 'Generate Invoice'}
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              Edit
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)}>
+              Delete
+            </Button>
           </div>
         }
       />
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit contract</DialogTitle>
+          </DialogHeader>
+          <form className="grid gap-3" onSubmit={onEditSubmit}>
+            <div className="space-y-1">
+              <Label>Name</Label>
+              <Input {...editForm.register('name')} />
+            </div>
+            <div className="space-y-1">
+              <Label>Client</Label>
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                {...editForm.register('clientId')}
+              >
+                {(clients.data ?? []).map((cl) => (
+                  <option key={cl._id} value={cl._id}>
+                    {cl.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Description</Label>
+              <Input {...editForm.register('description')} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Monthly amount (paise)</Label>
+                <Input type="number" {...editForm.register('monthlyAmountPaise', { valueAsNumber: true })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Currency</Label>
+                <Input {...editForm.register('currency')} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Start date</Label>
+                <Input type="date" {...editForm.register('startDate')} />
+              </div>
+              <div className="space-y-1">
+                <Label>End date</Label>
+                <Input type="date" {...editForm.register('endDate')} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Status</Label>
+                <select
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  {...editForm.register('status')}
+                >
+                  {(Object.values(ContractStatus) as ContractStatus[]).map((s) => (
+                    <option key={s} value={s}>
+                      {STATUS_LABELS[s]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label>Billing day</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={28}
+                  placeholder="e.g. 1"
+                  {...editForm.register('billingDay', { valueAsNumber: true })}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Notes</Label>
+              <textarea
+                className="min-h-20 w-full rounded border bg-background px-3 py-2 text-sm"
+                {...editForm.register('notes')}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={update.isPending}>
+                {update.isPending ? 'Saving…' : 'Save changes'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete contract</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Delete <span className="font-medium text-foreground">{c.name}</span>? This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={del.isPending}
+              onClick={() => del.mutate(contractId, { onSuccess: () => router.push('/contracts') })}
+            >
+              {del.isPending ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -181,6 +346,16 @@ function Inner({ contractId }: { contractId: string }) {
           <div>
             <p className="text-sm font-medium text-muted-foreground">Currency</p>
             <p className="mt-1 text-sm">{c.currency}</p>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Billing Reminder</p>
+            {c.billingDay ? (
+              <p className="mt-1 text-sm">Day {c.billingDay} of every month</p>
+            ) : (
+              <p className="mt-1 text-sm text-amber-600">
+                No billing day set — this contract won&apos;t trigger a dashboard invoicing reminder. Click Edit to set one.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

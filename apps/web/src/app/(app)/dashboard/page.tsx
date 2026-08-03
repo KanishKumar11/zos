@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import {
   Bar,
@@ -91,6 +92,33 @@ export default function DashboardPage() {
               title="Profit This FY"
               value={owner.isLoading ? '—' : formatPaise(owner.data?.profitThisFinancialYear ?? 0, 'INR')}
               valueClassName={(owner.data?.profitThisFinancialYear ?? 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}
+            />
+          </div>
+
+          {/* Non-client income + last payroll run — feeds the profit numbers above but was never shown on its own */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-border divide-x divide-border">
+            <StatBlock
+              title="Other Income — This Month"
+              value={owner.isLoading ? '—' : formatPaise(owner.data?.otherIncomeThisMonth ?? 0, 'INR')}
+            />
+            <StatBlock
+              title="Other Income — This FY"
+              value={owner.isLoading ? '—' : formatPaise(owner.data?.otherIncomeThisFinancialYear ?? 0, 'INR')}
+            />
+            <StatBlock
+              title="Last Payroll Run"
+              value={
+                owner.isLoading
+                  ? '—'
+                  : owner.data?.lastPayrollRun
+                    ? `${owner.data.lastPayrollRun.month} · ${formatPaise(owner.data.lastPayrollRun.totalNetPaise, 'INR')}`
+                    : 'No runs yet'
+              }
+            />
+            <StatBlock
+              title="Overdue Invoices"
+              value={owner.isLoading ? '—' : formatPaise(owner.data?.invoices.overdue ?? 0, 'INR')}
+              valueClassName={(owner.data?.invoices.overdue ?? 0) > 0 ? 'text-destructive' : undefined}
             />
           </div>
 
@@ -218,7 +246,11 @@ export default function DashboardPage() {
                     <tbody>
                       {(teamEarnings.data?.members ?? []).map((m) => (
                         <tr key={m.userId} className="group hover:bg-muted/30 transition-colors">
-                          <td className="py-4 text-sm font-medium text-foreground border-b border-border align-middle">{m.name}</td>
+                          <td className="py-4 text-sm font-medium text-foreground border-b border-border align-middle">
+                            <Link href={`/team/${m.userId}`} className="hover:underline">
+                              {m.name}
+                            </Link>
+                          </td>
                           <td className="py-4 text-sm text-foreground border-b border-border align-middle text-right">{formatPaise(m.grossPaise, 'INR')}</td>
                           <td className="py-4 text-sm text-destructive border-b border-border align-middle text-right">
                             {m.deductionsPaise > 0 ? `−${formatPaise(m.deductionsPaise, 'INR')}` : '—'}

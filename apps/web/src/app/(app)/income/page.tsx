@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { TrendingUp } from 'lucide-react';
 
+import { Role } from '@agency/shared';
+
+import { RoleGate } from '@/components/auth/role-gate';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,6 +39,14 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 
 export default function IncomePage() {
+  return (
+    <RoleGate allow={[Role.OWNER]} fallback={<p className="text-sm text-muted-foreground">Restricted.</p>}>
+      <Inner />
+    </RoleGate>
+  );
+}
+
+function Inner() {
   const [open, setOpen] = useState(false);
   const [catFilter, setCatFilter] = useState('');
   const list = useIncome(catFilter ? { category: catFilter } : undefined);

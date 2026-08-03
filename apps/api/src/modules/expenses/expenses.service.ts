@@ -12,9 +12,17 @@ import type { CreateExpenseDto, UpdateExpenseDto } from './dto/expense.dto';
 export class ExpensesService {
   constructor(@InjectModel(Expense.name) private readonly model: Model<ExpenseDocument>) {}
 
-  async list(opts: { page?: number; limit?: number; category?: string; from?: string; to?: string }) {
+  async list(opts: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    from?: string;
+    to?: string;
+    contributorId?: string;
+  }) {
     const filter: Record<string, unknown> = { deletedAt: { $exists: false } };
     if (opts.category) filter.category = opts.category;
+    if (opts.contributorId) filter['contributions.userId'] = new Types.ObjectId(opts.contributorId);
     if (opts.from || opts.to) {
       const range: Record<string, Date> = {};
       if (opts.from) range.$gte = new Date(opts.from);

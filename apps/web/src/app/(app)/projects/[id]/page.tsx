@@ -1,12 +1,25 @@
 // Project detail.
 'use client';
 
-import { use, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { use, useEffect, useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import type { z } from 'zod';
 
-import { Role } from '@agency/shared';
+import { ProjectMemberRole, ProjectStatus, Role, updateProjectSchema } from '@agency/shared';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { formatPaise } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
@@ -16,29 +29,46 @@ import { PageHeader } from '@/components/layout/page-header';
 import { useInvoices, useCreateInvoice } from '@/features/invoices/invoices.hooks';
 import { useContracts } from '@/features/contracts/contracts.hooks';
 import {
-  useProject, useSetMemberCost,
+  useProject, useSetMemberCost, useUpdateProject, useDeleteProject,
+  useAddProjectMember, useRemoveProjectMember,
   useAddMemberPayment, useRemoveMemberPayment,
   useProjectBalance, useAddMilestone, useUpdateMilestone, useRemoveMilestone,
   type MemberPaymentEntry, type MilestoneRow,
 } from '@/features/projects/projects.hooks';
 import { useTeamList } from '@/features/team/team.hooks';
+import { useClients } from '@/features/clients/clients.hooks';
 import { useFreelancerPaymentsByProject } from '@/features/freelancer-payments/freelancer-payments.hooks';
+
+type UpdateProjectForm = z.input<typeof updateProjectSchema>;
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const project = useProject(id);
   const role = useAuthStore((s) => s.user?.role);
   const isOwner = role === Role.OWNER;
   const team = useTeamList({ pageSize: 100 });
+  const clients = useClients();
   const invoices = useInvoices({ projectId: id });
   const freelancerPayments = useFreelancerPaymentsByProject(isOwner ? id : undefined);
   const contracts = useContracts();
   const createInvoice = useCreateInvoice();
+  const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
+  const addMember = useAddProjectMember();
+  const removeMember = useRemoveProjectMember();
 
   const balance = useProjectBalance(isOwner ? id : undefined);
   const addMilestone = useAddMilestone();
   const updateMilestone = useUpdateMilestone();
   const removeMilestone = useRemoveMilestone();
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [addingMember, setAddingMember] = useState(false);
+  const [newMemberUserId, setNewMemberUserId] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState<ProjectMemberRole>(ProjectMemberRole.CONTRIBUTOR);
+  const [newMemberAmount, setNewMemberAmount] = useState('');
 
   const [addingMilestone, setAddingMilestone] = useState(false);
   const [msName, setMsName] = useState('');
@@ -50,6 +80,32 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [invAmount, setInvAmount] = useState('');
   const [invDate, setInvDate] = useState(new Date().toISOString().slice(0, 10));
   const [invDesc, setInvDesc] = useState('');
+
+  const editForm = useForm<UpdateProjectForm>({
+    resolver: zodResolver(updateProjectSchema) as never,
+  });
+
+  useEffect(() => {
+    if (project.data) {
+      editForm.reset({
+        name: project.data.name,
+        code: project.data.code,
+        description: project.data.description,
+        status: project.data.status,
+        startDate: project.data.startDate?.slice(0, 10),
+        endDate: project.data.endDate?.slice(0, 10),
+        brief: project.data.brief,
+        clientId: project.data.clientId,
+        clientBudgetPaise: project.data.clientBudgetPaise,
+        agencyMarginPaise: project.data.agencyMarginPaise,
+        currency: project.data.currency,
+      } as never);
+    }
+  }, [project.data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onEditSubmit = editForm.handleSubmit((values) => {
+    updateProject.mutate({ id, body: values as never }, { onSuccess: () => setEditOpen(false) });
+  });
 
   if (project.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!project.data) return <p className="text-sm text-muted-foreground">Not found.</p>;
@@ -80,10 +136,120 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       .map((inv) => inv.contractId)
   );
   const relatedContracts = (contracts.data ?? []).filter((c) => relatedContractIds.has(c._id));
+  const clientName = clients.data?.find((c) => c._id === p.clientId)?.name;
+  const assignedTeamIds = new Set(p.members.map((m) => m.userId));
+  const assignableTeam = (team.data ?? []).filter((u) => !assignedTeamIds.has(u._id));
 
   return (
     <div className="space-y-6">
-      <PageHeader title={p.name} description={`${p.code} · ${p.status}`} />
+      <PageHeader
+        title={p.name}
+        description={`${p.code} · ${p.status}`}
+        action={
+          isOwner ? (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Edit</Button>
+              <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)}>Delete</Button>
+            </div>
+          ) : undefined
+        }
+      />
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit project</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={onEditSubmit} className="grid gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Name</Label>
+                <Input {...editForm.register('name')} />
+              </div>
+              <div className="space-y-1">
+                <Label>Code</Label>
+                <Input {...editForm.register('code')} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Description</Label>
+              <Input {...editForm.register('description')} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Status</Label>
+                <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" {...editForm.register('status')}>
+                  {Object.values(ProjectStatus).map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label>Client</Label>
+                <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" {...editForm.register('clientId')}>
+                  <option value="">No client (internal)</option>
+                  {(clients.data ?? []).map((c) => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Start date</Label>
+                <Input type="date" {...editForm.register('startDate')} />
+              </div>
+              <div className="space-y-1">
+                <Label>End date</Label>
+                <Input type="date" {...editForm.register('endDate')} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Client budget (paise)</Label>
+                <Input type="number" {...editForm.register('clientBudgetPaise', { valueAsNumber: true })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Agency margin (paise)</Label>
+                <Input type="number" {...editForm.register('agencyMarginPaise', { valueAsNumber: true })} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Brief</Label>
+              <textarea
+                className="min-h-24 w-full rounded border bg-background px-3 py-2 text-sm"
+                {...editForm.register('brief')}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={updateProject.isPending}>
+                {updateProject.isPending ? 'Saving…' : 'Save changes'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete project</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Delete <span className="font-medium text-foreground">{p.name}</span>? This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteProject.isPending}
+              onClick={() => deleteProject.mutate(id, { onSuccess: () => router.push('/projects') })}
+            >
+              {deleteProject.isPending ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {relatedContracts.length > 0 && (
         <Card>
@@ -118,7 +284,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <CardHeader>
             <CardTitle>Financials</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
+          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded border p-3">
+              <p className="text-xs text-muted-foreground">Client</p>
+              {p.clientId ? (
+                <Link href={`/clients/${p.clientId}`} className="text-lg font-semibold hover:underline">
+                  {clientName ?? p.clientId.slice(-6)}
+                </Link>
+              ) : (
+                <p className="text-lg font-semibold text-muted-foreground">No client (internal)</p>
+              )}
+            </div>
             <div className="rounded border p-3">
               <p className="text-xs text-muted-foreground">Client budget</p>
               <p className="text-lg font-semibold">{formatPaise(p.clientBudgetPaise ?? 0, cur)}</p>
@@ -353,10 +529,76 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle>Members ({p.members.length})</CardTitle>
+          {isOwner && !addingMember && (
+            <Button size="sm" variant="outline" onClick={() => setAddingMember(true)}>+ Add member</Button>
+          )}
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          {isOwner && addingMember && (
+            <div className="rounded border p-3 space-y-2 bg-muted/40">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Add member</p>
+              <div className="grid gap-2 sm:grid-cols-4">
+                <select
+                  value={newMemberUserId}
+                  onChange={(e) => setNewMemberUserId(e.target.value)}
+                  className="h-8 rounded border bg-background px-2 text-sm sm:col-span-2"
+                >
+                  <option value="">Select team member…</option>
+                  {assignableTeam.map((u) => (
+                    <option key={u._id} value={u._id}>{u.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={newMemberRole}
+                  onChange={(e) => setNewMemberRole(e.target.value as ProjectMemberRole)}
+                  className="h-8 rounded border bg-background px-2 text-sm"
+                >
+                  {Object.values(ProjectMemberRole).map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+                <Input
+                  type="number"
+                  placeholder="Budgeted (₹, optional)"
+                  className="h-8 text-sm"
+                  value={newMemberAmount}
+                  onChange={(e) => setNewMemberAmount(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={!newMemberUserId || addMember.isPending}
+                  onClick={() => {
+                    const inr = parseFloat(newMemberAmount);
+                    addMember.mutate(
+                      {
+                        id,
+                        body: {
+                          userId: newMemberUserId,
+                          role: newMemberRole,
+                          ...(newMemberAmount && !isNaN(inr) ? { amountPaise: Math.round(inr * 100) } : {}),
+                        },
+                      },
+                      {
+                        onSuccess: () => {
+                          setAddingMember(false);
+                          setNewMemberUserId('');
+                          setNewMemberAmount('');
+                          setNewMemberRole(ProjectMemberRole.CONTRIBUTOR);
+                        },
+                      },
+                    );
+                  }}
+                >
+                  {addMember.isPending ? 'Adding…' : 'Add'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setAddingMember(false)}>Cancel</Button>
+              </div>
+            </div>
+          )}
           <Table>
             <THead>
               <TR>
@@ -365,6 +607,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <TH>Added</TH>
                 {isOwner && <TH>Budgeted Pay</TH>}
                 {isOwner && <TH>Paid</TH>}
+                {isOwner && <TH />}
               </TR>
             </THead>
             <TBody>
@@ -379,6 +622,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     currency={cur}
                     isOwner={isOwner}
                     paidTotal={paid}
+                    onRemove={() => {
+                      if (confirm(`Remove ${nameMap.get(m.userId) ?? 'this member'} from the project?`)) {
+                        removeMember.mutate({ id, userId: m.userId });
+                      }
+                    }}
                   />
                 );
               })}
@@ -387,6 +635,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   <TD colSpan={3} className="text-right text-xs text-muted-foreground">Total</TD>
                   <TD className="font-semibold">{formatPaise(memberBudgeted, cur)}</TD>
                   <TD className="font-semibold text-green-700">{formatPaise(memberPaid, cur)}</TD>
+                  <TD />
                 </TR>
               )}
             </TBody>
@@ -578,6 +827,7 @@ function MemberRow({
   currency,
   isOwner,
   paidTotal,
+  onRemove,
 }: {
   projectId: string;
   member: { userId: string; role: string; addedAt: string; amountPaise: number; payments: MemberPaymentEntry[] };
@@ -585,6 +835,7 @@ function MemberRow({
   currency: string;
   isOwner: boolean;
   paidTotal: number;
+  onRemove: () => void;
 }) {
   const setCost = useSetMemberCost();
 
@@ -605,6 +856,17 @@ function MemberRow({
       {isOwner && (
         <TD className="text-green-700 font-medium">
           {paidTotal > 0 ? formatPaise(paidTotal, currency) : <span className="text-muted-foreground">₹0</span>}
+        </TD>
+      )}
+      {isOwner && (
+        <TD>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="text-xs text-muted-foreground hover:text-destructive"
+          >
+            Remove
+          </button>
         </TD>
       )}
     </TR>

@@ -26,6 +26,9 @@ import { Sow, type SowDocument } from '../sow/schemas/sow.schema';
 import { Task, type TaskDocument } from '../tasks/schemas/task.schema';
 import { User, type UserDocument } from '../users/schemas/user.schema';
 
+/** Per-document net expense (gross amountPaise less any team-member contributions recovered via payroll). */
+const NET_EXPENSE_EXPR = { $subtract: ['$amountPaise', { $sum: '$contributions.amountPaise' }] };
+
 /** Build a sorted list of the last N YYYY-MM strings ending at current month. */
 function lastNMonths(n: number): string[] {
   const now = new Date();
@@ -101,20 +104,20 @@ export class DashboardService {
         { $match: { status: 'FINALIZED', month: { $gte: `${fyStart.getFullYear()}-${String(fyStart.getMonth() + 1).padStart(2, '0')}` } } },
         { $group: { _id: null, total: { $sum: '$totalNetPaise' } } },
       ]).exec(),
-      // Expenses this month
+      // Expenses this month (net of team-member contributions recovered via payroll)
       this.expenses.aggregate([
         { $match: { deletedAt: { $exists: false }, date: { $gte: monthStart, $lt: monthEnd } } },
-        { $group: { _id: null, total: { $sum: '$amountPaise' } } },
+        { $group: { _id: null, total: { $sum: NET_EXPENSE_EXPR } } },
       ]).exec(),
       // Expenses next month
       this.expenses.aggregate([
         { $match: { deletedAt: { $exists: false }, date: { $gte: nextMonthStart, $lt: nextMonthEnd } } },
-        { $group: { _id: null, total: { $sum: '$amountPaise' } } },
+        { $group: { _id: null, total: { $sum: NET_EXPENSE_EXPR } } },
       ]).exec(),
       // Expenses this FY
       this.expenses.aggregate([
         { $match: { deletedAt: { $exists: false }, date: { $gte: fyStart } } },
-        { $group: { _id: null, total: { $sum: '$amountPaise' } } },
+        { $group: { _id: null, total: { $sum: NET_EXPENSE_EXPR } } },
       ]).exec(),
       // Freelancer this month
       this.freelancerPayments.aggregate([
@@ -247,14 +250,14 @@ export class DashboardService {
           },
         ])
         .exec(),
-      // Monthly expenses
+      // Monthly expenses (net of team-member contributions recovered via payroll)
       this.expenses
         .aggregate([
           { $match: { deletedAt: { $exists: false }, date: { $gte: startDate } } },
           {
             $group: {
               _id: { $dateToString: { format: '%Y-%m', date: '$date' } },
-              totalPaise: { $sum: '$amountPaise' },
+              totalPaise: { $sum: NET_EXPENSE_EXPR },
             },
           },
         ])

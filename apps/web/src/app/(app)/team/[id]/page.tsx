@@ -32,6 +32,9 @@ import {
 } from '@/features/team/team.hooks';
 import { teamApi } from '@/features/team/team.api';
 import { useMemberStats } from '@/features/dashboard/dashboard.hooks';
+import { useUserPayslips, type PayslipRow } from '@/features/payroll/payroll.hooks';
+import { useExpenses } from '@/features/expenses/expenses.hooks';
+import { env } from '@/lib/env';
 
 export default function TeamMemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -52,6 +55,9 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
   const setOnboarding = useSetOnboarding();
   const toggleOnboard = useToggleOnboarding();
   const stats = useMemberStats(id, me?.role === Role.OWNER);
+  const payslips = useUserPayslips(id, me?.role === Role.OWNER || me?.role === Role.ADMIN);
+  const [expandedPayslip, setExpandedPayslip] = useState<string | null>(null);
+  const contributions = useExpenses({ contributorId: id, limit: 50 }, me?.role === Role.OWNER);
 
   if (member.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!member.data) return <p className="text-sm text-muted-foreground">Member not found.</p>;
@@ -68,7 +74,17 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="space-y-6">
-      <PageHeader title={u.name} description={u.email} />
+      <PageHeader
+        title={u.name}
+        description={u.email}
+        action={
+          me?.role === Role.OWNER ? (
+            <Link href={`/team/${u._id}/compensation`}>
+              <Button variant="outline" size="sm">Compensation</Button>
+            </Link>
+          ) : undefined
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -202,6 +218,81 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Payslips</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {payslips.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : (payslips.data ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">No payslips yet.</p>
+              ) : (
+                <div className="divide-y">
+                  {(payslips.data ?? []).map((s) => {
+                    const isOpen = expandedPayslip === s._id;
+                    return (
+                      <div key={s._id} className="py-2">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedPayslip(isOpen ? null : s._id)}
+                          className="flex w-full items-center justify-between gap-3 py-1 text-left text-sm"
+                        >
+                          <span className="font-medium">{s.month}</span>
+                          <span className="flex items-center gap-4 text-xs">
+                            <span className="text-muted-foreground">
+                              Gross {formatPaise(s.grossPaise, s.currency)}
+                            </span>
+                            <span className="text-destructive">
+                              {s.deductionsPaise > 0 ? `−${formatPaise(s.deductionsPaise, s.currency)}` : '—'}
+                            </span>
+                            <span className="font-semibold">Net {formatPaise(s.netPaise, s.currency)}</span>
+                            <span className="text-muted-foreground">{isOpen ? '▲' : '▼'}</span>
+                          </span>
+                        </button>
+                        {isOpen && <PayslipBreakdownDetail slip={s} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Shared Cost Contributions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {contributions.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : (contributions.data?.items ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No shared costs (e.g. Claude/tool subscriptions) recovered from this person&apos;s pay.
+                </p>
+              ) : (
+                <div className="divide-y">
+                  {(contributions.data?.items ?? []).map((e) => {
+                    const mine = e.contributions.find((c) => c.userId === id);
+                    if (!mine) return null;
+                    return (
+                      <div key={e._id} className="flex items-center justify-between py-2 text-sm">
+                        <div>
+                          <p className="font-medium">{e.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(e.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            {mine.note && ` · ${mine.note}`}
+                          </p>
+                        </div>
+                        <span className="font-semibold text-destructive">−{formatPaise(mine.amountPaise, e.currency)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -403,6 +494,82 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function PayslipBreakdownDetail({ slip }: { slip: PayslipRow }) {
+  const b = slip.breakdown;
+  const earnings = [
+    { label: 'Base', value: b.baseAmount },
+    { label: 'HRA', value: b.hra },
+    { label: 'Special allowance', value: b.specialAllowance },
+    { label: 'Bonus', value: b.bonusPaise },
+  ].filter((r) => r.value > 0);
+  const deductions = [
+    { label: 'LOP', value: b.lopDeduction },
+    { label: 'Provident fund', value: b.providentFundEmployee },
+    { label: 'Professional tax', value: b.professionalTax },
+    { label: 'TDS', value: b.tdsMonthly },
+    { label: 'Late deduction', value: b.lateDeduction },
+    { label: 'Manual deduction', value: b.manualDeductionPaise },
+  ].filter((r) => r.value > 0);
+
+  return (
+    <div className="mt-2 grid gap-4 rounded-md border bg-muted/20 p-3 text-xs md:grid-cols-3">
+      <div>
+        <p className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">Earnings</p>
+        {earnings.length === 0 ? (
+          <p className="text-muted-foreground">—</p>
+        ) : (
+          earnings.map((r) => (
+            <div key={r.label} className="flex justify-between py-0.5">
+              <span className="text-muted-foreground">{r.label}</span>
+              <span>{formatPaise(r.value, slip.currency)}</span>
+            </div>
+          ))
+        )}
+      </div>
+      <div>
+        <p className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">Deductions</p>
+        {deductions.length === 0 ? (
+          <p className="text-muted-foreground">—</p>
+        ) : (
+          deductions.map((r) => (
+            <div key={r.label} className="flex justify-between py-0.5">
+              <span className="text-muted-foreground">{r.label}</span>
+              <span className="text-destructive">−{formatPaise(r.value, slip.currency)}</span>
+            </div>
+          ))
+        )}
+        {slip.adjustments.length > 0 && (
+          <div className="mt-2 border-t pt-2">
+            {slip.adjustments.map((a, i) => (
+              <div key={i} className="flex justify-between py-0.5">
+                <span className="text-muted-foreground">{a.reason || a.kind}</span>
+                <span className={a.kind === 'DEDUCTION' ? 'text-destructive' : 'text-emerald-600'}>
+                  {a.kind === 'DEDUCTION' ? '−' : '+'}
+                  {formatPaise(a.amountPaise, slip.currency)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col justify-between">
+        <div>
+          <p className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">Attendance</p>
+          <p>{slip.presentDays} / {slip.workingDays} days present{slip.lopDays > 0 ? ` (${slip.lopDays} LOP)` : ''}</p>
+        </div>
+        <a
+          href={`${env.apiBaseUrl}/payroll/payslips/${slip._id}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 text-primary underline"
+        >
+          Download PDF
+        </a>
+      </div>
     </div>
   );
 }

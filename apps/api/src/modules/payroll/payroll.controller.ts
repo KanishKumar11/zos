@@ -72,6 +72,12 @@ export class PayrollController {
     return this.svc.myPayslips(user.sub);
   }
 
+  @Roles(Role.OWNER, Role.ADMIN)
+  @Get('users/:userId/payslips')
+  forUser(@Param('userId', ObjectIdPipe) userId: string) {
+    return this.svc.myPayslips(userId);
+  }
+
   // -- Adjustments (OWNER/ADMIN, only when run is DRAFT) ---------------------
 
   @Roles(Role.OWNER, Role.ADMIN)

@@ -47,7 +47,7 @@ const incomeApi = {
 
 const QK = {
   list: (p?: object) => ['income', 'list', p ?? {}] as const,
-  summary: () => ['income', 'summary'] as const,
+  summary: (from?: string, to?: string) => ['income', 'summary', from ?? '', to ?? ''] as const,
 };
 
 export function useIncome(params?: Record<string, string | number | undefined>) {
@@ -55,7 +55,7 @@ export function useIncome(params?: Record<string, string | number | undefined>) 
 }
 
 export function useIncomeSummary(from?: string, to?: string) {
-  return useQuery({ queryKey: QK.summary(), queryFn: () => incomeApi.summary(from, to) });
+  return useQuery({ queryKey: QK.summary(from, to), queryFn: () => incomeApi.summary(from, to) });
 }
 
 export function useCreateIncome() {

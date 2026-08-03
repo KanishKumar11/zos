@@ -31,7 +31,11 @@ export function BillingReminders() {
           inv.issueDate &&
           inv.issueDate.slice(0, 7) === currentMonth,
       );
-      const isDue = todayDay >= (c.billingDay ?? 1);
+      // A retainer bills in arrears for a completed month — never remind for the
+      // calendar month the contract itself started in (nothing's been delivered yet).
+      const startMonth = c.startDate?.slice(0, 7);
+      const startedBeforeThisMonth = !startMonth || startMonth < currentMonth;
+      const isDue = startedBeforeThisMonth && todayDay >= (c.billingDay ?? 1);
       return { contract: c, alreadyGenerated, isDue };
     })
     .filter((r) => r.isDue && !r.alreadyGenerated);

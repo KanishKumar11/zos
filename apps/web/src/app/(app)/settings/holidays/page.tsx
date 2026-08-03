@@ -6,8 +6,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
-import { createHolidaySchema } from '@agency/shared';
+import { Role, createHolidaySchema } from '@agency/shared';
 
+import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -28,6 +29,8 @@ import {
 import { PageHeader } from '@/components/layout/page-header';
 
 export default function HolidaysPage() {
+  const role = useAuthStore((s) => s.user?.role);
+  const canManage = role === Role.OWNER || role === Role.ADMIN;
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const list = useHolidays(year);
@@ -57,7 +60,7 @@ export default function HolidaysPage() {
             onChange={(e) => setYear(Number(e.target.value))}
             className="w-28"
           />
-          <Button onClick={() => setOpen(true)}>Add holiday</Button>
+          {canManage && <Button onClick={() => setOpen(true)}>Add holiday</Button>}
         </div>
       </div>
 
@@ -78,9 +81,11 @@ export default function HolidaysPage() {
                       {new Date(h.date).toLocaleDateString()} {h.optional ? '(optional)' : ''}
                     </p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => remove.mutate(h._id)}>
-                    Remove
-                  </Button>
+                  {canManage && (
+                    <Button variant="ghost" size="sm" onClick={() => remove.mutate(h._id)}>
+                      Remove
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>

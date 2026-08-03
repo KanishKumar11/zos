@@ -5,8 +5,9 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import { createDesignationSchema, type CreateDesignationInput } from '@agency/shared';
+import { Role, createDesignationSchema, type CreateDesignationInput } from '@agency/shared';
 
+import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -29,6 +30,8 @@ import {
 } from '@/features/org/org.hooks';
 
 export default function DesignationsPage() {
+  const role = useAuthStore((s) => s.user?.role);
+  const canManage = role === Role.OWNER || role === Role.ADMIN;
   const departments = useDepartments();
   const designations = useDesignations();
   const create = useCreateDesignation();
@@ -50,9 +53,11 @@ export default function DesignationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <PageHeader title="Designations" description="Job roles grouped by department." />
-        <Button onClick={() => setOpen(true)} disabled={!departments.data?.length}>
-          Add designation
-        </Button>
+        {canManage && (
+          <Button onClick={() => setOpen(true)} disabled={!departments.data?.length}>
+            Add designation
+          </Button>
+        )}
       </div>
 
       {(departments.data ?? []).map((dept) => {
@@ -73,15 +78,17 @@ export default function DesignationsPage() {
                           <p className="text-xs text-muted-foreground">L{d.seniorityLevel}</p>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Delete "${d.title}"?`)) remove.mutate(d._id);
-                        }}
-                      >
-                        Delete
-                      </Button>
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Delete "${d.title}"?`)) remove.mutate(d._id);
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>
