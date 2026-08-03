@@ -7,6 +7,7 @@ import { use, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
+import { Pencil } from 'lucide-react';
 
 import { ProjectMemberRole, ProjectStatus, Role, updateProjectSchema } from '@agency/shared';
 
@@ -97,14 +98,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         brief: project.data.brief,
         clientId: project.data.clientId,
         clientBudgetPaise: project.data.clientBudgetPaise,
-        agencyMarginPaise: project.data.agencyMarginPaise,
         currency: project.data.currency,
       } as never);
     }
   }, [project.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onEditSubmit = editForm.handleSubmit((values) => {
-    updateProject.mutate({ id, body: values as never }, { onSuccess: () => setEditOpen(false) });
+    // Margin is never entered manually — recompute it from the (possibly just-edited) budget
+    // minus the team + freelancer costs so the stored figure never drifts from reality.
+    const newBudget = (values as { clientBudgetPaise?: number }).clientBudgetPaise ?? p.clientBudgetPaise ?? 0;
+    const body = { ...values, agencyMarginPaise: newBudget - totalDevCost };
+    updateProject.mutate({ id, body: body as never }, { onSuccess: () => setEditOpen(false) });
   });
 
   if (project.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -113,7 +117,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const nameMap = new Map((team.data ?? []).map((u) => [u._id, u.name]));
   const cur = p.currency ?? 'INR';
-  const totalDevCost = (p.clientBudgetPaise ?? 0) - (p.agencyMarginPaise ?? 0);
   const invList = invoices.data ?? [];
   const invoiceMap = new Map(invList.map((i) => [i._id, i]));
   // For milestones sharing the same invoice, only show the invoice card on the last milestone
@@ -129,6 +132,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const freelancerList = freelancerPayments.data ?? [];
   const freelancerAgreed = freelancerList.reduce((s, f) => s + f.agreedTotalPaise, 0);
   const freelancerPaid = freelancerList.reduce((s, f) => s + f.paidPaise, 0);
+  // Dev cost and margin are always derived live from actual team + freelancer budgets —
+  // never manually entered — so they can't drift out of sync the way a stored figure would.
+  const totalDevCost = memberBudgeted + freelancerAgreed;
+  const computedMargin = (p.clientBudgetPaise ?? 0) - totalDevCost;
 
   const relatedContractIds = new Set(
     (invoices.data ?? [])
@@ -204,15 +211,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <Input type="date" {...editForm.register('endDate')} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Client budget (paise)</Label>
-                <Input type="number" {...editForm.register('clientBudgetPaise', { valueAsNumber: true })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Agency margin (paise)</Label>
-                <Input type="number" {...editForm.register('agencyMarginPaise', { valueAsNumber: true })} />
-              </div>
+            <div className="space-y-1">
+              <Label>Client budget (paise)</Label>
+              <Input type="number" {...editForm.register('clientBudgetPaise', { valueAsNumber: true })} />
+              <p className="text-[11px] text-muted-foreground">
+                Agency margin is calculated automatically (budget minus what&apos;s budgeted to the team and freelancers) — currently {formatPaise(computedMargin, cur)}.
+              </p>
             </div>
             <div className="space-y-1">
               <Label>Brief</Label>
@@ -305,7 +309,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </div>
             <div className="rounded border p-3">
               <p className="text-xs text-muted-foreground">Agency margin</p>
-              <p className="text-lg font-semibold text-green-600">{formatPaise(p.agencyMarginPaise ?? 0, cur)}</p>
+              <p className={`text-lg font-semibold ${computedMargin >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                {formatPaise(computedMargin, cur)}
+              </p>
             </div>
             {balance.data && (
               <div className="rounded border p-3">
@@ -820,10 +826,16 @@ function EditableCell({
   }
 
   return (
-    <button className="rounded px-1 text-left hover:bg-muted" onClick={startEdit} title="Click to edit">
+    <button
+      type="button"
+      className="group inline-flex items-center gap-1.5 rounded px-1 text-left decoration-dashed decoration-muted-foreground/50 underline-offset-4 hover:bg-muted hover:underline"
+      onClick={startEdit}
+      title="Click to edit budgeted amount"
+    >
       {shownPaise > 0
         ? formatPaise(shownPaise, currency)
         : <span className="text-muted-foreground">— click to set</span>}
+      <Pencil className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
   );
 }

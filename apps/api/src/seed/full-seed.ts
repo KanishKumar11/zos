@@ -469,11 +469,11 @@ async function main() {
       { uid: ID.uJaya,       role: C, amountINR: 2800, paidINR: 2800, paidAtDate: '2025-12-31' },
     ], 14500, 9200, 'Website development for Sculpt Agency — Geetanjali 2.5k + Jaya 2.8k paid'),
     project(ID.pGKGIndustries, 'GKG Industries Website', 'SP-GKG', ID.cSP, 'COMPLETED', '2025-12-15', '2025-12-30', [{ uid: ID.uGeetanjali, role: L, amountINR: 1800, paidINR: 1800, paidAtDate: '2025-12-30' }], 5000, 3200, 'Industries website development — 1.8k paid to Geetanjali'),
-    project(ID.pStudycrux, 'Studycrux LMS', 'STUDYCRUX', ID.cStartiffy, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L, amountINR: 22000, paidINR: 9500, payments: [{ amountINR: 1500, paidAtDate: '2026-02-01', note: 'Initial payment' }, { amountINR: 5500, paidAtDate: '2026-05-01', note: 'Second payment' }, { amountINR: 2500, paidAtDate: '2026-08-03', note: 'Claude contribution — deducted from LMS balance, no cash paid out' }] }], 50000, 28000, 'LMS development — dev cost 22k; Shivam budgeted 22k, paid 9.5k (1.5k Feb 1 + 5.5k May 1 + 2.5k Aug 3 Claude contribution, no cash); 15k pending from client',
+    project(ID.pStudycrux, 'Studycrux LMS', 'STUDYCRUX', ID.cStartiffy, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L, amountINR: 40000, paidINR: 14500, payments: [{ amountINR: 1500, paidAtDate: '2026-02-01', note: 'Initial payment' }, { amountINR: 5500, paidAtDate: '2026-05-01', note: 'Second payment' }, { amountINR: 5000, paidAtDate: '2026-07-08', note: 'Third payment' }, { amountINR: 2500, paidAtDate: '2026-08-03', note: 'Claude contribution — deducted from LMS balance, no cash paid out' }] }], 80000, 40000, 'LMS development — dev cost 40k; Shivam budgeted 40k, paid 14.5k (1.5k Feb 1 + 5.5k May 1 + 5k Jul 8 + 2.5k Aug 3 Claude contribution, no cash); 55k pending from client',
       [
         { name: 'Advance',     amountINR: 5000,  dueDate: '2026-02-01', status: 'COLLECTED', invoiceId: ID.iStudycrux,   note: 'Initial — Feb 1' },
         { name: 'Milestone 2', amountINR: 20000, dueDate: '2026-05-22', status: 'COLLECTED', invoiceId: ID.iStudycruxM2, note: 'Milestone 2 — May 22' },
-        { name: 'Final',       amountINR: 25000, status: 'PENDING',     note: 'Final 50% pending' },
+        { name: 'Final',       amountINR: 55000, status: 'PENDING',     note: 'Final balance pending' },
       ]),
     project(ID.pDigitalMandir, 'Digital Mandir App', 'DIGITALMANDIR', ID.cDigitalMandir, 'COMPLETED', '2026-02-01', '2026-06-13', [{ uid: ID.uGeetanjali, role: L, amountINR: 9000, paidINR: 9000, payments: [{ amountINR: 4500, paidAtDate: '2026-02-01', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-05-01', note: 'Payment 2' }] }], 15000, 4000, 'Android app + admin panel. Fully paid — 10% advance (1.5k Feb 1) + 50% milestone (7.5k Feb 28) + 40% final (6k Jun 13).',
       [
@@ -1027,7 +1027,7 @@ async function main() {
     ['2026-07', ID.uJaya,       20000], // HR Book 10k + Firstrank 10k + Mending Mind 2.5k = 22.5k payable, less 2.5k Claude contribution → net 20k
     ['2026-07', ID.uSidhak,     9500],  // Gessure June maintenance 12k (50% of ₹24k), less 2.5k Claude contribution → net 9.5k
     ['2026-07', ID.uGeetanjali, 5000],  // Inno Transventive website (Jul 2)
-    ['2026-07', ID.uShivam,     2500],  // Velotra 5k payable (Jul 5), less 2.5k Claude contribution → net 2.5k
+    ['2026-07', ID.uShivam,     7500],  // Velotra 5k payable (Jul 5), less 2.5k Claude contribution → net 2.5k; + Studycrux 5k (Jul 8)
     ['2026-07', ID.uYatin,      3000],  // Stipend (Jul 3)
     ['2026-07', ID.uSanjana,    3000],  // Final stipend before exit (Jul 10)
     // Aug 2026

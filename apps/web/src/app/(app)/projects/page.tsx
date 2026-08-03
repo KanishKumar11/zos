@@ -51,7 +51,8 @@ export default function ProjectsPage() {
   });
 
   const onSubmit = form.handleSubmit((values) =>
-    create.mutate(values, {
+    // No members exist yet at creation, so dev cost is 0 — margin starts equal to the full budget.
+    create.mutate({ ...values, agencyMarginPaise: values.clientBudgetPaise ?? 0 }, {
       onSuccess: () => {
         setOpen(false);
         form.reset();
@@ -107,15 +108,12 @@ export default function ProjectsPage() {
                         Required to create invoices against this project later.
                       </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label>Client budget (paise)</Label>
-                        <Input type="number" {...form.register('clientBudgetPaise', { valueAsNumber: true })} />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Agency margin (paise)</Label>
-                        <Input type="number" {...form.register('agencyMarginPaise', { valueAsNumber: true })} />
-                      </div>
+                    <div className="space-y-1">
+                      <Label>Client budget (paise)</Label>
+                      <Input type="number" {...form.register('clientBudgetPaise', { valueAsNumber: true })} />
+                      <p className="text-[11px] text-muted-foreground">
+                        Agency margin is calculated automatically as budget minus what&apos;s budgeted to the team — no members yet, so it starts out equal to the full budget.
+                      </p>
                     </div>
                   </>
                 )}
@@ -169,7 +167,16 @@ export default function ProjectsPage() {
                   <TD>{p.status}</TD>
                   <TD>{(p.members ?? []).length}</TD>
                   {isOwner && <TD>{p.clientBudgetPaise ? formatPaise(p.clientBudgetPaise, p.currency ?? 'INR') : '—'}</TD>}
-                  {isOwner && <TD>{p.agencyMarginPaise ? formatPaise(p.agencyMarginPaise, p.currency ?? 'INR') : '—'}</TD>}
+                  {isOwner && (
+                    <TD>
+                      {p.clientBudgetPaise
+                        ? formatPaise(
+                            p.clientBudgetPaise - (p.members ?? []).reduce((s, m) => s + (m.amountPaise ?? 0), 0),
+                            p.currency ?? 'INR',
+                          )
+                        : '—'}
+                    </TD>
+                  )}
                 </TR>
               ))}
             </TBody>

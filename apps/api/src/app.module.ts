@@ -111,8 +111,12 @@ import { LettersModule } from './modules/letters/letters.module';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: TimeoutInterceptor },
-    { provide: APP_INTERCEPTOR, useClass: SerializeInterceptor },
+    // Response-shape order matters: NestJS interceptor response pipelines run innermost
+    // (last-registered) first, so SerializeInterceptor must run before ResponseInterceptor
+    // wraps the payload into { success, data, meta } — otherwise it strips fields from the
+    // envelope instead of the actual resource and silently does nothing.
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: SerializeInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     { provide: APP_FILTER, useClass: MongoExceptionFilter },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

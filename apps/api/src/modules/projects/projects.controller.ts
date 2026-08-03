@@ -22,6 +22,7 @@ import {
 } from '@agency/shared';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { SerializeResource } from '@/common/decorators/owner-only.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
 import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 import { ObjectIdPipe } from '@/common/pipes/object-id.pipe';
@@ -30,6 +31,7 @@ import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe';
 import { ProjectsService } from './projects.service';
 
 @Controller('projects')
+@SerializeResource('project')
 export class ProjectsController {
   constructor(private readonly svc: ProjectsService) {}
 

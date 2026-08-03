@@ -167,17 +167,17 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
                       barSize={14}
                       barGap={2}
                     >
-                      <CartesianGrid stroke="var(--border)" horizontal vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} width={48}
+                      <CartesianGrid stroke="hsl(var(--border))" horizontal vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={48}
                         tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`} />
                       <Tooltip
                         content={<ChartTooltip formatValue={(v) => `₹${v.toLocaleString('en-IN')}`} />}
-                        cursor={{ fill: 'var(--muted)', opacity: 0.4 }}
+                        cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
                       />
-                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'var(--muted-foreground)' }} iconType="circle" iconSize={8} />
-                      <Bar dataKey="Gross" fill="var(--muted-foreground)" opacity={0.4} radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="Net" fill="var(--foreground)" radius={[4, 4, 0, 0]} />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'hsl(var(--muted-foreground))' }} iconType="circle" iconSize={8} />
+                      <Bar dataKey="Gross" fill="hsl(var(--muted-foreground))" opacity={0.4} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Net" fill="hsl(var(--foreground))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

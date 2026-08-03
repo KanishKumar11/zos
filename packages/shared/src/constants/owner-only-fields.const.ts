@@ -5,7 +5,7 @@ import { Role } from '../enums/roles.enum';
 
 /** Fields removed from any non-OWNER response on these resources. */
 export const OWNER_ONLY_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  project: ['clientBudget', 'agencyMargin', 'clientId'],
+  project: ['clientId', 'clientBudgetPaise', 'agencyMarginPaise', 'currency'],
   user: ['bankDetails'],
   payrollEntry: ['baseSalary', 'bonuses', 'deductions', 'netPay'],
   sow: ['totalValue', 'milestones', 'clientId', 'documentUrl'],
