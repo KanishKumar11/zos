@@ -134,7 +134,7 @@ export default function AttendancePage() {
 }
 
 function AdminMarkCard() {
-  const list = useTeamList({ page: 1, pageSize: 200 });
+  const list = useTeamList({ page: 1, pageSize: 100 });
   const mark = useAdminMarkAttendance();
   const [userId, setUserId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));

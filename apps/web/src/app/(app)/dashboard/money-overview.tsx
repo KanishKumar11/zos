@@ -24,7 +24,7 @@ export function MoneyOverview() {
   const invoices = useInvoices();
   const projects = useProjects({ pageSize: 500 });
   const freelancers = useFreelancerPayments({ limit: 200 });
-  const team = useTeamList({ pageSize: 200 });
+  const team = useTeamList({ pageSize: 100 });
 
   const clientNameMap = new Map((clients.data ?? []).map((c) => [c._id, c.name]));
   const teamNameMap = new Map((team.data ?? []).map((u) => [u._id, u.name]));

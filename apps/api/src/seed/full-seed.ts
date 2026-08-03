@@ -733,7 +733,7 @@ async function main() {
     '2026-06-01', 'PAID', ID.cGessureContract);
   inv(ID.cGessure, undefined, 'Gessure — Support & Maintenance — July 2026', 20000,
     [payment('2026-08-01', 20000, 'UPI', 'July maintenance')],
-    '2026-07-01', 'PAID', ID.cGessureContract);
+    '2026-08-01', 'PAID', ID.cGessureContract);
 
   // Shivmanicreations (3500, PAID)
   inv(ID.cSP, ID.pShivmani, 'Shivmanicreations Website', 3500,
