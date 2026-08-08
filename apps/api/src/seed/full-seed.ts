@@ -469,13 +469,13 @@ async function main() {
       { uid: ID.uJaya,       role: C, amountINR: 2800, paidINR: 2800, paidAtDate: '2025-12-31' },
     ], 14500, 9200, 'Website development for Sculpt Agency — Geetanjali 2.5k + Jaya 2.8k paid'),
     project(ID.pGKGIndustries, 'GKG Industries Website', 'SP-GKG', ID.cSP, 'COMPLETED', '2025-12-15', '2025-12-30', [{ uid: ID.uGeetanjali, role: L, amountINR: 1800, paidINR: 1800, paidAtDate: '2025-12-30' }], 5000, 3200, 'Industries website development — 1.8k paid to Geetanjali'),
-    project(ID.pStudycrux, 'Studycrux LMS', 'STUDYCRUX', ID.cStartiffy, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L, amountINR: 40000, paidINR: 14500, payments: [{ amountINR: 1500, paidAtDate: '2026-02-01', note: 'Initial payment' }, { amountINR: 5500, paidAtDate: '2026-05-01', note: 'Second payment' }, { amountINR: 5000, paidAtDate: '2026-07-08', note: 'Third payment' }, { amountINR: 2500, paidAtDate: '2026-08-03', note: 'Claude contribution — deducted from LMS balance, no cash paid out' }] }], 80000, 40000, 'LMS development — dev cost 40k; Shivam budgeted 40k, paid 14.5k (1.5k Feb 1 + 5.5k May 1 + 5k Jul 8 + 2.5k Aug 3 Claude contribution, no cash); 55k pending from client',
+    project(ID.pStudycrux, 'Studycrux LMS', 'STUDYCRUX', ID.cStartiffy, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L, amountINR: 40000, paidINR: 18500, payments: [{ amountINR: 1500, paidAtDate: '2026-02-01', note: 'Initial payment' }, { amountINR: 5500, paidAtDate: '2026-05-01', note: 'Second payment' }, { amountINR: 5000, paidAtDate: '2026-07-08', note: 'Third payment' }, { amountINR: 2500, paidAtDate: '2026-08-03', note: 'Claude contribution — deducted from LMS balance, no cash paid out' }, { amountINR: 4000, paidAtDate: '2026-08-06', note: 'Fourth payment (Aug)' }] }], 80000, 40000, 'LMS development — dev cost 40k; Shivam budgeted 40k, paid 18.5k (1.5k Feb 1 + 5.5k May 1 + 5k Jul 8 + 2.5k Aug 3 Claude contribution no cash + 4k Aug 6); 55k pending from client',
       [
         { name: 'Advance',     amountINR: 5000,  dueDate: '2026-02-01', status: 'COLLECTED', invoiceId: ID.iStudycrux,   note: 'Initial — Feb 1' },
         { name: 'Milestone 2', amountINR: 20000, dueDate: '2026-05-22', status: 'COLLECTED', invoiceId: ID.iStudycruxM2, note: 'Milestone 2 — May 22' },
         { name: 'Final',       amountINR: 55000, status: 'PENDING',     note: 'Final balance pending' },
       ]),
-    project(ID.pDigitalMandir, 'Digital Mandir App', 'DIGITALMANDIR', ID.cDigitalMandir, 'COMPLETED', '2026-02-01', '2026-06-13', [{ uid: ID.uGeetanjali, role: L, amountINR: 9000, paidINR: 9000, payments: [{ amountINR: 4500, paidAtDate: '2026-02-01', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-05-01', note: 'Payment 2' }] }], 15000, 4000, 'Android app + admin panel. Fully paid — 10% advance (1.5k Feb 1) + 50% milestone (7.5k Feb 28) + 40% final (6k Jun 13).',
+    project(ID.pDigitalMandir, 'Digital Mandir App', 'DIGITALMANDIR', ID.cDigitalMandir, 'COMPLETED', '2026-02-01', '2026-06-13', [{ uid: ID.uGeetanjali, role: L, amountINR: 9000, paidINR: 9000, payments: [{ amountINR: 4500, paidAtDate: '2026-02-01', note: 'Payment 1' }, { amountINR: 4500, paidAtDate: '2026-05-27', note: 'Payment 2' }] }], 15000, 4000, 'Android app + admin panel. Fully paid — 10% advance (1.5k Feb 1) + 50% milestone (7.5k Feb 28) + 40% final (6k Jun 13).',
       [
         { name: 'Advance (10%)',    amountINR: 1500, dueDate: '2026-02-01', status: 'COLLECTED', invoiceId: ID.iDigitalMandir1, note: 'Advance 10% — Feb 1' },
         { name: 'Milestone (50%)', amountINR: 7500, dueDate: '2026-02-28', status: 'COLLECTED', invoiceId: ID.iDigitalMandir2, note: '50% milestone — Feb 28' },
@@ -493,13 +493,13 @@ async function main() {
       { amountINR: 10000, paidAtDate: '2026-06-02', note: 'Payment 1' },
       { amountINR: 10000, paidAtDate: '2026-07-03', note: 'Payment 2 (Jul)' },
       { amountINR: 17500, paidAtDate: '2026-08-03', note: 'Payment 3 (Aug) — ₹2.5k Claude contribution deducted from payslip, net ₹15k cash' },
-    ] }, { uid: ID.uSidhak, role: C, amountINR: 45000, paidINR: 0 }, { uid: ID.uKanish, role: C, amountINR: 0 }], 530000, 440000, 'Website & platform — 203k received of 530k (M4 ₹63k collected Jul 1; M5 ₹55k of ₹1,10,000 collected Aug 2); 37.5k of 45k paid to Jaya (10k Jun 2 + 10k Jul + 17.5k Aug, net 15k cash after ₹2.5k Claude contribution); 0 of 45k paid to Sidhak',
+    ] }, { uid: ID.uSidhak, role: C, amountINR: 45000, paidINR: 0 }, { uid: ID.uKanish, role: C, amountINR: 0 }], 530000, 440000, 'Website & platform — 258k received of 530k (M4 ₹63k collected Jul 1; M5 ₹1,10,000 fully collected — ₹55k Aug 2 + ₹55k Aug 5); 37.5k of 45k paid to Jaya (10k Jun 2 + 10k Jul + 17.5k Aug, net 15k cash after ₹2.5k Claude contribution); 0 of 45k paid to Sidhak',
       [
         { name: 'Advance',     amountINR: 10000,  dueDate: '2026-03-06', status: 'COLLECTED', invoiceId: ID.iFirstrank,   note: 'Advance payment — Mar 6' },
         { name: 'Milestone 2', amountINR: 25000,  dueDate: '2026-04-04', status: 'COLLECTED', invoiceId: ID.iFirstrankM2, note: 'Milestone 2 — Apr 4' },
         { name: 'Milestone 3', amountINR: 50000,  dueDate: '2026-06-02', status: 'COLLECTED', invoiceId: ID.iFirstrankM3, note: 'Milestone 3 — Jun 2' },
         { name: 'Milestone 4', amountINR: 63000,  dueDate: '2026-06-24', status: 'COLLECTED', invoiceId: ID.iFirstrank2, note: 'Milestone 4 — collected Jul 1' },
-        { name: 'Milestone 5', amountINR: 110000, dueDate: '2026-08-02', status: 'INVOICED',  invoiceId: ID.iFirstrankM5, note: 'Milestone 5 — ₹55,000 of ₹1,10,000 collected Aug 2, ₹55,000 outstanding' },
+        { name: 'Milestone 5', amountINR: 110000, dueDate: '2026-08-02', status: 'COLLECTED', invoiceId: ID.iFirstrankM5, note: 'Milestone 5 — fully collected: ₹55,000 Aug 2 + ₹55,000 Aug 5' },
         { name: 'Balance',     amountINR: 272000, status: 'PENDING',                          note: 'Remaining balance — ₹2,72,000' },
       ]),
     project(ID.pRewardzy, 'Rewardzy Platform', 'REWARDZY', ID.cAnshulGlobal, 'ACTIVE', '2026-03-13', null, [{ uid: ID.uSidhak, role: L, amountINR: 12000, paidINR: 0 }], 30000, 18000, '9k pending from client; 12k to Sidhak (not paid yet)',
@@ -508,7 +508,7 @@ async function main() {
         { name: 'Milestone 2', amountINR: 12000, dueDate: '2026-04-19', status: 'COLLECTED', invoiceId: ID.iRewardzyM2, note: 'Milestone 2 — Apr 19' },
         { name: 'Final',       amountINR: 9000,  status: 'PENDING',     note: 'Final payment pending' },
       ]),
-    project(ID.pOnebox, 'Onebox Project', 'ONEBOX', ID.cOnebox, 'ACTIVE', '2026-03-14', null, [{ uid: ID.uKanish, role: L, amountINR: 0 }, { uid: ID.uGeetanjali, role: C, amountINR: 10000 }], 40000, 30000, 'Platform development — 28k received of 40k (12k Mar 14 + 16k Jul 6); 12k pending from client',
+    project(ID.pOnebox, 'Onebox Project', 'ONEBOX', ID.cOnebox, 'ACTIVE', '2026-03-14', null, [{ uid: ID.uKanish, role: L, amountINR: 0 }, { uid: ID.uGeetanjali, role: C, amountINR: 10000, paidINR: 5000, payments: [{ amountINR: 5000, paidAtDate: '2026-07-10', note: 'Payment 1' }] }], 40000, 30000, 'Platform development — 28k received of 40k (12k Mar 14 + 16k Jul 6); 12k pending from client; Geetanjali 10k budgeted, 5k paid (Jul 10)',
       [
         { name: 'Milestone 1', amountINR: 12000, dueDate: '2026-03-14', status: 'COLLECTED', invoiceId: ID.iOnebox,  note: 'Advance — Mar 14' },
         { name: 'Milestone 2', amountINR: 16000, dueDate: '2026-07-06', status: 'COLLECTED', invoiceId: ID.iOnebox2, note: 'Milestone 2 — Jul 6' },
@@ -520,7 +520,7 @@ async function main() {
         { name: 'Milestone 2', amountINR: 13000, dueDate: '2026-05-21', status: 'COLLECTED', invoiceId: ID.iRealEstateM2, note: 'Milestone 2 — May 21' },
         { name: 'Balance',     amountINR: 60950, status: 'PENDING',     note: 'Balance ₹60,950 pending' },
       ]),
-    project(ID.pInnoWebsite, 'Inno Transventive Website', 'INNO-WEBSITE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 11000 }, { uid: ID.uGeetanjali, role: C, amountINR: 5000, paidINR: 5000, paidAtDate: '2026-07-02' }], 30000, 14000, 'Website development — ₹30k pending from client; ₹11k to Shivam; ₹5k to Geetanjali (paid Jul 2)',
+    project(ID.pInnoWebsite, 'Inno Transventive Website', 'INNO-WEBSITE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 11000 }, { uid: ID.uGeetanjali, role: C, amountINR: 11000, paidINR: 5000, paidAtDate: '2026-07-02' }], 30000, 8000, 'Website development — ₹30k pending from client; ₹11k to Shivam; ₹11k to Geetanjali (5k paid Jul 2, 6k pending)',
       [
         { name: 'Milestone 1', amountINR: 5000,  dueDate: '2026-05-21', status: 'COLLECTED', invoiceId: ID.iInnoWebsite, note: 'Milestone 1 — May 21' },
         { name: 'Balance',     amountINR: 25000, status: 'PENDING',     note: 'Balance ₹25,000 pending' },
@@ -917,9 +917,10 @@ async function main() {
     [payment('2026-07-06', 16000, 'Bank Transfer', 'Milestone 2')], '2026-07-06', 'PAID', undefined, ID.iOnebox2);
 
   // ── AUGUST 2026 income ───────────────────────────────────────────────────────
-  // Firstrank — Milestone 5 (₹1,10,000 total; ₹55,000 collected Aug 2, ₹55,000 outstanding)
+  // Firstrank — Milestone 5 (₹1,10,000 total; fully paid — ₹55,000 Aug 2 + ₹55,000 Aug 5)
   inv(ID.cFirstrank, ID.pFirstrank, 'Firstrank Website & Platform — Milestone 5', 110000,
-    [payment('2026-08-02', 55000, 'Bank Transfer', 'Milestone 5 — partial')], '2026-08-02', 'PARTIAL', undefined, ID.iFirstrankM5);
+    [payment('2026-08-02', 55000, 'Bank Transfer', 'Milestone 5 — part 1'),
+     payment('2026-08-05', 55000, 'Bank Transfer', 'Milestone 5 — part 2')], '2026-08-02', 'PAID', undefined, ID.iFirstrankM5);
 
   await db.collection('invoices').insertMany(invoices);
   console.log(`[full-seed] Inserted ${invoices.length} invoices`);
@@ -1012,7 +1013,7 @@ async function main() {
     ['2026-05', ID.uAmit,        1000], // Stipend
     ['2026-05', ID.uHarshika,    3000], // Increment
     ['2026-05', ID.uSanjana,     3000], // Stipend (incremented, May 9)
-    ['2026-05', ID.uGeetanjali,  4500], // Digital Mandir (May 1)
+    ['2026-05', ID.uGeetanjali,  4500], // Digital Mandir (May 27)
     ['2026-05', ID.uSidhak,      4500], // Dhawada NGO 2k + G-Power 2.5k (Gessure May was late, paid in Jun)
     // Jun 2026
     ['2026-06', ID.uJaya,       17500], // Firstrank 10k + BroBuzz 6.5k + G-Power 4k
@@ -1026,7 +1027,7 @@ async function main() {
     // Jul 2026
     ['2026-07', ID.uJaya,       20000], // HR Book 10k + Firstrank 10k + Mending Mind 2.5k = 22.5k payable, less 2.5k Claude contribution → net 20k
     ['2026-07', ID.uSidhak,     9500],  // Gessure June maintenance 12k (50% of ₹24k), less 2.5k Claude contribution → net 9.5k
-    ['2026-07', ID.uGeetanjali, 5000],  // Inno Transventive website (Jul 2)
+    ['2026-07', ID.uGeetanjali, 10000], // Inno Transventive website 5k (Jul 2) + Onebox 5k (Jul 10)
     ['2026-07', ID.uShivam,     7500],  // Velotra 5k payable (Jul 5), less 2.5k Claude contribution → net 2.5k; + Studycrux 5k (Jul 8)
     ['2026-07', ID.uYatin,      3000],  // Stipend (Jul 3)
     ['2026-07', ID.uSanjana,    3000],  // Final stipend before exit (Jul 10)
@@ -1034,6 +1035,7 @@ async function main() {
     ['2026-08', ID.uJaya,       15000], // Firstrank Milestone 5 payout 17.5k, less 2.5k Claude contribution → net 15k (Aug 3)
     ['2026-08', ID.uSidhak,     9500],  // Gessure Aug maintenance 12k, less 2.5k Claude contribution → net 9.5k (Aug 1)
     ['2026-08', ID.uYatin,      3000],  // Stipend (Aug 3)
+    ['2026-08', ID.uShivam,     4000],  // Studycrux LMS payout (Aug 6)
   ];
 
   // Build payroll runs
