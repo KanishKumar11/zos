@@ -17,6 +17,7 @@ import { ErrorCodes } from '@/common/constants/error-codes';
 
 import { Client, type ClientDocument } from '../clients/schemas/client.schema';
 import { PdfService } from '../pdf/pdf.service';
+import { Project, type ProjectDocument } from '../projects/schemas/project.schema';
 import { SettingsService } from '../settings/settings.service';
 import { StorageService } from '../storage/storage.service';
 import { Invoice, type InvoiceDocument } from './schemas/invoice.schema';
@@ -27,6 +28,7 @@ export class InvoicesService {
   constructor(
     @InjectModel(Invoice.name) private readonly model: Model<InvoiceDocument>,
     @InjectModel(Client.name) private readonly clients: Model<ClientDocument>,
+    @InjectModel(Project.name) private readonly projects: Model<ProjectDocument>,
     private readonly events: EventEmitter2,
     private readonly pdf: PdfService,
     private readonly storage: StorageService,
@@ -37,7 +39,12 @@ export class InvoicesService {
     const q: Record<string, unknown> = { deletedAt: { $exists: false } };
     if (filter.status) q.status = filter.status;
     if (filter.clientId) q.clientId = new Types.ObjectId(filter.clientId);
-    if (filter.projectId) q.projectId = new Types.ObjectId(filter.projectId);
+    if (filter.projectId) {
+      // Match both single-project invoices and multi-project invoices that bill
+      // this project on one of their line items.
+      const pid = new Types.ObjectId(filter.projectId);
+      q.$or = [{ projectId: pid }, { 'lineItems.projectId': pid }];
+    }
     if (filter.contractId) q.contractId = new Types.ObjectId(filter.contractId);
     return this.model.find(q).sort({ createdAt: -1 }).limit(500).exec();
   }
@@ -62,6 +69,70 @@ export class InvoicesService {
     doc.gstPaise = gst;
     doc.totalPaise = subTotal + gst;
     doc.paidPaise = doc.payments.reduce((acc, p) => acc + p.amountPaise, 0);
+  }
+
+  /** Line-item ids arrive as strings from Zod; Mongoose needs ObjectIds to query on them. */
+  private normalizeLineItems(items: CreateInvoiceInput['lineItems']) {
+    return items.map((li) => ({
+      description: li.description,
+      qty: li.qty,
+      unitPaise: li.unitPaise,
+      projectId: li.projectId ? new Types.ObjectId(li.projectId) : undefined,
+      milestoneId: li.milestoneId ? new Types.ObjectId(li.milestoneId) : undefined,
+    }));
+  }
+
+  /**
+   * Keep `Project.milestones[].status/invoiceId` in step with the milestones this
+   * invoice bills: linked milestones become INVOICED (COLLECTED once fully paid),
+   * and milestones dropped from the invoice are released back to PENDING.
+   */
+  private async syncMilestones(doc: InvoiceDocument): Promise<void> {
+    const linked = new Map<string, Set<string>>();
+    for (const li of doc.lineItems) {
+      if (!li.projectId || !li.milestoneId) continue;
+      const key = li.projectId.toString();
+      if (!linked.has(key)) linked.set(key, new Set());
+      linked.get(key)!.add(li.milestoneId.toString());
+    }
+
+    const collected = doc.totalPaise > 0 && doc.paidPaise >= doc.totalPaise;
+    const affected = await this.projects
+      .find({
+        $or: [
+          { _id: { $in: [...linked.keys()].map((id) => new Types.ObjectId(id)) } },
+          { 'milestones.invoiceId': doc._id },
+        ],
+      })
+      .exec();
+
+    for (const project of affected) {
+      const wanted = linked.get(project.id as string) ?? new Set<string>();
+      let dirty = false;
+      for (const ms of project.milestones as unknown as {
+        _id: Types.ObjectId;
+        status: string;
+        invoiceId?: Types.ObjectId;
+      }[]) {
+        if (wanted.has(ms._id.toString())) {
+          const status = collected ? 'COLLECTED' : 'INVOICED';
+          if (ms.status !== status || ms.invoiceId?.toString() !== doc.id) {
+            ms.status = status;
+            ms.invoiceId = doc._id as Types.ObjectId;
+            dirty = true;
+          }
+        } else if (ms.invoiceId?.toString() === doc.id) {
+          // No longer billed by this invoice — release it.
+          ms.status = 'PENDING';
+          ms.invoiceId = undefined;
+          dirty = true;
+        }
+      }
+      if (dirty) {
+        project.markModified('milestones');
+        await project.save();
+      }
+    }
   }
 
   private updateStatusByPayments(doc: InvoiceDocument): void {
@@ -96,12 +167,15 @@ export class InvoicesService {
       clientId: new Types.ObjectId(input.clientId),
       projectId: input.projectId ? new Types.ObjectId(input.projectId) : undefined,
       contractId: input.contractId ? new Types.ObjectId(input.contractId) : undefined,
+      lineItems: this.normalizeLineItems(input.lineItems),
       status: InvoiceStatus.DRAFT,
       currency: input.currency ?? 'INR',
       issueDate,
     });
     this.computeTotals(doc);
-    return doc.save();
+    await doc.save();
+    await this.syncMilestones(doc);
+    return doc;
   }
 
   async update(id: string, input: UpdateInvoiceInput): Promise<InvoiceDocument> {
@@ -110,9 +184,12 @@ export class InvoicesService {
     if (input.clientId) doc.clientId = new Types.ObjectId(input.clientId);
     if (input.projectId) doc.projectId = new Types.ObjectId(input.projectId);
     if (input.contractId) doc.contractId = new Types.ObjectId(input.contractId);
+    if (input.lineItems) doc.lineItems = this.normalizeLineItems(input.lineItems) as never;
     this.computeTotals(doc);
     this.updateStatusByPayments(doc);
-    return doc.save();
+    await doc.save();
+    await this.syncMilestones(doc);
+    return doc;
   }
 
   async send(id: string): Promise<InvoiceDocument> {
@@ -132,13 +209,18 @@ export class InvoicesService {
     } as never);
     this.computeTotals(doc);
     this.updateStatusByPayments(doc);
-    return doc.save();
+    await doc.save();
+    await this.syncMilestones(doc);
+    return doc;
   }
 
   async remove(id: string): Promise<void> {
     const doc = await this.byId(id);
     doc.deletedAt = new Date();
     await doc.save();
+    // Release any milestones this invoice was holding.
+    doc.lineItems = [] as never;
+    await this.syncMilestones(doc);
   }
 
   /** Hourly check for overdue invoices; fanout notifications. */
@@ -169,6 +251,14 @@ export class InvoicesService {
     const inv = await this.byId(id);
     const client = await this.clients.findById(inv.clientId).exec();
     const settings = await this.settings.get();
+
+    // Resolve project names so a multi-project invoice groups its lines by project.
+    const projectIds = [...new Set(inv.lineItems.filter((li) => li.projectId).map((li) => li.projectId!.toString()))];
+    const projectDocs = projectIds.length
+      ? await this.projects.find({ _id: { $in: projectIds } }).select('name').lean().exec()
+      : [];
+    const projectNames = new Map(projectDocs.map((p) => [p._id.toString(), p.name]));
+
     const html = renderInvoiceHtml({
       agency: {
         name: settings.workspaceName,
@@ -189,6 +279,7 @@ export class InvoicesService {
         description: li.description,
         qty: li.qty,
         unitPaise: li.unitPaise,
+        projectName: li.projectId ? projectNames.get(li.projectId.toString()) : undefined,
       })),
       subTotalPaise: inv.subTotalPaise,
       gstPercent: inv.gstPercent,

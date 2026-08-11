@@ -16,6 +16,10 @@ export interface InvoiceLineItemRow {
   description: string;
   qty: number;
   unitPaise: number;
+  /** Set when the line bills a specific project — one invoice can span several. */
+  projectId?: string;
+  /** Milestone subdoc id within `projectId`. */
+  milestoneId?: string;
 }
 export interface PaymentRow {
   _id: string;

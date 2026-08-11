@@ -6,7 +6,7 @@ export interface InvoicePdfData {
   issueDate?: Date;
   dueDate?: Date;
   currency: string;
-  lineItems: { description: string; qty: number; unitPaise: number }[];
+  lineItems: { description: string; qty: number; unitPaise: number; projectName?: string }[];
   subTotalPaise: number;
   gstPercent: number;
   gstPaise: number;
@@ -60,17 +60,48 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
   const statusColor = isPaid ? '#16a34a' : isPartial ? '#d97706' : '#dc2626';
   const statusBg   = isPaid ? '#dcfce7' : isPartial ? '#fef3c7' : '#fee2e2';
 
-  const lineItemsHtml = data.lineItems
-    .map((li) => {
-      const total = Math.round(li.qty * li.unitPaise);
-      return `<tr>
+  const itemRow = (li: InvoicePdfData['lineItems'][number]): string => {
+    const total = Math.round(li.qty * li.unitPaise);
+    return `<tr>
         <td style="padding:11px 16px;color:#374151;font-weight:500;border-bottom:1px solid #f3f4f6">${li.description}</td>
         <td style="padding:11px 16px;text-align:right;color:#6b7280;border-bottom:1px solid #f3f4f6">${li.qty}</td>
         <td style="padding:11px 16px;text-align:right;color:#6b7280;border-bottom:1px solid #f3f4f6">₹${fmtNum(li.unitPaise)}</td>
         <td style="padding:11px 16px;text-align:right;font-weight:700;color:#111827;border-bottom:1px solid #f3f4f6">₹${fmtNum(total)}</td>
       </tr>`;
-    })
-    .join('');
+  };
+
+  // A group header + subtotal row per project, so an invoice covering several
+  // projects still reads as one document with clear per-project figures.
+  const groupHeaderRow = (name: string): string =>
+    `<tr><td colspan="4" style="padding:10px 16px 7px;background:#fffaf6;border-bottom:1px solid #f3f4f6">
+      <span style="display:inline-block;width:3px;height:9px;background:#f85f00;border-radius:1px;vertical-align:middle;margin-right:7px"></span>
+      <span style="font-size:9px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:0.12em">${name}</span>
+    </td></tr>`;
+
+  const groupSubtotalRow = (paise: number): string =>
+    `<tr><td colspan="3" style="padding:7px 16px;text-align:right;font-size:11px;color:#9ca3af;border-bottom:1px solid #f3f4f6">Subtotal</td>
+      <td style="padding:7px 16px;text-align:right;font-size:12px;font-weight:700;color:#6b7280;border-bottom:1px solid #f3f4f6">₹${fmtNum(paise)}</td></tr>`;
+
+  // Preserve the caller's line order; only start a new group when the project changes.
+  const groups: { name?: string; items: InvoicePdfData['lineItems'] }[] = [];
+  for (const li of data.lineItems) {
+    const last = groups[groups.length - 1];
+    if (last && last.name === li.projectName) last.items.push(li);
+    else groups.push({ name: li.projectName, items: [li] });
+  }
+  const showGroups = new Set(data.lineItems.map((li) => li.projectName ?? '')).size > 1;
+
+  const lineItemsHtml = showGroups
+    ? groups
+        .map((g) => {
+          const rows = g.items.map(itemRow).join('');
+          if (!g.name) return rows;
+          const subtotal = g.items.reduce((s, li) => s + Math.round(li.qty * li.unitPaise), 0);
+          const withSubtotal = g.items.length > 1 ? rows + groupSubtotalRow(subtotal) : rows;
+          return groupHeaderRow(g.name) + withSubtotal;
+        })
+        .join('')
+    : data.lineItems.map(itemRow).join('');
 
   // Only show payment history when it adds information:
   // - multiple payments (shows the breakdown), or

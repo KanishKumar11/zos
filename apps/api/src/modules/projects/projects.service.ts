@@ -356,15 +356,42 @@ export class ProjectsService {
     return doc.save();
   }
 
+  /**
+   * Fraction of an invoice that belongs to `projectId`. Single-project invoices
+   * count fully; on a multi-project invoice each project takes the share its own
+   * line items represent, so a shared payment is never counted twice.
+   */
+  private projectShareRatio(inv: InvoiceDocument, projectId: string): number {
+    const lineTotal = (li: any) => Math.round(li.qty * li.unitPaise);
+    const tagged = (inv.lineItems ?? []).filter((li: any) => li.projectId);
+    if (tagged.length === 0) return inv.projectId?.toString() === projectId ? 1 : 0;
+
+    const mine = tagged
+      .filter((li: any) => li.projectId.toString() === projectId)
+      .reduce((s: number, li: any) => s + lineTotal(li), 0);
+    const subTotal =
+      inv.subTotalPaise || (inv.lineItems ?? []).reduce((s: number, li: any) => s + lineTotal(li), 0);
+    return subTotal > 0 ? mine / subTotal : 0;
+  }
+
   async projectBalance(projectId: string) {
+    const oid = new Types.ObjectId(projectId);
     const [doc, invDocs] = await Promise.all([
       this.model.findOne({ _id: projectId, deletedAt: { $exists: false } }).exec(),
-      this.invoices.find({ projectId: new Types.ObjectId(projectId), deletedAt: { $exists: false } }).exec(),
+      this.invoices
+        .find({
+          deletedAt: { $exists: false },
+          $or: [{ projectId: oid }, { 'lineItems.projectId': oid }],
+        })
+        .exec(),
     ]);
     if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
 
-    const collectedPaise = invDocs.reduce((s, inv) =>
-      s + (inv.payments ?? []).reduce((ps: number, p: any) => ps + p.amountPaise, 0), 0);
+    const collectedPaise = invDocs.reduce((s, inv) => {
+      const paid = (inv.payments ?? []).reduce((ps: number, p: any) => ps + p.amountPaise, 0);
+      if (paid === 0) return s;
+      return s + Math.round(paid * this.projectShareRatio(inv, projectId));
+    }, 0);
 
     const memberIds = doc.members.map((m) => m.userId);
     const userDocs = await this.users.find({ _id: { $in: memberIds } }).select('name').exec();

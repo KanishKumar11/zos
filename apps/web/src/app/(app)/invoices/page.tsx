@@ -30,11 +30,54 @@ import { formatPaise } from '@/lib/formatters';
 import { PageHeader } from '@/components/layout/page-header';
 import { useClients } from '@/features/clients/clients.hooks';
 import { useContracts } from '@/features/contracts/contracts.hooks';
-import { useCreateInvoice, useInvoices } from '@/features/invoices/invoices.hooks';
+import {
+  InvoiceLineItems,
+  emptyToUndefined,
+  emptyToUndefinedNumber,
+} from '@/features/invoices/invoice-line-items';
+import { useCreateInvoice, useInvoices, type InvoiceRow } from '@/features/invoices/invoices.hooks';
 import { useInvoiceAging, useInvoiceDashboard } from '@/features/invoices/invoices.hooks';
 import { useProjects } from '@/features/projects/projects.hooks';
 
 type CreateInvoiceForm = z.input<typeof createInvoiceSchema>;
+
+/** Collects every project an invoice touches — header-level and per line item. */
+function invoiceProjectIds(inv: InvoiceRow): string[] {
+  const ids = new Set<string>();
+  if (inv.projectId) ids.add(inv.projectId);
+  inv.lineItems.forEach((li) => li.projectId && ids.add(li.projectId));
+  return [...ids];
+}
+
+function InvoiceLinks({
+  invoice,
+  projectMap,
+  contractMap,
+}: {
+  invoice: InvoiceRow;
+  projectMap: Map<string, string>;
+  contractMap: Map<string, string>;
+}) {
+  const projectIds = invoiceProjectIds(invoice);
+  if (projectIds.length === 0) {
+    return invoice.contractId ? (
+      <Link href={`/contracts/${invoice.contractId}`} className="hover:underline">
+        {contractMap.get(invoice.contractId) ?? '—'}
+      </Link>
+    ) : (
+      <>—</>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-0.5">
+      {projectIds.map((pid) => (
+        <Link key={pid} href={`/projects/${pid}`} className="hover:underline">
+          {projectMap.get(pid) ?? '—'}
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 export default function InvoicesPage() {
   return (
@@ -74,6 +117,12 @@ function Inner() {
     } as never,
   });
 
+  /** Only offer projects belonging to the client selected in the create form. */
+  const selectedClientId = createForm.watch('clientId');
+  const clientProjects = (projects.data?.items ?? []).filter(
+    (p) => !selectedClientId || p.clientId === selectedClientId,
+  );
+
   const onCreateSubmit = createForm.handleSubmit((values) => {
     createInvoice.mutate(values as never, {
       onSuccess: (data) => {
@@ -93,7 +142,7 @@ function Inner() {
       />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Create invoice</DialogTitle>
           </DialogHeader>
@@ -122,30 +171,31 @@ function Inner() {
                 ))}
               </select>
             </div>
-            <div className="space-y-1">
-              <Label>Description</Label>
-              <Input {...createForm.register('lineItems.0.description')} placeholder="e.g. Monthly retainer — August" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Amount (paise)</Label>
-                <Input type="number" {...createForm.register('lineItems.0.unitPaise', { valueAsNumber: true })} />
-              </div>
+            <InvoiceLineItems form={createForm} projects={clientProjects} />
+
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>GST %</Label>
-                <Input type="number" {...createForm.register('gstPercent', { valueAsNumber: true })} />
+                {/* Blank must submit as "no GST" rather than NaN, which the schema rejects. */}
+                <Input type="number" placeholder="0" {...createForm.register('gstPercent', { setValueAs: emptyToUndefinedNumber })} />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Issue date</Label>
-                <Input type="date" {...createForm.register('issueDate')} />
+                <Input type="date" {...createForm.register('issueDate', { setValueAs: emptyToUndefined })} />
               </div>
               <div className="space-y-1">
                 <Label>Due date</Label>
-                <Input type="date" {...createForm.register('dueDate')} />
+                <Input type="date" {...createForm.register('dueDate', { setValueAs: emptyToUndefined })} />
               </div>
             </div>
+            {createForm.formState.errors.lineItems && (
+              <p className="text-xs text-destructive">
+                Every line item needs a description and an amount.
+              </p>
+            )}
+            {createForm.formState.errors.clientId && (
+              <p className="text-xs text-destructive">Select a client.</p>
+            )}
             <DialogFooter>
               <Button type="submit" disabled={createInvoice.isPending}>
                 {createInvoice.isPending ? 'Creating…' : 'Create draft'}
@@ -271,17 +321,11 @@ function Inner() {
                     </Link>
                   </TD>
                   <TD>
-                    {inv.projectId ? (
-                      <Link href={`/projects/${inv.projectId}`} className="hover:underline">
-                        {projectMap.get(inv.projectId) ?? '—'}
-                      </Link>
-                    ) : inv.contractId ? (
-                      <Link href={`/contracts/${inv.contractId}`} className="hover:underline">
-                        {contractMap.get(inv.contractId) ?? '—'}
-                      </Link>
-                    ) : (
-                      '—'
-                    )}
+                    <InvoiceLinks
+                      invoice={inv}
+                      projectMap={projectMap}
+                      contractMap={contractMap}
+                    />
                   </TD>
                   <TD>
                     <span

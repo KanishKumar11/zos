@@ -41,6 +41,8 @@ const ID = {
   iRewardzy: oid(), iRewardzyM2: oid(),
   iRealEstate: oid(), iRealEstateM2: oid(),
   iInnoWebsite: oid(), iStudycrux: oid(), iStudycruxM2: oid(),
+  // Combined invoice covering both Inno Transventive engagements (Aug 2026)
+  iInnoCombined: oid(),
   iDigitalMandir1: oid(), iDigitalMandir2: oid(), iDigitalMandir3: oid(),
   iEldeco: oid(), iEldecoFinal: oid(),
   iGPower: oid(), iGPower2: oid(),
@@ -68,6 +70,8 @@ const ID = {
   pArowai: oid(), pBitaminNaturals: oid(), pDhawadaNGO: oid(),
   pHiristan: oid(), pSoulSurf: oid(), pResto: oid(),
   pMrVeg: oid(), pGPower: oid(), pSPNov25: oid(),
+  // Milestones referenced by multi-project invoice line items
+  msRealEstateM2Short: oid(), msRealEstateM3: oid(), msInnoWebsiteBalance: oid(),
 };
 
 // Invoice counter — per-year sequential: ZLK-YYYY-NNNN
@@ -87,9 +91,39 @@ const payment = (date: string, amountINR: number, method = 'Bank Transfer', ref 
   _id: oid(), paidAt: d(date), amountPaise: p(amountINR), reference: ref, method,
 });
 
-const lineItem = (desc: string, qty: number, unitINR: number) => ({
+const lineItem = (
+  desc: string, qty: number, unitINR: number,
+  projectId?: Types.ObjectId, milestoneId?: Types.ObjectId,
+) => ({
   description: desc, qty, unitPaise: p(unitINR),
+  ...(projectId ? { projectId } : {}),
+  ...(milestoneId ? { milestoneId } : {}),
 });
+
+/**
+ * Invoice whose lines carry their own project — one document billing several
+ * projects at once, with each project keeping its revenue attribution.
+ */
+function multiProjectInvoice(
+  num: string, clientId: Types.ObjectId,
+  items: ReturnType<typeof lineItem>[],
+  payments_arr: ReturnType<typeof payment>[],
+  issueDate: string, dueDate: string, status: string,
+  notes = '', id?: Types.ObjectId,
+) {
+  const subTotal = items.reduce((s, li) => s + Math.round(li.qty * li.unitPaise), 0);
+  return {
+    ...(id ? { _id: id } : {}),
+    number: num, clientId, projectId: undefined, contractId: undefined,
+    lineItems: items,
+    subTotalPaise: subTotal, gstPercent: 0, gstPaise: 0, totalPaise: subTotal,
+    paidPaise: payments_arr.reduce((s, x) => s + x.amountPaise, 0),
+    currency: 'INR', status,
+    issueDate: d(issueDate), dueDate: d(dueDate),
+    payments: payments_arr,
+    notes, createdAt: d(issueDate), updatedAt: new Date(),
+  };
+}
 
 function invoice(
   num: string, clientId: Types.ObjectId,
@@ -115,7 +149,7 @@ function project(
   status: string, startDate: string, endDate: string | null,
   membersList: { uid: Types.ObjectId; role: string; amountINR?: number; paidINR?: number; paidAtDate?: string; payments?: { amountINR: number; paidAtDate: string; note?: string; forPeriod?: string }[] }[],
   budgetINR = 0, marginINR = 0, desc = '',
-  milestonesList?: { name: string; amountINR: number; dueDate?: string; status?: string; invoiceId?: Types.ObjectId; note?: string }[],
+  milestonesList?: { id?: Types.ObjectId; name: string; amountINR: number; dueDate?: string; status?: string; invoiceId?: Types.ObjectId; note?: string }[],
 ) {
   return {
     _id: id, name, code, clientId, status, description: desc, brief: '',
@@ -126,7 +160,7 @@ function project(
       payments: m.payments ? m.payments.map(pmt => ({ _id: oid(), paidAt: d(pmt.paidAtDate), amountPaise: p(pmt.amountINR), note: pmt.note ?? '', ...(pmt.forPeriod ? { forPeriod: pmt.forPeriod } : {}) })) : (m.paidINR ? [{ _id: oid(), paidAt: d(m.paidAtDate ?? startDate), amountPaise: p(m.paidINR), note: '' }] : []),
     })),
     milestones: (milestonesList ?? []).map((ms) => ({
-      _id: oid(), name: ms.name, amountPaise: p(ms.amountINR),
+      _id: ms.id ?? oid(), name: ms.name, amountPaise: p(ms.amountINR),
       dueDate: ms.dueDate ? d(ms.dueDate) : undefined,
       status: ms.status ?? 'PENDING',
       ...(ms.invoiceId ? { invoiceId: ms.invoiceId } : {}),
@@ -514,16 +548,20 @@ async function main() {
         { name: 'Milestone 2', amountINR: 16000, dueDate: '2026-07-06', status: 'COLLECTED', invoiceId: ID.iOnebox2, note: 'Milestone 2 — Jul 6' },
         { name: 'Milestone 3', amountINR: 12000, status: 'PENDING',                          note: 'Final milestone — ₹12k pending' },
       ]),
-    project(ID.pRealEstate, 'Inno Transventive Real Estate App', 'INNO-REALESTATE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 30000 }], 87000, 57000, 'Real estate app — ₹60.95k pending from client; ₹30k to Shivam',
+    project(ID.pRealEstate, 'Inno Transventive Real Estate App', 'INNO-REALESTATE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 30000 }], 87000, 57000, 'Real estate app — ₹26.15k invoiced Aug 11 (M2 shortfall + M3) on the combined Inno invoice; ₹39.2k still to bill; ₹30k to Shivam',
       [
         { name: 'Advance',     amountINR: 13050, dueDate: '2026-04-06', status: 'COLLECTED', invoiceId: ID.iRealEstate,   note: 'Advance — Apr 6' },
-        { name: 'Milestone 2', amountINR: 13000, dueDate: '2026-05-21', status: 'COLLECTED', invoiceId: ID.iRealEstateM2, note: 'Milestone 2 — May 21' },
-        { name: 'Balance',     amountINR: 60950, status: 'PENDING',     note: 'Balance ₹60,950 pending' },
+        // Milestone 2 was raised at ₹13,000 but only ₹8,600 came in; the ₹4,400
+        // shortfall is re-billed on the combined Aug 2026 invoice below.
+        { name: 'Milestone 2', amountINR: 8600,  dueDate: '2026-05-21', status: 'COLLECTED', invoiceId: ID.iRealEstateM2, note: 'Milestone 2 — May 21 (₹8,600 of ₹13,000 collected)' },
+        { id: ID.msRealEstateM2Short, name: 'Milestone 2 shortfall', amountINR: 4400, dueDate: '2026-08-25', status: 'INVOICED', invoiceId: ID.iInnoCombined, note: 'Unpaid balance of Milestone 2 — re-billed Aug 11' },
+        { id: ID.msRealEstateM3,      name: 'Milestone 3',           amountINR: 21750, dueDate: '2026-08-25', status: 'INVOICED', invoiceId: ID.iInnoCombined, note: 'Milestone 3 — invoiced Aug 11' },
+        { name: 'Balance',     amountINR: 39200, status: 'PENDING',   note: 'Balance ₹39,200 not yet invoiced' },
       ]),
-    project(ID.pInnoWebsite, 'Inno Transventive Website', 'INNO-WEBSITE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 11000 }, { uid: ID.uGeetanjali, role: C, amountINR: 11000, paidINR: 5000, paidAtDate: '2026-07-02' }], 30000, 8000, 'Website development — ₹30k pending from client; ₹11k to Shivam; ₹11k to Geetanjali (5k paid Jul 2, 6k pending)',
+    project(ID.pInnoWebsite, 'Inno Transventive Website', 'INNO-WEBSITE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 11000 }, { uid: ID.uGeetanjali, role: C, amountINR: 11000, paidINR: 5000, paidAtDate: '2026-07-02' }], 30000, 8000, 'Website development — ₹25k final balance invoiced Aug 11 on the combined Inno invoice; ₹11k to Shivam; ₹11k to Geetanjali (5k paid Jul 2, 6k pending)',
       [
         { name: 'Milestone 1', amountINR: 5000,  dueDate: '2026-05-21', status: 'COLLECTED', invoiceId: ID.iInnoWebsite, note: 'Milestone 1 — May 21' },
-        { name: 'Balance',     amountINR: 25000, status: 'PENDING',     note: 'Balance ₹25,000 pending' },
+        { id: ID.msInnoWebsiteBalance, name: 'Final balance', amountINR: 25000, dueDate: '2026-08-25', status: 'INVOICED', invoiceId: ID.iInnoCombined, note: 'Final balance — invoiced Aug 11 on the combined Inno invoice' },
       ]),
     project(ID.pNavisha, 'Navisha Website', 'SP-NAVISHA', ID.cSP, 'COMPLETED', '2026-03-15', '2026-03-27', [{ uid: ID.uJaya, role: L, amountINR: 5000, paidINR: 5000, paidAtDate: '2026-03-27' }], 12000, 7000, 'Website development — 5k paid to Jaya on Mar 27'),
     project(ID.pAvcoEnergy, 'Avco Energy Website', 'AVCO-ENERGY', ID.cStartiffy, 'COMPLETED', '2026-04-01', '2026-04-30', [{ uid: ID.uJaya, role: L, amountINR: 2000, paidINR: 2000, paidAtDate: '2026-04-19' }, { uid: ID.uSidhak, role: C, amountINR: 2000, paidINR: 2000, paidAtDate: '2026-04-30' }], 8000, 4000, 'Website development'),
@@ -835,12 +873,15 @@ async function main() {
   inv(ID.cOnebox, ID.pOnebox, 'Onebox Project Development — Milestone 1 (Advance)', 12000,
     [payment('2026-03-14', 12000, 'Bank Transfer', 'Advance')], '2026-03-14', 'PAID', undefined, ID.iOnebox);
 
-  // Inno Transventive Real Estate App (26050 collected across 2 milestone invoices; balance pending)
+  // Inno Transventive Real Estate App (21,650 collected across 2 milestone invoices)
   inv(ID.cInnoTrans, ID.pRealEstate, 'Real Estate App Development — Advance', 13050,
     [payment('2026-04-06', 13050, 'Bank Transfer', 'Advance')], '2026-04-06', 'PAID', undefined, ID.iRealEstate);
-  inv(ID.cInnoTrans, ID.pRealEstate, 'Real Estate App Development — Milestone 2', 13000,
-    [payment('2026-05-21', 13000, 'Bank Transfer', 'Milestone 2')], '2026-05-21', 'PAID', undefined, ID.iRealEstateM2);
-  // Inno Transventive Website (5000 collected; remaining not yet invoiced)
+  // Raised at ₹13,000; ₹8,600 collected. Closed at the collected amount because the
+  // ₹4,400 shortfall is re-billed on the combined Aug 2026 invoice — leaving this one
+  // open would count that ₹4,400 as outstanding twice.
+  inv(ID.cInnoTrans, ID.pRealEstate, 'Real Estate App Development — Milestone 2', 8600,
+    [payment('2026-05-21', 8600, 'Bank Transfer', 'Milestone 2 — part payment')], '2026-05-21', 'PAID', undefined, ID.iRealEstateM2);
+  // Inno Transventive Website (5000 collected; balance billed on the combined invoice)
   inv(ID.cInnoTrans, ID.pInnoWebsite, 'Website Development — Milestone 1', 5000,
     [payment('2026-05-21', 5000, 'Bank Transfer', 'Milestone 1')], '2026-04-06', 'PAID', undefined, ID.iInnoWebsite);
 
@@ -921,6 +962,20 @@ async function main() {
   inv(ID.cFirstrank, ID.pFirstrank, 'Firstrank Website & Platform — Milestone 5', 110000,
     [payment('2026-08-02', 55000, 'Bank Transfer', 'Milestone 5 — part 1'),
      payment('2026-08-05', 55000, 'Bank Transfer', 'Milestone 5 — part 2')], '2026-08-02', 'PAID', undefined, ID.iFirstrankM5);
+
+  // Inno Transventive — one invoice covering both engagements (₹51,150, unpaid).
+  // Appended last so it takes the next free 2026 number without renumbering anything above.
+  invoices.push(multiProjectInvoice(
+    nextInv('2026-08-11'), ID.cInnoTrans,
+    [
+      lineItem('Website Development — final balance', 1, 25000, ID.pInnoWebsite, ID.msInnoWebsiteBalance),
+      lineItem('Real Estate App — Milestone 2 shortfall', 1, 4400, ID.pRealEstate, ID.msRealEstateM2Short),
+      lineItem('Real Estate App — Milestone 3', 1, 21750, ID.pRealEstate, ID.msRealEstateM3),
+    ],
+    [], '2026-08-11', '2026-08-25', 'SENT',
+    'Covers both active Inno Transventive engagements. Single payment against this invoice number.',
+    ID.iInnoCombined,
+  ));
 
   await db.collection('invoices').insertMany(invoices);
   console.log(`[full-seed] Inserted ${invoices.length} invoices`);

@@ -2,20 +2,33 @@
 import { z } from 'zod';
 
 import { InvoiceStatus } from '../enums';
-import { isoDateSchema, objectIdSchema } from './common.schema';
+import { isoDateSchema, objectIdSchema, optionalObjectIdSchema } from './common.schema';
 
-export const invoiceLineItemSchema = z.object({
-  description: z.string().min(1).max(500),
-  qty: z.number().positive(),
-  unitPaise: z.number().int().min(0),
-});
+/**
+ * A line item may carry its own project (and optionally the milestone it bills),
+ * so a single invoice can span several projects while each project keeps its
+ * revenue attribution. `projectId` on the invoice itself stays supported for
+ * single-project invoices.
+ */
+export const invoiceLineItemSchema = z
+  .object({
+    description: z.string().min(1).max(500),
+    qty: z.number().positive(),
+    unitPaise: z.number().int().min(0),
+    projectId: optionalObjectIdSchema,
+    milestoneId: optionalObjectIdSchema,
+  })
+  .refine((v) => !v.milestoneId || !!v.projectId, {
+    message: 'milestoneId requires projectId',
+    path: ['projectId'],
+  });
 export type InvoiceLineItemInput = z.infer<typeof invoiceLineItemSchema>;
 
 export const createInvoiceSchema = z.object({
   number: z.string().min(2).max(40).optional(),
   clientId: objectIdSchema,
-  projectId: objectIdSchema.optional(),
-  contractId: objectIdSchema.optional(),
+  projectId: optionalObjectIdSchema,
+  contractId: optionalObjectIdSchema,
   lineItems: z.array(invoiceLineItemSchema).min(1),
   gstPercent: z.number().min(0).max(50).optional(),
   currency: z.string().length(3).optional(),

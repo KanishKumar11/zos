@@ -1,9 +1,10 @@
 // Invoice detail (OWNER-only) — line items, payments, send action.
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { z } from 'zod';
@@ -29,8 +30,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { env } from '@/lib/env';
-import { formatPaise } from '@/lib/formatters';
+import { formatPaise, toPaise, toRupees } from '@/lib/formatters';
 
+import {
+  InvoiceLineItems,
+  emptyToUndefined,
+  emptyToUndefinedNumber,
+} from '@/features/invoices/invoice-line-items';
 import {
   useDeleteInvoice,
   useInvoice,
@@ -38,6 +44,7 @@ import {
   useSendInvoice,
   useUpdateInvoice,
 } from '@/features/invoices/invoices.hooks';
+import { useProjects } from '@/features/projects/projects.hooks';
 import { PageHeader } from '@/components/layout/page-header';
 
 type UpdateInvoiceForm = z.input<typeof updateInvoiceSchema>;
@@ -67,16 +74,27 @@ function Inner({ id }: { id: string }) {
 
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /** Payment amount is entered in rupees; the API stores paise. */
+  const [payRupees, setPayRupees] = useState('');
   const editForm = useForm<UpdateInvoiceForm>({
     resolver: zodResolver(updateInvoiceSchema) as never,
   });
-  const lineItems = useFieldArray({ control: editForm.control, name: 'lineItems' as never });
+
+  const projects = useProjects({ pageSize: 200 });
+  const clientProjects = (projects.data?.items ?? []).filter(
+    (p) => !inv.data?.clientId || p.clientId === inv.data.clientId,
+  );
+  const projectMap = new Map((projects.data?.items ?? []).map((p) => [p._id, p.name]));
 
   useEffect(() => {
     if (inv.data) {
       editForm.reset({
         lineItems: inv.data.lineItems.map((li) => ({
-          description: li.description, qty: li.qty, unitPaise: li.unitPaise,
+          description: li.description,
+          qty: li.qty,
+          unitPaise: li.unitPaise,
+          projectId: li.projectId,
+          milestoneId: li.milestoneId,
         })),
         gstPercent: inv.data.gstPercent,
         currency: inv.data.currency,
@@ -97,6 +115,17 @@ function Inner({ id }: { id: string }) {
   const i = inv.data;
   const due = Math.max(0, i.totalPaise - i.paidPaise);
 
+  // Header-level project plus every project billed on a line item.
+  const linkedProjectIds = [
+    ...new Set([i.projectId, ...i.lineItems.map((li) => li.projectId)].filter(Boolean) as string[]),
+  ];
+  // Per-project totals, so a combined invoice shows what each project owes.
+  const projectTotals = new Map<string, number>();
+  i.lineItems.forEach((li) => {
+    const key = li.projectId ?? '';
+    projectTotals.set(key, (projectTotals.get(key) ?? 0) + Math.round(li.qty * li.unitPaise));
+  });
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -116,61 +145,24 @@ function Inner({ id }: { id: string }) {
       />
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Edit invoice</DialogTitle>
           </DialogHeader>
           <form onSubmit={onEditSubmit} className="grid gap-3">
-            <div className="space-y-2">
-              <Label>Line items</Label>
-              {lineItems.fields.map((field, idx) => (
-                <div key={field.id} className="grid grid-cols-[1fr_80px_120px_auto] gap-2">
-                  <Input
-                    placeholder="Description"
-                    className="h-8 text-sm"
-                    {...editForm.register(`lineItems.${idx}.description` as never)}
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Qty"
-                    className="h-8 text-sm"
-                    {...editForm.register(`lineItems.${idx}.qty` as never, { valueAsNumber: true })}
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Unit (paise)"
-                    className="h-8 text-sm"
-                    {...editForm.register(`lineItems.${idx}.unitPaise` as never, { valueAsNumber: true })}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => lineItems.remove(idx)}
-                    className="text-xs text-muted-foreground hover:text-destructive"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => lineItems.append({ description: '', qty: 1, unitPaise: 0 } as never)}
-                className="text-xs text-primary hover:underline"
-              >
-                + Add line item
-              </button>
-            </div>
+            <InvoiceLineItems form={editForm} projects={clientProjects} showQty />
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>GST %</Label>
-                <Input type="number" {...editForm.register('gstPercent', { valueAsNumber: true })} />
+                <Input type="number" placeholder="0" {...editForm.register('gstPercent', { setValueAs: emptyToUndefinedNumber })} />
               </div>
               <div className="space-y-1">
                 <Label>Issue date</Label>
-                <Input type="date" {...editForm.register('issueDate')} />
+                <Input type="date" {...editForm.register('issueDate', { setValueAs: emptyToUndefined })} />
               </div>
               <div className="space-y-1">
                 <Label>Due date</Label>
-                <Input type="date" {...editForm.register('dueDate')} />
+                <Input type="date" {...editForm.register('dueDate', { setValueAs: emptyToUndefined })} />
               </div>
             </div>
             <div className="space-y-1">
@@ -233,27 +225,28 @@ function Inner({ id }: { id: string }) {
         </a>
       </div>
 
-      {(i.projectId || i.contractId) && (
+      {(linkedProjectIds.length > 0 || i.contractId) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Related</CardTitle>
           </CardHeader>
-          <CardContent className="flex gap-3">
-            {i.projectId && (
-              <a
-                href={`/projects/${i.projectId}`}
+          <CardContent className="flex flex-wrap gap-3">
+            {linkedProjectIds.map((pid) => (
+              <Link
+                key={pid}
+                href={`/projects/${pid}`}
                 className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
               >
-                → View Project
-              </a>
-            )}
+                → {projectMap.get(pid) ?? 'View Project'}
+              </Link>
+            ))}
             {i.contractId && (
-              <a
+              <Link
                 href={`/contracts/${i.contractId}`}
                 className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
               >
                 → View Contract
-              </a>
+              </Link>
             )}
           </CardContent>
         </Card>
@@ -268,6 +261,7 @@ function Inner({ id }: { id: string }) {
             <THead>
               <TR>
                 <TH>Description</TH>
+                <TH>Project</TH>
                 <TH>Qty</TH>
                 <TH>Unit</TH>
                 <TH>Total</TH>
@@ -277,6 +271,15 @@ function Inner({ id }: { id: string }) {
               {i.lineItems.map((li, idx) => (
                 <TR key={idx}>
                   <TD>{li.description}</TD>
+                  <TD className="text-muted-foreground">
+                    {li.projectId ? (
+                      <Link href={`/projects/${li.projectId}`} className="hover:underline">
+                        {projectMap.get(li.projectId) ?? '—'}
+                      </Link>
+                    ) : (
+                      '—'
+                    )}
+                  </TD>
                   <TD>{li.qty}</TD>
                   <TD>{formatPaise(li.unitPaise, i.currency)}</TD>
                   <TD>{formatPaise(Math.round(li.qty * li.unitPaise), i.currency)}</TD>
@@ -284,6 +287,21 @@ function Inner({ id }: { id: string }) {
               ))}
             </TBody>
           </Table>
+          {projectTotals.size > 1 && (
+            <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                Split across projects
+              </p>
+              {[...projectTotals.entries()].map(([pid, paise]) => (
+                <div key={pid || 'unassigned'} className="flex justify-between py-0.5">
+                  <span className="text-muted-foreground">
+                    {projectMap.get(pid) ?? 'Not linked to a project'}
+                  </span>
+                  <span className="font-medium tabular-nums">{formatPaise(paise, i.currency)}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="mt-4 grid gap-1 text-sm">
             <p>Subtotal: {formatPaise(i.subTotalPaise, i.currency)}</p>
             <p>GST {i.gstPercent}%: {formatPaise(i.gstPaise, i.currency)}</p>
@@ -326,7 +344,10 @@ function Inner({ id }: { id: string }) {
                 pay.mutate(
                   { id, body: v as never },
                   {
-                    onSuccess: () => form.reset({ paidAt: today, amountPaise: 0 } as never),
+                    onSuccess: () => {
+                      form.reset({ paidAt: today, amountPaise: 0 } as never);
+                      setPayRupees('');
+                    },
                   },
                 ),
               )}
@@ -336,8 +357,30 @@ function Inner({ id }: { id: string }) {
                 <Input type="date" {...form.register('paidAt')} />
               </div>
               <div className="space-y-1">
-                <Label>Amount (paise)</Label>
-                <Input type="number" {...form.register('amountPaise', { valueAsNumber: true })} />
+                <div className="flex items-baseline justify-between">
+                  <Label>Amount (₹)</Label>
+                  <button
+                    type="button"
+                    className="text-[11px] text-primary hover:underline"
+                    onClick={() => {
+                      setPayRupees(String(toRupees(due)));
+                      form.setValue('amountPaise', due as never);
+                    }}
+                  >
+                    Full balance
+                  </button>
+                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder={String(toRupees(due))}
+                  value={payRupees}
+                  onChange={(e) => {
+                    setPayRupees(e.target.value);
+                    form.setValue('amountPaise', toPaise(e.target.value) as never);
+                  }}
+                />
               </div>
               <div className="space-y-1">
                 <Label>Reference</Label>

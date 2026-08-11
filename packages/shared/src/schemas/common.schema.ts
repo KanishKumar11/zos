@@ -8,6 +8,15 @@ export const objectIdSchema = z
   .string()
   .regex(/^[a-f0-9]{24}$/i, 'Invalid id');
 
+/**
+ * Optional ObjectId that also accepts '' as "not set" — HTML `<select>` placeholder
+ * options submit an empty string, which plain `objectIdSchema.optional()` rejects.
+ */
+export const optionalObjectIdSchema = z
+  .union([objectIdSchema, z.literal('')])
+  .optional()
+  .transform((v) => (v === '' ? undefined : v));
+
 /** ISO 8601 date string, coerced to Date. */
 export const isoDateSchema = z.coerce.date();
 

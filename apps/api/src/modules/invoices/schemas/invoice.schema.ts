@@ -9,6 +9,10 @@ export class InvoiceLineItem {
   @Prop({ required: true }) description!: string;
   @Prop({ required: true, type: Number }) qty!: number;
   @Prop({ required: true, type: Number }) unitPaise!: number;
+  /** Set when this line bills a specific project — lets one invoice span several. */
+  @Prop({ type: MS.Types.ObjectId, ref: 'Project', index: true }) projectId?: Types.ObjectId;
+  /** Milestone subdoc id within `projectId`; kept in sync with Project.milestones. */
+  @Prop({ type: MS.Types.ObjectId }) milestoneId?: Types.ObjectId;
 }
 const InvoiceLineItemSchema = SchemaFactory.createForClass(InvoiceLineItem);
 
