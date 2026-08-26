@@ -23,7 +23,11 @@ export class PdfService implements OnModuleDestroy {
     const browser = await this.getBrowser();
     const page = await browser.newPage();
     try {
-      await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      // 'load' (not 'domcontentloaded') so linked stylesheets are applied, then wait on
+      // fonts.ready — otherwise the webfont race silently prints the fallback family.
+      await page.setContent(html, { waitUntil: 'load', timeout: 30_000 });
+      // String form: this runs in the page context, and the API tsconfig has no DOM lib.
+      await page.evaluate('(async () => { await document.fonts.ready; })()');
       const buf = await page.pdf({
         format: 'A4',
         printBackground: true,
