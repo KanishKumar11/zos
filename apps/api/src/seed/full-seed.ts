@@ -22,7 +22,7 @@ const ID = {
   uKanish: oid(), uSidhak: oid(), uShabd: oid(), uShivam: oid(),
   uGeetanjali: oid(), uJaya: oid(),
   uAnjali: oid(), uHarshika: oid(), uSanjana: oid(), uIsha: oid(),
-  uYatin: oid(), uJyotiYadav: oid(), uAmit: oid(),
+  uYatin: oid(), uJyotiYadav: oid(), uAmit: oid(), uTanish: oid(), uHarsh: oid(),
   // Clients
   cLalit: oid(), cSP: oid(), cFoody: oid(), cBluehutch: oid(),
   cSculpt: oid(), cMendingMind: oid(), cUnextdoor: oid(),
@@ -33,7 +33,8 @@ const ID = {
   cVelotra: oid(), cBallBoundary: oid(), cAllWheel: oid(),
   cSellercircle: oid(), cSWBuild: oid(), cShivAiTelerad: oid(),
   cEldeco: oid(), cArowai: oid(), cBroBuzz: oid(),
-  cBitaminNaturals: oid(), cOnebox: oid(), cHostinger: oid(),
+  cBitaminNaturals: oid(), cOnebox: oid(), cHostinger: oid(), cShivanand: oid(),
+  cPoonam: oid(),
   // Invoices (explicit IDs for those referenced in milestones) — one invoice per milestone
   iFirstrank: oid(), iFirstrankM2: oid(), iFirstrankM3: oid(), iFirstrank2: oid(), iFirstrankM5: oid(),
   iHRBook: oid(), iHRBookM2: oid(), iHRBook2: oid(),
@@ -50,6 +51,7 @@ const ID = {
   iMendingMindPlatform: oid(), iMendingMindP2: oid(), iMendingMindP3: oid(),
   iMendingMindBalance: oid(), iBroBuzz: oid(),
   iOnebox: oid(), iOnebox2: oid(),
+  iSmishingM1: oid(),
   // Contracts
   cFoodyContract: oid(), cGessureContract: oid(), cMendingMindContract: oid(),
   // Projects
@@ -70,6 +72,7 @@ const ID = {
   pArowai: oid(), pBitaminNaturals: oid(), pDhawadaNGO: oid(),
   pHiristan: oid(), pSoulSurf: oid(), pResto: oid(),
   pMrVeg: oid(), pGPower: oid(), pSPNov25: oid(),
+  pGreenloop: oid(), pBlogyouneed: oid(), pSmishing: oid(),
   // Milestones referenced by multi-project invoice line items
   msRealEstateM2Short: oid(), msRealEstateM3: oid(), msInnoWebsiteBalance: oid(),
 };
@@ -130,6 +133,7 @@ function invoice(
   projectId: Types.ObjectId | undefined, contractId: Types.ObjectId | undefined,
   desc: string, totalINR: number, payments_arr: ReturnType<typeof payment>[],
   issueDate: string, status: string, currency = 'INR', id?: Types.ObjectId,
+  dueDate?: string,
 ) {
   const paidINR = payments_arr.reduce((s, x) => s + x.amountPaise / 100, 0);
   const subTotal = p(totalINR);
@@ -139,7 +143,7 @@ function invoice(
     lineItems: [lineItem(desc, 1, totalINR)],
     subTotalPaise: subTotal, gstPercent: 0, gstPaise: 0, totalPaise: subTotal,
     paidPaise: Math.round(paidINR * 100),
-    currency, status, issueDate: d(issueDate), payments: payments_arr,
+    currency, status, issueDate: d(issueDate), ...(dueDate ? { dueDate: d(dueDate) } : {}), payments: payments_arr,
     notes: '', createdAt: d(issueDate), updatedAt: new Date(),
   };
 }
@@ -267,6 +271,8 @@ async function main() {
     // Shivam's team interns
     mkIntern(ID.uJyotiYadav, 'jyotiyadav@zlaark.com', 'Jyoti Yadav',      '2026-04-17', ID.uShivam, 'EXITED'),
     mkIntern(ID.uAmit,       'amit@zlaark.com',        'Amit Maurya',      '2026-04-17', ID.uShivam),
+    mkIntern(ID.uTanish,     'tanish@zlaark.com',      'Tanish',           '2026-07-01', ID.uShivam),
+    mkIntern(ID.uHarsh,      'harsh@zlaark.com',       'Harsh',            '2026-06-16', ID.uShivam),
   ]);
 
   // ── COMPENSATION PROFILES ───────────────────────────────────────────────────
@@ -293,6 +299,8 @@ async function main() {
     mkStipend(ID.uYatin,      3000, '2026-05-03'), // incremented May
     mkStipend(ID.uJyotiYadav, 1000, '2026-04-17'),
     mkStipend(ID.uAmit,       1000, '2026-04-17'),
+    mkStipend(ID.uTanish,     1000, '2026-07-01'),
+    mkStipend(ID.uHarsh,      2000, '2026-06-16'),
   ]);
 
   // ── CLIENTS ─────────────────────────────────────────────────────────────────
@@ -332,6 +340,8 @@ async function main() {
     mkClient(ID.cBitaminNaturals,'Bitamin Naturals',        'Website development — client payment issues, agency covered cost'),
     mkClient(ID.cOnebox,         'Onebox',                   'Platform development — separate client; 28k pending'),
     mkClient(ID.cHostinger,      'Hostinger',               'Affiliate/referral income from Hostinger partnership'),
+    mkClient(ID.cShivanand,      'Shivanand Kumar',         'Individual client — Blogyouneed website redesign'),
+    mkClient(ID.cPoonam,         'Poonam Manna',            'Individual client — Smishing Analyzer. MSA ZLK-PM-MSA-001 dated 17 Aug 2026, signed 23 Aug 2026; no GST charged'),
   ]);
 
   // ── CONTRACTS ───────────────────────────────────────────────────────────────
@@ -343,9 +353,9 @@ async function main() {
       description: 'Ongoing monthly development contract — maintained by Kanish',
       monthlyAmountPaise: p(22000),
       currency: 'INR',
-      status: 'ACTIVE',
+      status: 'PAUSED',
       startDate: d('2025-01-15'),
-      notes: 'Month-to-month retainer. No fixed end date. Kanish handles all development.',
+      notes: 'Month-to-month retainer, paused — billing stopped after the Jun 20 2026 invoice (ZLK-2026-0046); no Jul/Aug 2026 invoices raised. Kanish handled all development.',
       billingDay: 20,
       createdAt: d('2025-01-01'), updatedAt: new Date(),
     },
@@ -503,7 +513,7 @@ async function main() {
       { uid: ID.uJaya,       role: C, amountINR: 2800, paidINR: 2800, paidAtDate: '2025-12-31' },
     ], 14500, 9200, 'Website development for Sculpt Agency — Geetanjali 2.5k + Jaya 2.8k paid'),
     project(ID.pGKGIndustries, 'GKG Industries Website', 'SP-GKG', ID.cSP, 'COMPLETED', '2025-12-15', '2025-12-30', [{ uid: ID.uGeetanjali, role: L, amountINR: 1800, paidINR: 1800, paidAtDate: '2025-12-30' }], 5000, 3200, 'Industries website development — 1.8k paid to Geetanjali'),
-    project(ID.pStudycrux, 'Studycrux LMS', 'STUDYCRUX', ID.cStartiffy, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L, amountINR: 40000, paidINR: 18500, payments: [{ amountINR: 1500, paidAtDate: '2026-02-01', note: 'Initial payment' }, { amountINR: 5500, paidAtDate: '2026-05-01', note: 'Second payment' }, { amountINR: 5000, paidAtDate: '2026-07-08', note: 'Third payment' }, { amountINR: 2500, paidAtDate: '2026-08-03', note: 'Claude contribution — deducted from LMS balance, no cash paid out' }, { amountINR: 4000, paidAtDate: '2026-08-06', note: 'Fourth payment (Aug)' }] }], 80000, 40000, 'LMS development — dev cost 40k; Shivam budgeted 40k, paid 18.5k (1.5k Feb 1 + 5.5k May 1 + 5k Jul 8 + 2.5k Aug 3 Claude contribution no cash + 4k Aug 6); 55k pending from client',
+    project(ID.pStudycrux, 'Studycrux LMS', 'STUDYCRUX', ID.cStartiffy, 'ACTIVE', '2026-02-01', null, [{ uid: ID.uShivam, role: L, amountINR: 40000, paidINR: 21000, payments: [{ amountINR: 1500, paidAtDate: '2026-02-01', note: 'Initial payment' }, { amountINR: 5500, paidAtDate: '2026-05-01', note: 'Second payment' }, { amountINR: 5000, paidAtDate: '2026-07-08', note: 'Third payment' }, { amountINR: 2500, paidAtDate: '2026-08-03', note: 'Claude contribution — deducted from LMS balance, no cash paid out' }, { amountINR: 4000, paidAtDate: '2026-08-06', note: 'Fourth payment (Aug)' }, { amountINR: 1000, paidAtDate: '2026-08-21', note: 'Fifth payment (Aug)' }, { amountINR: 1500, paidAtDate: '2026-08-25', note: 'Sixth payment (Aug)' }] }], 80000, 40000, 'LMS development — dev cost 40k; Shivam budgeted 40k, paid 21k (1.5k Feb 1 + 5.5k May 1 + 5k Jul 8 + 2.5k Aug 3 Claude contribution no cash + 4k Aug 6 + 1k Aug 21 + 1.5k Aug 25); 55k pending from client',
       [
         { name: 'Advance',     amountINR: 5000,  dueDate: '2026-02-01', status: 'COLLECTED', invoiceId: ID.iStudycrux,   note: 'Initial — Feb 1' },
         { name: 'Milestone 2', amountINR: 20000, dueDate: '2026-05-22', status: 'COLLECTED', invoiceId: ID.iStudycruxM2, note: 'Milestone 2 — May 22' },
@@ -558,7 +568,7 @@ async function main() {
         { id: ID.msRealEstateM3,      name: 'Milestone 3',           amountINR: 21750, dueDate: '2026-08-25', status: 'INVOICED', invoiceId: ID.iInnoCombined, note: 'Milestone 3 — invoiced Aug 11' },
         { name: 'Balance',     amountINR: 39200, status: 'PENDING',   note: 'Balance ₹39,200 not yet invoiced' },
       ]),
-    project(ID.pInnoWebsite, 'Inno Transventive Website', 'INNO-WEBSITE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 11000 }, { uid: ID.uGeetanjali, role: C, amountINR: 11000, paidINR: 5000, paidAtDate: '2026-07-02' }], 30000, 8000, 'Website development — ₹25k final balance invoiced Aug 11 on the combined Inno invoice; ₹11k to Shivam; ₹11k to Geetanjali (5k paid Jul 2, 6k pending)',
+    project(ID.pInnoWebsite, 'Inno Transventive Website', 'INNO-WEBSITE', ID.cInnoTrans, 'ACTIVE', '2026-04-06', null, [{ uid: ID.uShivam, role: L, amountINR: 11000 }, { uid: ID.uGeetanjali, role: C, amountINR: 11000, paidINR: 11000, payments: [{ amountINR: 5000, paidAtDate: '2026-07-02', note: 'Payment 1' }, { amountINR: 6000, paidAtDate: '2026-08-14', note: 'Final balance — Aug 14' }] }], 30000, 8000, 'Website development — ₹25k final balance invoiced Aug 11 on the combined Inno invoice; ₹11k to Shivam; ₹11k to Geetanjali (5k Jul 2 + 6k Aug 14 — fully paid)',
       [
         { name: 'Milestone 1', amountINR: 5000,  dueDate: '2026-05-21', status: 'COLLECTED', invoiceId: ID.iInnoWebsite, note: 'Milestone 1 — May 21' },
         { id: ID.msInnoWebsiteBalance, name: 'Final balance', amountINR: 25000, dueDate: '2026-08-25', status: 'INVOICED', invoiceId: ID.iInnoCombined, note: 'Final balance — invoiced Aug 11 on the combined Inno invoice' },
@@ -603,6 +613,16 @@ async function main() {
         { name: 'Advance',       amountINR: 2000,  dueDate: '2026-02-12', status: 'COLLECTED', invoiceId: ID.iGPower,  note: 'Advance — Feb 12' },
         { name: 'Final Balance', amountINR: 20000, dueDate: '2026-06-26', status: 'INVOICED',  invoiceId: ID.iGPower2, note: 'Final balance — Jun 26' },
       ]),
+    // ── Aug 2026 one-time website jobs ──────────────────────────────────────
+    project(ID.pGreenloop, 'Greenloop India Website', 'SP-GREENLOOP', ID.cSP, 'COMPLETED', '2026-08-20', '2026-08-20', [{ uid: ID.uKanish, role: L }], 2300, 2300, 'One-time website build for Social Parindee — ₹2,300 received Aug 20; single payment, no recurring work.'),
+    project(ID.pBlogyouneed, 'Blogyouneed Website Redesign', 'BLOGYOUNEED', ID.cShivanand, 'COMPLETED', '2026-08-20', '2026-08-25', [{ uid: ID.uKanish, role: L }], 4000, 4000, 'Website redesign for Shivanand Kumar — ₹4,000 collected in two ₹2,000 payments (Aug 20 + Aug 25).'),
+    // ── Smishing Analyzer — Poonam Manna, MSA ZLK-PM-MSA-001 ────────────────
+    project(ID.pSmishing, 'Smishing Analyzer Phase 1 MVP', 'SMISHING', ID.cPoonam, 'ACTIVE', '2026-08-26', null, [{ uid: ID.uKanish, role: L }], 30000, 30000, 'Web tool where a visitor pastes an SMS and gets a smishing risk score, verdict, triggered signals and extracted links/numbers — rule-based engine with an optional AI-assisted layer, no login in Phase 1. Fixed fee ₹30,000, no GST (MSA ZLK-PM-MSA-001, Schedule A). 20–25 working days from the advance. VPS, domain and AI usage run on accounts held by the client.',
+      [
+        { name: 'Kickoff (20%)',    amountINR: 6000,  dueDate: '2026-09-02', status: 'INVOICED', invoiceId: ID.iSmishingM1, note: 'Payable on signing — invoiced Aug 26' },
+        { name: 'Core MVP (40%)',   amountINR: 12000, status: 'PENDING', note: 'Payable once the core MVP is functional and demonstrated on staging' },
+        { name: 'Acceptance (40%)', amountINR: 12000, status: 'PENDING', note: 'Payable on acceptance — final testing, deployment to the client domain and source handover' },
+      ]),
   ]);
 
   // ── INVOICES (client → agency) ───────────────────────────────────────────────
@@ -617,8 +637,9 @@ async function main() {
     issueDate: string, status: string,
     contractId?: Types.ObjectId,
     id?: Types.ObjectId,
+    dueDate?: string,
   ) => {
-    invoices.push(invoice(nextInv(issueDate), cid, pid, contractId, desc, totalINR, pays, issueDate, status, 'INR', id));
+    invoices.push(invoice(nextInv(issueDate), cid, pid, contractId, desc, totalINR, pays, issueDate, status, 'INR', id, dueDate));
   };
 
   // Fenkmat (5500 total, PAID)
@@ -977,6 +998,19 @@ async function main() {
     ID.iInnoCombined,
   ));
 
+  // Greenloop India website — one-time job for Social Parindee (₹2,300, paid Aug 20)
+  inv(ID.cSP, ID.pGreenloop, 'Greenloop India Website (one-time)', 2300,
+    [payment('2026-08-20', 2300, 'Bank Transfer', 'One-time website build')], '2026-08-20', 'PAID');
+
+  // Blogyouneed website redesign — Shivanand Kumar (₹4,000, paid in two instalments)
+  inv(ID.cShivanand, ID.pBlogyouneed, 'Blogyouneed Website Redesign', 4000,
+    [payment('2026-08-20', 2000, 'Bank Transfer', 'Redesign — part 1'),
+     payment('2026-08-25', 2000, 'Bank Transfer', 'Redesign — part 2')], '2026-08-20', 'PAID');
+
+  // Smishing Analyzer — Poonam Manna, M1 Kickoff 20% (₹6,000, issued Aug 26, due in 5 working days)
+  inv(ID.cPoonam, ID.pSmishing, 'Smishing Analyzer Phase 1 MVP — Kickoff (20%)', 6000,
+    [], '2026-08-26', 'SENT', undefined, ID.iSmishingM1, '2026-09-02');
+
   await db.collection('invoices').insertMany(invoices);
   console.log(`[full-seed] Inserted ${invoices.length} invoices`);
 
@@ -1086,11 +1120,17 @@ async function main() {
     ['2026-07', ID.uShivam,     7500],  // Velotra 5k payable (Jul 5), less 2.5k Claude contribution → net 2.5k; + Studycrux 5k (Jul 8)
     ['2026-07', ID.uYatin,      3000],  // Stipend (Jul 3)
     ['2026-07', ID.uSanjana,    3000],  // Final stipend before exit (Jul 10)
+    ['2026-07', ID.uHarsh,      2000],  // Stipend (Jul 16)
     // Aug 2026
     ['2026-08', ID.uJaya,       15000], // Firstrank Milestone 5 payout 17.5k, less 2.5k Claude contribution → net 15k (Aug 3)
     ['2026-08', ID.uSidhak,     9500],  // Gessure Aug maintenance 12k, less 2.5k Claude contribution → net 9.5k (Aug 1)
     ['2026-08', ID.uYatin,      3000],  // Stipend (Aug 3)
-    ['2026-08', ID.uShivam,     4000],  // Studycrux LMS payout (Aug 6)
+    ['2026-08', ID.uShivam,     6500],  // Studycrux LMS payouts: 4k (Aug 6) + 1k (Aug 21) + 1.5k (Aug 25)
+    ['2026-08', ID.uGeetanjali,  6000], // Inno Transventive website final balance (Aug 14)
+    ['2026-08', ID.uHarshika,    3000], // Stipend (Aug 20)
+    ['2026-08', ID.uAmit,        1000], // Stipend (Aug 16)
+    ['2026-08', ID.uHarsh,       2000], // Stipend (Aug 16)
+    ['2026-08', ID.uTanish,      1000], // Stipend (Aug 11)
   ];
 
   // Build payroll runs
@@ -1141,8 +1181,9 @@ async function main() {
     { _id: oid(), date: expD('2026-08-03'), title: 'Claude AI Subscription',          category: 'SOFTWARE',       vendor: 'Anthropic',  amountPaise: p(11266.31), currency: 'INR', description: 'Claude subscription — Aug bill', contributions: [
       claudeContribution(ID.uJaya, 2500, 'Aug'), claudeContribution(ID.uSidhak, 2500, 'Aug'), claudeContribution(ID.uShivam, 2500, 'Aug'),
     ], createdAt: now, updatedAt: now },
+    { _id: oid(), date: expD('2026-08-05'), title: 'VPS Server — Hetzner',           category: 'INFRASTRUCTURE', vendor: 'Hetzner',    amountPaise: p(1781.35),  currency: 'INR', description: 'Monthly VPS subscription', contributions: [], createdAt: now, updatedAt: now },
   ]);
-  console.log('[full-seed] Inserted 9 expense records');
+  console.log('[full-seed] Inserted 10 expense records');
 
   // ── FREELANCER PAYMENTS ──────────────────────────────────────────────────────
   // External freelancers paid per-project (Sampreet = Sculpt owner, Shubham Jain, Jyoti Makwana)
@@ -1212,7 +1253,7 @@ async function main() {
       createdAt: now, updatedAt: now,
     }
   ]);
-  console.log('[full-seed] Inserted 2 more expense records (11 total)');
+  console.log('[full-seed] Inserted 2 more expense records (12 total)');
 
   await mongoose.disconnect();
   console.log('[full-seed] Done ✓');
