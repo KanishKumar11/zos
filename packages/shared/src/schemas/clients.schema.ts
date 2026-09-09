@@ -14,6 +14,7 @@ export const clientContactSchema = z.object({
 export const createClientSchema = z.object({
   name: z.string().min(2).max(200),
   gstin: z.string().max(20).optional(),
+  cin: z.string().max(30).optional(),
   address: z.string().max(500).optional(),
   contacts: z.array(clientContactSchema).optional(),
   notes: z.string().max(20_000).optional(),

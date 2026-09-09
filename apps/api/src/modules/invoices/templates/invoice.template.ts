@@ -1,7 +1,7 @@
 // Invoice PDF template — Zlaark branded design.
 export interface InvoicePdfData {
   agency: { name: string; address?: string; gstin?: string; pan?: string };
-  client: { name: string; company?: string; gstin?: string; address?: string };
+  client: { name: string; company?: string; gstin?: string; cin?: string; address?: string };
   number: string;
   issueDate?: Date;
   dueDate?: Date;
@@ -291,7 +291,7 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
 </head>
 <body>
 <div class="grain"></div>
-<div style="position:relative;z-index:1;padding:44px 62px 30px;max-width:820px;margin:0 auto">
+<div style="position:relative;z-index:1;padding:44px 62px 4px;max-width:820px;margin:0 auto">
 
   <!-- Masthead: logo · invoice meta, closed by a hairline rule -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -314,6 +314,7 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
       data.client.company ? data.client.name : undefined,
       data.client.address,
       data.client.gstin ? `GSTIN ${data.client.gstin}` : undefined,
+      data.client.cin ? `CIN ${data.client.cin}` : undefined,
     ])}
     ${party('From', C.hair, data.agency.name, [
       data.agency.address,
@@ -396,7 +397,7 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
   ${closingHtml}
 
   <!-- Footer: signature rail · labelled contact -->
-  <div style="margin-top:30px;padding-top:20px;border-top:1px solid ${C.hair};display:flex;justify-content:space-between;align-items:flex-end;${NOBREAK}">
+  <div style="margin-top:22px;padding-top:20px;border-top:1px solid ${C.hair};display:flex;justify-content:space-between;align-items:flex-end;${NOBREAK}">
     <div style="border-left:2px solid ${C.brand};padding-left:15px">
       <p style="font-size:14px;font-weight:700;color:${C.ink}">Kanish Kumar</p>
       <p style="${MICRO};color:${C.inkSoft};margin-top:4px;letter-spacing:0.14em">Founder, Zlaark</p>

@@ -269,6 +269,7 @@ export class InvoicesService {
       client: {
         name: client?.name ?? 'Client',
         gstin: client?.gstin || undefined,
+        cin: client?.cin || undefined,
         address: client?.address || undefined,
       },
       number: inv.number,

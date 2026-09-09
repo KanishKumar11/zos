@@ -60,6 +60,7 @@ function Inner({ id }: { id: string }) {
       editForm.reset({
         name: c.data.name,
         gstin: c.data.gstin,
+        cin: c.data.cin,
         address: c.data.address,
         notes: c.data.notes,
         contacts: c.data.contacts,
@@ -102,6 +103,10 @@ function Inner({ id }: { id: string }) {
               <div className="space-y-1">
                 <Label>GSTIN</Label>
                 <Input {...editForm.register('gstin')} />
+              </div>
+              <div className="space-y-1">
+                <Label>CIN</Label>
+                <Input {...editForm.register('cin')} />
               </div>
             </div>
             <div className="space-y-1">

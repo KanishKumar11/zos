@@ -24,6 +24,7 @@ export interface ClientRow {
   _id: string;
   name: string;
   gstin: string;
+  cin: string;
   address: string;
   contacts: ClientContactRow[];
   notes: string;

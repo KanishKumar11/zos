@@ -15,6 +15,7 @@ const ClientContactSchema = SchemaFactory.createForClass(ClientContact);
 export class Client {
   @Prop({ required: true, index: true }) name!: string;
   @Prop({ default: '' }) gstin!: string;
+  @Prop({ default: '' }) cin!: string;
   @Prop({ default: '' }) address!: string;
   @Prop({ type: [ClientContactSchema], default: [] }) contacts!: ClientContact[];
   @Prop({ default: '' }) notes!: string;

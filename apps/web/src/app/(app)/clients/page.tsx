@@ -94,6 +94,10 @@ function Inner() {
                 <Input {...form.register('gstin')} />
               </div>
               <div className="space-y-1">
+                <Label>CIN</Label>
+                <Input {...form.register('cin')} />
+              </div>
+              <div className="space-y-1">
                 <Label>Address</Label>
                 <Input {...form.register('address')} />
               </div>
