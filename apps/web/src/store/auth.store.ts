@@ -11,6 +11,8 @@ export interface AuthUser {
   name: string;
   role: Role;
   avatarUrl?: string;
+  /** CLIENT role only — the client company this portal user belongs to. */
+  clientId?: string;
 }
 
 interface AuthState {

@@ -1,452 +1,326 @@
+// Contract — terms, billing history and one-click monthly invoices (OWNER).
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { AlertTriangle, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import type { z } from 'zod';
-import { ArrowRight, Calendar, DollarSign, FileText, Plus } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
 
-import { ContractStatus, Role, updateContractSchema } from '@agency/shared';
+import { ContractStatus, InvoiceStatus, Role } from '@agency/shared';
 
-type UpdateContractForm = z.input<typeof updateContractSchema>;
+import { ApiRequestError } from '@/lib/api-client';
+import { thisMonthLocal } from '@/lib/form';
+import { formatDate, formatPaise } from '@/lib/formatters';
 
 import { RoleGate } from '@/components/auth/role-gate';
+import { DataTable, type Column } from '@/components/data/data-table';
+import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { formatPaise, formatDate } from '@/lib/formatters';
-
-import { PageHeader } from '@/components/layout/page-header';
-import {
-  useContract,
-  useDeleteContract,
-  useGenerateContractInvoice,
-  useUpdateContract,
-} from '@/features/contracts/contracts.hooks';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { StatCard } from '@/components/ui/stat-card';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
 import { useClients } from '@/features/clients/clients.hooks';
-import { useInvoices } from '@/features/invoices/invoices.hooks';
-
-const STATUS_COLORS: Record<ContractStatus, string> = {
-  [ContractStatus.ACTIVE]: 'bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]',
-  [ContractStatus.PAUSED]: 'bg-amber-600/10 text-amber-600',
-  [ContractStatus.COMPLETED]: 'bg-muted text-muted-foreground',
-};
-
-const STATUS_LABELS: Record<ContractStatus, string> = {
-  [ContractStatus.ACTIVE]: 'Active',
-  [ContractStatus.PAUSED]: 'Paused',
-  [ContractStatus.COMPLETED]: 'Completed',
-};
+import {
+  CONTRACT_STATUS_TONE,
+  contractStatusLabel,
+  daysToEnd,
+  defaultGst,
+  dueThisMonth,
+  endsSoon,
+  monthLabel,
+} from '@/features/contracts/contract-utils';
+import { ContractFormDialog } from '@/features/contracts/contract-form-dialog';
+import { useContract, useDeleteContract } from '@/features/contracts/contracts.hooks';
+import { GenerateInvoiceDialog } from '@/features/contracts/generate-invoice-dialog';
+import { useInvoices, type InvoiceRow } from '@/features/invoices/invoices.hooks';
 
 export default function ContractDetailPage() {
   const params = useParams();
-  const contractId = params.id as string;
-
   return (
-    <RoleGate
-      allow={[Role.OWNER]}
-      fallback={<p className="text-sm text-muted-foreground">Restricted.</p>}
-    >
-      <Inner contractId={contractId} />
+    <RoleGate allow={[Role.OWNER]} fallback={<p className="text-sm text-muted-foreground">Restricted.</p>}>
+      <Inner contractId={params.id as string} />
     </RoleGate>
   );
 }
 
+/** Drafts aren't issued yet and written-off invoices won't be paid — neither counts as billed. */
+const NOT_BILLED = new Set<string>([InvoiceStatus.DRAFT, InvoiceStatus.WRITTEN_OFF]);
+
+/**
+ * This contract's slice of an invoice. Invoices linked only at the header bill the
+ * contract in full; a combined invoice bills it through its own lines, and payments
+ * are split in proportion to those lines.
+ */
+function contractShare(inv: InvoiceRow, contractId: string): { billedPaise: number; sharePaidPaise: number } {
+  const lines = inv.lineItems.filter((li) => li.contractId === contractId);
+  if (lines.length === 0) return { billedPaise: inv.totalPaise, sharePaidPaise: inv.paidPaise };
+  const lineTotal = lines.reduce((s, li) => s + Math.round(li.qty * li.unitPaise), 0);
+  const ratio = inv.subTotalPaise > 0 ? lineTotal / inv.subTotalPaise : 0;
+  return {
+    billedPaise: Math.round(inv.totalPaise * ratio),
+    sharePaidPaise: Math.round(inv.paidPaise * ratio),
+  };
+}
+
+type HistoryRow = InvoiceRow & { billedPaise: number; sharePaidPaise: number };
+
 function Inner({ contractId }: { contractId: string }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const contract = useContract(contractId);
   const clients = useClients();
   const invoices = useInvoices({ contractId });
-  const generateInvoice = useGenerateContractInvoice();
-  const update = useUpdateContract();
   const del = useDeleteContract();
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [editOpen, setEditOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
 
-  const editForm = useForm<UpdateContractForm>({
-    resolver: zodResolver(updateContractSchema) as never,
-  });
-
-  useEffect(() => {
-    if (contract.data) {
-      editForm.reset({
-        name: contract.data.name,
-        clientId: contract.data.clientId,
-        description: contract.data.description,
-        monthlyAmountPaise: contract.data.monthlyAmountPaise,
-        currency: contract.data.currency,
-        status: contract.data.status,
-        startDate: contract.data.startDate?.slice(0, 10),
-        endDate: contract.data.endDate?.slice(0, 10),
-        notes: contract.data.notes,
-        billingDay: contract.data.billingDay,
-      } as never);
-    }
-  }, [contract.data]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onEditSubmit = editForm.handleSubmit((values) => {
-    update.mutate({ id: contractId, body: values as never }, { onSuccess: () => setEditOpen(false) });
-  });
-
-  const clientName = clients.data?.find((c) => c._id === contract.data?.clientId)?.name;
-  const contractInvoices = invoices.data || [];
-  const totalBilled = contractInvoices.reduce((sum, inv) => sum + inv.totalPaise, 0);
-  const totalPaid = contractInvoices.reduce((sum, inv) => sum + inv.paidPaise, 0);
-  const totalOutstanding = totalBilled - totalPaid;
-
-  if (contract.isLoading) {
+  if (contract.isLoading) return <PageSkeleton />;
+  if (contract.error || !contract.data) {
+    const notFound = contract.error instanceof ApiRequestError && contract.error.status === 404;
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-64" />
-      </div>
-    );
-  }
-
-  if (!contract.data) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-        <p className="text-sm text-red-800">Contract not found</p>
+      <div className="space-y-5">
+        <PageHeader title={notFound ? 'Contract not found' : 'Contract'} crumbs={[{ label: 'Contracts', href: '/contracts' }]} />
+        {notFound ? (
+          <EmptyState
+            icon={FileText}
+            title="This contract doesn’t exist or was deleted"
+            action={
+              <Button size="sm" variant="outline" asChild>
+                <Link href="/contracts">Back to contracts</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <ErrorState error={contract.error} onRetry={() => contract.refetch()} />
+        )}
       </div>
     );
   }
 
   const c = contract.data;
+  const client = clients.data?.find((cl) => cl._id === c.clientId);
+  const clientLabel = client?.name ?? (clients.isLoading ? '…' : 'Deleted client');
+  const month = thisMonthLocal();
+  const d = daysToEnd(c);
+
+  const history: HistoryRow[] = (invoices.data ?? [])
+    .map((inv) => ({ ...inv, ...contractShare(inv, contractId) }))
+    .sort((a, b) => (b.issueDate ?? '').localeCompare(a.issueDate ?? ''));
+  const counted = history.filter((inv) => !NOT_BILLED.has(inv.status));
+  const billed = counted.reduce((s, inv) => s + inv.billedPaise, 0);
+  const paid = counted.reduce((s, inv) => s + inv.sharePaidPaise, 0);
+  const outstanding = Math.max(0, billed - paid);
+  const drafts = history.filter((inv) => inv.status === InvoiceStatus.DRAFT).length;
+
+  const remove = async () => {
+    const ok = await confirm({
+      title: `Delete ${c.name}?`,
+      description: 'Invoices already generated from it stay as they are, but you won’t be able to bill this contract again.',
+      confirmText: 'Delete contract',
+      destructive: true,
+    });
+    if (ok) del.mutate(contractId, { onSuccess: () => router.push('/contracts') });
+  };
+
+  const columns: Column<HistoryRow>[] = [
+    {
+      id: 'number',
+      header: 'Invoice',
+      cell: (inv) => (
+        <Link href={`/invoices/${inv._id}`} className="font-mono text-[13px] hover:underline">
+          {inv.number}
+        </Link>
+      ),
+    },
+    {
+      id: 'month',
+      header: 'For',
+      cell: (inv) => (inv.issueDate ? monthLabel(inv.issueDate.slice(0, 7)) : '—'),
+    },
+    { id: 'status', header: 'Status', cell: (inv) => <StatusBadge status={inv.status} /> },
+    {
+      id: 'due',
+      header: 'Due',
+      hideBelow: 'md',
+      cell: (inv) => (inv.dueDate ? formatDate(inv.dueDate) : <span className="text-muted-foreground">—</span>),
+    },
+    {
+      id: 'amount',
+      header: 'Amount',
+      align: 'right',
+      cell: (inv) => (
+        <span className={NOT_BILLED.has(inv.status) ? 'text-muted-foreground' : undefined}>{formatPaise(inv.billedPaise, inv.currency || c.currency)}</span>
+      ),
+      footer: formatPaise(billed, c.currency),
+    },
+    {
+      id: 'paid',
+      header: 'Paid',
+      align: 'right',
+      cell: (inv) => formatPaise(inv.sharePaidPaise, inv.currency || c.currency),
+      footer: formatPaise(paid, c.currency),
+    },
+  ];
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={c.name}
-        description={c.description}
+        crumbs={[
+          { label: 'Contracts', href: '/contracts' },
+          ...(client ? [{ label: client.name, href: `/contracts?clientId=${client._id}` }] : []),
+        ]}
+        description={c.description || undefined}
+        meta={
+          <>
+            <Badge variant={CONTRACT_STATUS_TONE[c.status]}>{contractStatusLabel(c.status)}</Badge>
+            {endsSoon(c) && <Badge variant="warning">{d === 0 ? 'Ends today' : `Ends in ${d} day${d === 1 ? '' : 's'}`}</Badge>}
+            {c.status === ContractStatus.ACTIVE && d !== undefined && d < 0 && <Badge variant="danger">Past end date</Badge>}
+          </>
+        }
         action={
-          <div className="flex items-center gap-2">
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-            />
-            <Button
-              onClick={() =>
-                generateInvoice.mutate(
-                  { id: contractId, month: selectedMonth },
-                  { onSuccess: (data) => router.push(`/invoices/${data._id}`) },
-                )
-              }
-              disabled={generateInvoice.isPending}
-              size="sm"
-            >
-              <Plus className="mr-1 h-4 w-4" />
-              {generateInvoice.isPending ? 'Generating…' : 'Generate Invoice'}
+          <>
+            <Button size="sm" onClick={() => setGenerateOpen(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Generate invoice
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-              Edit
+            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)}>
-              Delete
+            <Button size="sm" variant="outline" onClick={() => void remove()} disabled={del.isPending}>
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
             </Button>
-          </div>
+          </>
         }
       />
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit contract</DialogTitle>
-          </DialogHeader>
-          <form className="grid gap-3" onSubmit={onEditSubmit}>
-            <div className="space-y-1">
-              <Label>Name</Label>
-              <Input {...editForm.register('name')} />
-            </div>
-            <div className="space-y-1">
-              <Label>Client</Label>
-              <select
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                {...editForm.register('clientId')}
-              >
-                {(clients.data ?? []).map((cl) => (
-                  <option key={cl._id} value={cl._id}>
-                    {cl.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Description</Label>
-              <Input {...editForm.register('description')} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Monthly amount (paise)</Label>
-                <Input type="number" {...editForm.register('monthlyAmountPaise', { valueAsNumber: true })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Currency</Label>
-                <Input {...editForm.register('currency')} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Start date</Label>
-                <Input type="date" {...editForm.register('startDate')} />
-              </div>
-              <div className="space-y-1">
-                <Label>End date</Label>
-                <Input type="date" {...editForm.register('endDate')} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Status</Label>
-                <select
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  {...editForm.register('status')}
-                >
-                  {(Object.values(ContractStatus) as ContractStatus[]).map((s) => (
-                    <option key={s} value={s}>
-                      {STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label>Billing day</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={28}
-                  placeholder="e.g. 1"
-                  {...editForm.register('billingDay', { valueAsNumber: true })}
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <textarea
-                className="min-h-20 w-full rounded border bg-background px-3 py-2 text-sm"
-                {...editForm.register('notes')}
-              />
-            </div>
-            <DialogFooter>
-              <Button type="submit" disabled={update.isPending}>
-                {update.isPending ? 'Saving…' : 'Save changes'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {dueThisMonth(c, month) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-600/30 bg-amber-600/5 px-4 py-3 text-sm">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            {monthLabel(month)} hasn’t been invoiced yet.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => setGenerateOpen(true)}>
+            Bill {monthLabel(month)}
+          </Button>
+        </div>
+      )}
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete contract</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Delete <span className="font-medium text-foreground">{c.name}</span>? This cannot be undone.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={del.isPending}
-              onClick={() => del.mutate(contractId, { onSuccess: () => router.push('/contracts') })}
-            >
-              {del.isPending ? 'Deleting…' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge className={STATUS_COLORS[c.status]}>
-              {STATUS_LABELS[c.status]}
-            </Badge>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Client</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Link href={`/clients/${c.clientId}`} className="font-semibold hover:underline">
-              {clientName}
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Monthly Amount</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold">{formatPaise(c.monthlyAmountPaise)}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Start Date</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold">{c.startDate ? formatDate(c.startDate) : '—'}</span>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Monthly amount" value={formatPaise(c.monthlyAmountPaise, c.currency)} hint={`+ ${defaultGst(c)}% GST by default`} />
+        <StatCard
+          label="Billed"
+          loading={invoices.isLoading}
+          value={formatPaise(billed, c.currency)}
+          hint={drafts ? `${drafts} draft${drafts === 1 ? '' : 's'} not counted` : `${counted.length} invoice${counted.length === 1 ? '' : 's'} issued`}
+        />
+        <StatCard label="Collected" loading={invoices.isLoading} tone={paid ? 'success' : 'default'} value={formatPaise(paid, c.currency)} />
+        <StatCard label="Outstanding" loading={invoices.isLoading} tone={outstanding ? 'warning' : 'default'} value={formatPaise(outstanding, c.currency)} />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Contract Details
-          </CardTitle>
+          <CardTitle className="text-base">Terms</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {c.notes && (
+        <CardContent>
+          <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Notes</p>
-              <p className="mt-1 text-sm">{c.notes}</p>
+              <dt className="text-xs text-muted-foreground">Client</dt>
+              <dd className="mt-0.5">
+                {client ? (
+                  <Link href={`/clients/${client._id}`} className="font-medium hover:underline">
+                    {client.name}
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">{clientLabel}</span>
+                )}
+              </dd>
             </div>
-          )}
-          {c.endDate && (
             <div>
-              <p className="text-sm font-medium text-muted-foreground">End Date</p>
-              <p className="mt-1 text-sm">{formatDate(c.endDate)}</p>
+              <dt className="text-xs text-muted-foreground">Term</dt>
+              <dd className="mt-0.5">
+                {c.startDate ? formatDate(c.startDate) : 'No start date'} – {c.endDate ? formatDate(c.endDate) : 'ongoing'}
+              </dd>
             </div>
-          )}
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Currency</p>
-            <p className="mt-1 text-sm">{c.currency}</p>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Billing Reminder</p>
-            {c.billingDay ? (
-              <p className="mt-1 text-sm">Day {c.billingDay} of every month</p>
-            ) : (
-              <p className="mt-1 text-sm text-amber-600">
-                No billing day set — this contract won&apos;t trigger a dashboard invoicing reminder. Click Edit to set one.
-              </p>
+            <div>
+              <dt className="text-xs text-muted-foreground">Billing reminder</dt>
+              <dd className="mt-0.5">
+                {c.billingDay ? (
+                  `Day ${c.billingDay} of every month`
+                ) : (
+                  <span className="text-amber-600">
+                    Not set — no dashboard reminder.{' '}
+                    <button type="button" className="underline" onClick={() => setEditOpen(true)}>
+                      Set a day
+                    </button>
+                  </span>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">GST on invoices</dt>
+              <dd className="mt-0.5">
+                {defaultGst(c)}%{typeof c.gstPercent !== 'number' && <span className="text-muted-foreground"> (default)</span>}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Currency</dt>
+              <dd className="mt-0.5">{c.currency}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Payment terms</dt>
+              <dd className="mt-0.5">
+                {client ? (client.paymentTermsDays === 0 ? 'Due on receipt' : `Net ${client.paymentTermsDays ?? 15}`) : '—'}
+              </dd>
+            </div>
+            {c.notes && (
+              <div className="sm:col-span-2 lg:col-span-3">
+                <dt className="text-xs text-muted-foreground">Notes</dt>
+                <dd className="mt-0.5 whitespace-pre-line">{c.notes}</dd>
+              </div>
             )}
-          </div>
+          </dl>
         </CardContent>
       </Card>
 
-      {contractInvoices.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Contract Financials</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-lg border p-4">
-                <p className="text-sm font-medium text-muted-foreground">Total Billed</p>
-                <p className="mt-2 text-2xl font-bold">{formatPaise(totalBilled)}</p>
-              </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-sm font-medium text-muted-foreground">Paid</p>
-                <p className="mt-2 text-2xl font-bold text-green-600">{formatPaise(totalPaid)}</p>
-              </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-sm font-medium text-muted-foreground">Outstanding</p>
-                <p className="mt-2 text-2xl font-bold text-orange-600">{formatPaise(totalOutstanding)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">Billing history</h2>
+          {history.length > 0 && <p className="text-xs text-muted-foreground">Drafts and written-off invoices aren’t counted in the totals.</p>}
+        </div>
+        <DataTable
+          columns={columns}
+          rows={history}
+          rowKey={(inv) => inv._id}
+          loading={invoices.isLoading}
+          error={invoices.error}
+          onRetry={() => invoices.refetch()}
+          rowHref={(inv) => `/invoices/${inv._id}`}
+          showFooter={counted.length > 0}
+          empty={
+            <EmptyState
+              icon={FileText}
+              title="No invoices yet"
+              description="Generate this month’s invoice in one click — it starts as a draft you can review."
+              action={
+                <Button size="sm" onClick={() => setGenerateOpen(true)}>
+                  Generate invoice
+                </Button>
+              }
+            />
+          }
+        />
+      </div>
 
-      {contractInvoices.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Linked Invoices ({contractInvoices.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Invoice #</TH>
-                    <TH>Project</TH>
-                    <TH>Amount</TH>
-                    <TH>Paid</TH>
-                    <TH>Status</TH>
-                    <TH></TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {contractInvoices.map((inv) => (
-                    <TR key={inv._id}>
-                      <TD className="font-mono text-sm">{inv.number}</TD>
-                      <TD className="text-sm">
-                        {inv.projectId ? (
-                          <Link
-                            href={`/projects/${inv.projectId}`}
-                            className="text-primary hover:underline"
-                          >
-                            View Project
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TD>
-                      <TD className="font-semibold">{formatPaise(inv.totalPaise)}</TD>
-                      <TD>{formatPaise(inv.paidPaise)}</TD>
-                      <TD>
-                        <Badge variant="outline">{inv.status}</Badge>
-                      </TD>
-                      <TD>
-                        <Link
-                          href={`/invoices/${inv._id}`}
-                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                        >
-                          View <ArrowRight className="h-3 w-3" />
-                        </Link>
-                      </TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {contractInvoices.length === 0 && (
-        <Card>
-          <CardContent className="pt-6 text-center">
-            <p className="text-sm text-muted-foreground">No invoices linked to this contract</p>
-          </CardContent>
-        </Card>
-      )}
+      <ContractFormDialog open={editOpen} onOpenChange={setEditOpen} contract={c} />
+      <GenerateInvoiceDialog
+        contract={c}
+        open={generateOpen}
+        onOpenChange={setGenerateOpen}
+        onGenerated={(inv) => router.push(`/invoices/${inv._id}`)}
+      />
     </div>
   );
 }

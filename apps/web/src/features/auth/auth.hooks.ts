@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
+import { getErrorMessage } from '@/lib/api-client';
 import { queryKeys } from '@/lib/query-keys';
+import { homeForRole, isPortalPath } from '@/lib/route-rules';
 import { useAuthStore } from '@/store/auth.store';
 
 import { authApi, type LoginPayload } from './auth.api';
@@ -23,6 +25,16 @@ export function useMe() {
   });
 }
 
+/** Honour ?next= from the login redirect, but only for a same-site path in the role's own area. */
+function postLoginPath(role: string): string {
+  const home = homeForRole(role);
+  if (typeof window === 'undefined') return home;
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return home;
+  if ((role === 'CLIENT') !== isPortalPath(next)) return home;
+  return next;
+}
+
 export function useLogin() {
   const router = useRouter();
   const qc = useQueryClient();
@@ -33,12 +45,9 @@ export function useLogin() {
       const me = await authApi.me();
       useAuthStore.getState().setUser(me);
       toast.success(`Welcome back, ${me.name}`);
-      router.push('/dashboard');
+      router.push(postLoginPath(me.role));
     },
-    onError: (err: { error?: { message?: string } } | Error) => {
-      const msg = (err as { error?: { message?: string } })?.error?.message ?? 'Login failed';
-      toast.error(msg);
-    },
+    onError: (err) => toast.error(getErrorMessage(err, 'Login failed')),
   });
 }
 
@@ -56,10 +65,17 @@ export function useLogout() {
   });
 }
 
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+      authApi.changePassword(input),
+    onSuccess: () => toast.success('Password changed. Other devices have been signed out.'),
+  });
+}
+
 export function useForgotPassword() {
   return useMutation({
     mutationFn: (input: { email: string }) => authApi.forgotPassword(input),
-    onSuccess: () => toast.success('If that email exists, a reset link has been sent.'),
   });
 }
 
@@ -80,6 +96,8 @@ export function useAcceptInvite() {
   return useMutation({
     mutationFn: (input: { token: string; password: string; name?: string; phone?: string }) =>
       authApi.acceptInvite(input),
+    // The page shows the error inline; skip the global toast.
+    onError: () => undefined,
     onSuccess: () => {
       toast.success('Account activated. Please log in.');
       router.push('/login');

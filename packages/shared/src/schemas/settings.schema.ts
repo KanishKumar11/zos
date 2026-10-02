@@ -20,6 +20,8 @@ export const updateSettingsSchema = z.object({
   country: z.string().max(100).optional(),
   gstin: z.string().max(20).optional(),
   pan: z.string().max(20).optional(),
+  /** Payroll: count working days with no attendance record as unpaid (LOP). Off by default. */
+  treatMissingAttendanceAsAbsent: z.boolean().optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 

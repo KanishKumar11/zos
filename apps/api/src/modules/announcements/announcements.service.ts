@@ -1,11 +1,13 @@
 // AnnouncementsService — CRUD + audience fanout to notifications.
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { type FilterQuery, Model, Types } from 'mongoose';
 
 import {
   AudienceType,
   NotificationType,
+  Role,
+  canSignIn,
   type CreateAnnouncementInput,
   type UpdateAnnouncementInput,
 } from '@agency/shared';
@@ -24,12 +26,39 @@ export class AnnouncementsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  list(): Promise<AnnouncementDocument[]> {
-    return this.model.find().sort({ pinned: -1, createdAt: -1 }).exec();
+  /** Announcements this viewer is in the audience for (owner/admin see everything). */
+  private async audienceFilter(viewer: { sub: string; role: Role }): Promise<FilterQuery<AnnouncementDocument>> {
+    if (viewer.role === Role.OWNER || viewer.role === Role.ADMIN) return {};
+    const me = await this.users.byId(viewer.sub);
+    const uid = new Types.ObjectId(viewer.sub);
+    return {
+      $or: [
+        { audienceType: AudienceType.ALL },
+        { audienceType: AudienceType.ROLE, audienceRoles: viewer.role },
+        // Old ROLE posts stored role names in audienceIds and never matched anyone — show them to everyone.
+        { audienceType: AudienceType.ROLE, audienceRoles: { $size: 0 } },
+        ...(me?.departmentId ? [{ audienceType: AudienceType.DEPARTMENT, audienceIds: me.departmentId }] : []),
+        { audienceType: AudienceType.USERS, audienceIds: uid },
+        { createdBy: uid },
+      ],
+    };
   }
 
-  async byId(id: string): Promise<AnnouncementDocument> {
-    const doc = await this.model.findById(id).exec();
+  async list(viewer: { sub: string; role: Role }) {
+    const docs = await this.model.find(await this.audienceFilter(viewer)).sort({ pinned: -1, createdAt: -1 }).limit(200).exec();
+    const isManager = viewer.role === Role.OWNER || viewer.role === Role.ADMIN;
+    return docs.map((d) => {
+      const json = d.toJSON() as Record<string, unknown>;
+      // Others only learn whether *they* have read it.
+      return isManager
+        ? { ...json, readCount: d.readBy.length }
+        : { ...json, readBy: d.readBy.filter((r) => r.userId.toString() === viewer.sub) };
+    });
+  }
+
+  async byId(id: string, viewer?: { sub: string; role: Role }): Promise<AnnouncementDocument> {
+    const filter = viewer ? await this.audienceFilter(viewer) : {};
+    const doc = await this.model.findOne({ _id: id, ...filter }).exec();
     if (!doc) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Announcement not found' });
     return doc;
   }
@@ -40,6 +69,7 @@ export class AnnouncementsService {
       body: input.body,
       audienceType: input.audienceType,
       audienceIds: (input.audienceIds ?? []).map((id) => new Types.ObjectId(id)),
+      audienceRoles: input.audienceRoles ?? [],
       pinned: input.pinned ?? false,
       createdBy: new Types.ObjectId(actorId),
       publishedAt: new Date(),
@@ -53,6 +83,7 @@ export class AnnouncementsService {
     if (input.audienceIds) {
       patch.audienceIds = input.audienceIds.map((aid) => new Types.ObjectId(aid));
     }
+    if (input.audienceRoles) patch.audienceRoles = input.audienceRoles;
     const doc = await this.model.findByIdAndUpdate(id, patch, { new: true }).exec();
     if (!doc) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Announcement not found' });
     return doc;
@@ -64,8 +95,8 @@ export class AnnouncementsService {
   }
 
   /** Mark announcement as read by user (idempotent). Returns updated readBy length. */
-  async markRead(id: string, userId: string): Promise<{ ok: true; readCount: number }> {
-    const doc = await this.byId(id);
+  async markRead(id: string, userId: string, role: Role): Promise<{ ok: true; readCount: number }> {
+    const doc = await this.byId(id, { sub: userId, role });
     const uid = new Types.ObjectId(userId);
     const exists = doc.readBy.some((r) => r.userId.toString() === userId);
     if (!exists) {
@@ -78,18 +109,19 @@ export class AnnouncementsService {
   // --- audience resolution -------------------------------------------------
 
   private async resolveRecipients(doc: AnnouncementDocument): Promise<string[]> {
+    const staff = (u: { role: Role; status: string }) => u.role !== Role.CLIENT && canSignIn(u.status as never);
     if (doc.audienceType === AudienceType.ALL) {
       const users = await this.users.list({}, { limit: 5000 });
-      return users.map((u) => u.id);
+      return users.filter(staff).map((u) => u.id);
     }
     if (doc.audienceType === AudienceType.USERS) {
       return doc.audienceIds.map((id) => id.toString());
     }
     if (doc.audienceType === AudienceType.ROLE) {
       const recipients = new Set<string>();
-      for (const role of doc.audienceIds.map((r) => r.toString())) {
+      for (const role of doc.audienceRoles ?? []) {
         const users = await this.users.list({ role }, { limit: 5000 });
-        users.forEach((u) => recipients.add(u.id));
+        users.filter(staff).forEach((u) => recipients.add(u.id));
       }
       return [...recipients];
     }
@@ -97,7 +129,7 @@ export class AnnouncementsService {
       const recipients = new Set<string>();
       for (const dept of doc.audienceIds) {
         const users = await this.users.list({ departmentId: dept }, { limit: 5000 });
-        users.forEach((u) => recipients.add(u.id));
+        users.filter(staff).forEach((u) => recipients.add(u.id));
       }
       return [...recipients];
     }
@@ -112,10 +144,23 @@ export class AnnouncementsService {
         userId,
         type: NotificationType.ANNOUNCEMENT_POSTED,
         title: doc.title,
-        body: doc.body.slice(0, 280),
+        body: toPlainText(doc.body).slice(0, 280),
         data: { announcementId: doc.id },
-        linkPath: `/announcements/${doc.id}`,
+        linkPath: '/announcements',
       })),
     );
   }
+}
+
+/** Notification previews are plain text — drop tags and collapse whitespace. */
+function toPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>|<\/(p|li|h[1-6])>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

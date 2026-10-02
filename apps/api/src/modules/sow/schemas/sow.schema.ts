@@ -37,7 +37,10 @@ export class Sow {
   @Prop({ required: true, type: Number }) totalValuePaise!: number;
   @Prop({ default: 'INR' }) currency!: string;
   @Prop({ type: String }) documentKey?: string;
+  @Prop({ type: String }) documentContentType?: string;
   @Prop({ type: SowBriefSchema }) brief?: SowBrief;
+  /** Sent to the client for signature. */
+  @Prop({ type: Date }) sentAt?: Date;
   @Prop({ type: Date }) signedAt?: Date;
   @Prop({ type: Date }) deletedAt?: Date;
 }

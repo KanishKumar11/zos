@@ -1,10 +1,14 @@
 // UsersService — full domain ops for team management.
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Types } from 'mongoose';
 
 import {
+  AuditAction,
+  EVENT_NAMES,
   Role,
   UserStatus,
+  canSignIn,
   type AdminUpdateUserInput,
   type ListUsersQuery,
   type OnboardingPatchInput,
@@ -13,6 +17,7 @@ import {
 } from '@agency/shared';
 
 import { ErrorCodes } from '@/common/constants/error-codes';
+import { emitAudit } from '@/common/utils/audit.util';
 import { Paginated, paginate } from '@/common/utils/pagination.util';
 
 import { StorageService } from '../storage/storage.service';
@@ -24,7 +29,14 @@ export class UsersService {
   constructor(
     private readonly repo: UsersRepository,
     private readonly storage: StorageService,
+    private readonly events: EventEmitter2,
   ) {}
+
+  /** Bumps the token version and tells auth to end every open session for this user. */
+  private async revokeAccess(id: string): Promise<void> {
+    await this.repo.bumpTokenVersion(id);
+    this.events.emit(EVENT_NAMES.user.accessRevoked, { userId: id });
+  }
 
   findByEmail(email: string) {
     return this.repo.byEmail(email);
@@ -48,21 +60,27 @@ export class UsersService {
     const page = q.page ?? 1;
     const pageSize = q.pageSize ?? 20;
     const filter: Record<string, unknown> = {};
-    if (q.role) filter.role = q.role;
+    // Portal (client) users only appear when asked for explicitly — they aren't team members.
+    filter.role = q.role ?? { $ne: Role.CLIENT };
     if (q.status) filter.status = q.status;
     if (q.departmentId) filter.departmentId = new Types.ObjectId(q.departmentId);
     if (q.q) {
       const re = new RegExp(q.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       filter.$or = [{ name: re }, { email: re }];
     }
+    const [sortBy, sortDir] = (q.sort ?? 'createdAt:desc').split(':') as [string, string];
+    const sort: Record<string, 1 | -1> = { [sortBy]: sortDir === 'asc' ? 1 : -1 };
+    if (sortBy !== 'name') sort.name = 1;
     const [items, total] = await Promise.all([
-      this.repo.list(filter, { skip: (page - 1) * pageSize, limit: pageSize }),
+      this.repo.list(filter, { skip: (page - 1) * pageSize, limit: pageSize, sort }),
       this.repo.count(filter),
     ]);
     return paginate(items, total, page, pageSize);
   }
 
-  async updateProfile(id: string, patch: UpdateProfileInput): Promise<UserDocument> {
+  /** Self-service callers pass the narrower UpdateProfileInput — zod has already dropped employment fields. */
+  async updateProfile(id: string, input: UpdateProfileInput | AdminUpdateUserInput): Promise<UserDocument> {
+    const patch = input as AdminUpdateUserInput;
     const cleaned: Partial<User> = { ...(patch as Partial<User>) };
     if (patch.dateOfBirth) cleaned.dateOfBirth = new Date(patch.dateOfBirth);
     if (patch.dateOfJoining) cleaned.dateOfJoining = new Date(patch.dateOfJoining);
@@ -86,31 +104,129 @@ export class UsersService {
     if (patch.role === Role.OWNER && actor.role !== Role.OWNER) {
       throw new ForbiddenException({ code: ErrorCodes.FORBIDDEN, message: 'Only OWNER can grant OWNER role' });
     }
-    await this.updateProfile(id, patch as UpdateProfileInput);
+    if (id === actor.sub && patch.status && !canSignIn(patch.status)) {
+      throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'You cannot deactivate yourself' });
+    }
+    if (actor.role !== Role.OWNER && (patch.role || patch.status)) {
+      const target = await this.findByIdOrThrow(id);
+      if (target.role === Role.OWNER) {
+        throw new ForbiddenException({ code: ErrorCodes.FORBIDDEN, message: 'Only the owner can change an owner account' });
+      }
+    }
+    const before = await this.findByIdOrThrow(id);
+    await this.updateProfile(id, patch);
     const finalDoc = await this.repo.update(id, {
       ...(patch.role ? { role: patch.role } : {}),
       ...(patch.status ? { status: patch.status } : {}),
     });
     if (!finalDoc) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'User not found' });
+    if (patch.status && !canSignIn(patch.status)) await this.revokeAccess(id);
+    this.auditAdminUpdate(before, finalDoc, patch, actor.sub);
     return finalDoc;
   }
 
-  async deactivate(id: string): Promise<UserDocument> {
+  /** One audit entry per meaningful change: role, sign-in access, or other employment details. */
+  private auditAdminUpdate(before: UserDocument, after: UserDocument, patch: AdminUpdateUserInput, actorId: string): void {
+    const base = { actorId, entity: 'user', entityId: after.id as string };
+    if (patch.role && patch.role !== before.role) {
+      emitAudit(this.events, {
+        ...base,
+        action: AuditAction.MEMBER_ROLE_CHANGED,
+        summary: `${after.name}: ${before.role} → ${after.role}`,
+        before: { role: before.role },
+        after: { role: after.role },
+      });
+    }
+    if (patch.status && patch.status !== before.status) {
+      const lostAccess = canSignIn(before.status) && !canSignIn(after.status);
+      const regained = !canSignIn(before.status) && canSignIn(after.status);
+      emitAudit(this.events, {
+        ...base,
+        action: lostAccess
+          ? AuditAction.MEMBER_DEACTIVATED
+          : regained
+            ? AuditAction.MEMBER_REACTIVATED
+            : AuditAction.MEMBER_UPDATED,
+        summary: `${after.name}: status ${before.status} → ${after.status}`,
+        before: { status: before.status },
+        after: { status: after.status },
+      });
+    }
+    const fields = ['name', 'phone', 'dateOfJoining', 'departmentId', 'designationId', 'reportingManagerId'] as const;
+    const changed = fields.filter((f) => f in patch && String(before.get(f) ?? '') !== String(after.get(f) ?? ''));
+    if (changed.length) {
+      emitAudit(this.events, {
+        ...base,
+        action: AuditAction.MEMBER_UPDATED,
+        summary: `${after.name}: changed ${changed.join(', ')}`,
+        before: Object.fromEntries(changed.map((f) => [f, before.get(f) ?? null])),
+        after: Object.fromEntries(changed.map((f) => [f, after.get(f) ?? null])),
+      });
+    }
+  }
+
+  async deactivate(id: string, actor: { sub: string; role: Role }): Promise<UserDocument> {
+    if (id === actor.sub) {
+      throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'You cannot deactivate yourself' });
+    }
+    const target = await this.findByIdOrThrow(id);
+    if (target.role === Role.OWNER && actor.role !== Role.OWNER) {
+      throw new ForbiddenException({ code: ErrorCodes.FORBIDDEN, message: 'Only the owner can deactivate an owner account' });
+    }
     const u = await this.repo.update(id, { status: UserStatus.SUSPENDED });
     if (!u) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'User not found' });
+    await this.revokeAccess(id);
+    emitAudit(this.events, {
+      actorId: actor.sub,
+      action: AuditAction.MEMBER_DEACTIVATED,
+      entity: 'user',
+      entityId: id,
+      summary: `Deactivated ${u.name}`,
+      before: { status: target.status },
+      after: { status: u.status },
+    });
     return u;
   }
 
-  async reactivate(id: string): Promise<UserDocument> {
+  async reactivate(id: string, actorId?: string): Promise<UserDocument> {
+    const before = await this.findByIdOrThrow(id);
     const u = await this.repo.update(id, { status: UserStatus.ACTIVE });
     if (!u) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'User not found' });
+    emitAudit(this.events, {
+      actorId,
+      action: AuditAction.MEMBER_REACTIVATED,
+      entity: 'user',
+      entityId: id,
+      summary: `Reactivated ${u.name}`,
+      before: { status: before.status },
+      after: { status: u.status },
+    });
     return u;
   }
 
-  async softDelete(id: string): Promise<{ ok: true }> {
+  async softDelete(id: string, actorId?: string): Promise<{ ok: true }> {
     const u = await this.repo.softDelete(id);
     if (!u) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'User not found' });
+    await this.revokeAccess(id);
+    emitAudit(this.events, {
+      actorId,
+      action: AuditAction.MEMBER_DELETED,
+      entity: 'user',
+      entityId: id,
+      summary: `Deleted ${u.name} (${u.email})`,
+    });
     return { ok: true };
+  }
+
+  /** Audit hook for self-service bank detail changes (never logs the account number). */
+  auditBankUpdate(userId: string, name: string, last4: string): void {
+    emitAudit(this.events, {
+      actorId: userId,
+      action: AuditAction.BANK_DETAILS_UPDATED,
+      entity: 'user',
+      entityId: userId,
+      summary: `${name} updated bank details (account ending ${last4})`,
+    });
   }
 
   // -- Documents -----------------------------------------------------------
@@ -154,11 +270,19 @@ export class UsersService {
 
   async setOnboarding(userId: string, input: OnboardingPatchInput): Promise<UserDocument> {
     const u = await this.findByIdOrThrow(userId);
-    u.onboardingChecklist = input.items.map((i) => ({
-      item: i.item,
-      completed: i.completed ?? false,
-      completedAt: i.completed ? new Date() : undefined,
-    })) as never;
+    // Keep the original completion date of items that were already done; only newly ticked items get today.
+    const previous = new Map<string, Date | undefined>();
+    for (const it of u.onboardingChecklist) {
+      if (it.completed && !previous.has(it.item)) previous.set(it.item, it.completedAt);
+    }
+    u.onboardingChecklist = input.items.map((i) => {
+      const completed = i.completed ?? false;
+      return {
+        item: i.item,
+        completed,
+        completedAt: completed ? (previous.get(i.item) ?? new Date()) : undefined,
+      };
+    }) as never;
     await u.save();
     return u;
   }

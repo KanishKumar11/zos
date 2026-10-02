@@ -34,13 +34,13 @@ const compensationApi = {
   history: (userId: string) =>
     unwrap<CompensationHistoryRow[]>(api.get(`/compensation/users/${userId}/history`)),
   upsert: (userId: string, body: UpsertCompensationInput) =>
-    unwrap<CompensationProfileRow>(api.put(`/compensation/users/${userId}`, body)),
+    unwrap<CompensationProfileRow | null>(api.put(`/compensation/users/${userId}`, body)),
 };
 
 export function useCompensation(userId: string | undefined) {
   return useQuery({
     queryKey: userId ? qk.compensation.byUser(userId) : ['compensation', 'undefined'],
-    queryFn: () => compensationApi.byUser(userId!),
+    queryFn: async () => (await compensationApi.byUser(userId!)) ?? null,
     enabled: !!userId,
   });
 }
@@ -53,16 +53,20 @@ export function useCompensationHistory(userId: string | undefined) {
   });
 }
 
+/** Save (or schedule) a package. Errors are left to the form. */
 export function useUpsertCompensation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { userId: string; body: UpsertCompensationInput }) =>
+    mutationFn: (vars: { userId: string; body: UpsertCompensationInput; scheduled?: boolean }) =>
       compensationApi.upsert(vars.userId, vars.body),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: qk.compensation.byUser(vars.userId) });
       qc.invalidateQueries({ queryKey: ['compensation', vars.userId, 'history'] });
-      toast.success('Compensation saved');
+      qc.invalidateQueries({ queryKey: ['payroll'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success(vars.scheduled ? 'Change scheduled' : 'Package saved', {
+        description: 'Recompute any draft payroll run to use the new amounts.',
+      });
     },
-    onError: (err: Error) => toast.error(err.message),
   });
 }

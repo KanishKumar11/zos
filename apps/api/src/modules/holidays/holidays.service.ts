@@ -46,8 +46,15 @@ export class HolidaysService {
   }
 
   /** Used by attendance/payroll: returns YYYY-MM-DD set for a date range. */
-  async holidayDateSet(start: Date, endExclusive: Date): Promise<Set<string>> {
-    const docs = await this.model.find({ date: { $gte: start, $lt: endExclusive } }).exec();
+  async holidayDateSet(
+    start: Date,
+    endExclusive: Date,
+    opts: { excludeOptional?: boolean } = {},
+  ): Promise<Set<string>> {
+    const q: Record<string, unknown> = { date: { $gte: start, $lt: endExclusive } };
+    // Optional (restricted) holidays are normal working days unless someone takes them as leave.
+    if (opts.excludeOptional) q.optional = { $ne: true };
+    const docs = await this.model.find(q).exec();
     return new Set(docs.map((d) => d.date.toISOString().slice(0, 10)));
   }
 }

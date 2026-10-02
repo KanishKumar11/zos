@@ -26,7 +26,7 @@ const SECTIONS = [
   {
     href: '/settings/general',
     title: 'General',
-    desc: 'Workspace name, default currency, locale.',
+    desc: 'Workspace details, working week and payroll rules.',
     icon: Settings2,
   },
 ];

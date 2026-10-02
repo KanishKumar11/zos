@@ -7,6 +7,7 @@ import type { CreateDesignationInput, UpdateDesignationInput } from '@agency/sha
 import { ErrorCodes } from '@/common/constants/error-codes';
 
 import { DepartmentsService } from '../departments/departments.service';
+import { UsersRepository } from '../users/users.repository';
 import { DesignationsRepository } from './designations.repository';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class DesignationsService {
   constructor(
     private readonly repo: DesignationsRepository,
     private readonly departments: DepartmentsService,
+    private readonly users: UsersRepository,
   ) {}
 
   list(departmentId?: string) {
@@ -29,7 +31,7 @@ export class DesignationsService {
   async create(input: CreateDesignationInput) {
     await this.departments.findOrThrow(input.departmentId);
     const dup = await this.repo.byTitleInDept(input.title, input.departmentId);
-    if (dup) throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'Designation exists in this department' });
+    if (dup) throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'That designation already exists in this department' });
     return this.repo.create({
       ...input,
       departmentId: new Types.ObjectId(input.departmentId),
@@ -38,6 +40,13 @@ export class DesignationsService {
 
   async update(id: string, patch: UpdateDesignationInput) {
     if (patch.departmentId) await this.departments.findOrThrow(patch.departmentId);
+    if (patch.title) {
+      const current = await this.findOrThrow(id);
+      const dup = await this.repo.byTitleInDept(patch.title, patch.departmentId ?? current.departmentId.toString());
+      if (dup && dup.id !== id) {
+        throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'That designation already exists in this department' });
+      }
+    }
     const { departmentId, ...rest } = patch;
     const updated = await this.repo.update(id, {
       ...rest,
@@ -48,8 +57,16 @@ export class DesignationsService {
   }
 
   async remove(id: string) {
-    const doc = await this.repo.softDelete(id);
-    if (!doc) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Designation not found' });
+    const doc = await this.findOrThrow(id);
+    const members = await this.users.count({ designationId: new Types.ObjectId(id) });
+    if (members > 0) {
+      throw new ConflictException({
+        code: ErrorCodes.CONFLICT,
+        message: `${members} member${members === 1 ? ' has' : 's have'} the designation “${doc.title}”. Change their designation first.`,
+        details: { memberCount: members },
+      });
+    }
+    await this.repo.softDelete(id);
     return { ok: true };
   }
 }

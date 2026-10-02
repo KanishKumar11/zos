@@ -6,9 +6,11 @@ import {
   Role,
   createPayrollRunSchema,
   finalizePayrollRunSchema,
+  markPayrollPaidSchema,
   payslipAdjustmentSchema,
   type CreatePayrollRunInput,
   type FinalizePayrollRunInput,
+  type MarkPayrollPaidInput,
   type PayslipAdjustmentInput,
 } from '@agency/shared';
 
@@ -67,9 +69,33 @@ export class PayrollController {
     return this.svc.finalize(id, user.sub, body);
   }
 
+  @Roles(Role.OWNER, Role.ADMIN)
+  @Post('runs/:id/mark-paid')
+  markPaid(
+    @Param('id', ObjectIdPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body(new ZodValidationPipe(markPayrollPaidSchema)) body: MarkPayrollPaidInput,
+  ) {
+    return this.svc.markPaid(id, user.sub, body);
+  }
+
+  /** OWNER only: unlock a finalized (not yet paid) run. */
+  @Roles(Role.OWNER)
+  @Post('runs/:id/reopen')
+  reopen(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.reopen(id, { sub: user.sub, role: user.role });
+  }
+
+  /** Bank-transfer sheet for a run — OWNER only, because bank details are owner-only. */
+  @Roles(Role.OWNER)
+  @Get('runs/:id/bank-export')
+  bankExport(@Param('id', ObjectIdPipe) id: string) {
+    return this.svc.bankExport(id);
+  }
+
   @Get('payslips/me')
   mine(@CurrentUser() user: JwtPayload) {
-    return this.svc.myPayslips(user.sub);
+    return this.svc.myPayslips(user.sub, { releasedOnly: true });
   }
 
   @Roles(Role.OWNER, Role.ADMIN)
@@ -114,6 +140,10 @@ export class PayrollController {
     }
     const allowed = user.role === Role.OWNER || user.role === Role.ADMIN || slip.userId.toString() === user.sub;
     if (!allowed) throw new ForbiddenException();
+    // People only get their own payslip once the run is finalized (drafts can still change).
+    if (user.role !== Role.OWNER && user.role !== Role.ADMIN && !(await this.svc.isReleased(slip.runId.toString()))) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'This payslip is not final yet' });
+    }
     const { buffer, filename } = await this.svc.payslipPdf(id);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${filename}"`);

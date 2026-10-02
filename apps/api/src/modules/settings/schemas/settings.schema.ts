@@ -23,6 +23,8 @@ export class Settings {
   @Prop() pan?: string;
   /** Per-day late deduction in paise (used by payroll). 0 disables. */
   @Prop({ type: Number, default: 0 }) lateDeductionPaisePerDay!: number;
+  /** Payroll: working days with no attendance record count as unpaid. Off = only days marked ABSENT are unpaid. */
+  @Prop({ type: Boolean, default: false }) treatMissingAttendanceAsAbsent!: boolean;
 }
 
 export type SettingsDocument = HydratedDocument<Settings>;

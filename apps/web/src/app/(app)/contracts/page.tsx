@@ -1,45 +1,43 @@
-// Contracts list page (OWNER-only).
+// Contracts — retainers: what's billed monthly, what's due to bill, and what's ending soon (OWNER).
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import type { z } from 'zod';
+import { Download, Handshake, Pencil, Plus, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 
-import {
-  ContractStatus,
-  Role,
-  createContractSchema,
-  updateContractSchema,
-  type CreateContractInput,
-} from '@agency/shared';
+import { ContractStatus, Role } from '@agency/shared';
 
-type UpdateContractForm = z.input<typeof updateContractSchema>;
+import { csvMoney } from '@/lib/csv';
+import { thisMonthLocal } from '@/lib/form';
+import { formatDate, formatPaise } from '@/lib/formatters';
+import { useListState } from '@/lib/list-state';
 
 import { RoleGate } from '@/components/auth/role-gate';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { formatPaise } from '@/lib/formatters';
-
+import { DataTable, exportColumnsCsv, sortRows, type Column } from '@/components/data/data-table';
+import { FilterBar, ResetFilters, SearchFilter, SelectFilter } from '@/components/data/filter-bar';
 import { PageHeader } from '@/components/layout/page-header';
+import { useNewParam } from '@/components/layout/quick-actions';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { StatCard } from '@/components/ui/stat-card';
+import { EmptyState } from '@/components/ui/states';
 import { useClients } from '@/features/clients/clients.hooks';
 import {
-  type ContractRow,
-  useContracts,
-  useCreateContract,
-  useDeleteContract,
-  useUpdateContract,
-} from '@/features/contracts/contracts.hooks';
+  CONTRACT_STATUS_OPTIONS,
+  CONTRACT_STATUS_TONE,
+  contractStatusLabel,
+  daysToEnd,
+  dueThisMonth,
+  endsSoon,
+  formatTotals,
+  monthLabel,
+  totalsByCurrency,
+} from '@/features/contracts/contract-utils';
+import { ContractFormDialog } from '@/features/contracts/contract-form-dialog';
+import { useContracts, useDeleteContract, type ContractRow } from '@/features/contracts/contracts.hooks';
 
 export default function ContractsPage() {
   return (
@@ -49,401 +47,263 @@ export default function ContractsPage() {
   );
 }
 
-const STATUS_LABELS: Record<ContractStatus, string> = {
-  [ContractStatus.ACTIVE]: 'Active',
-  [ContractStatus.PAUSED]: 'Paused',
-  [ContractStatus.COMPLETED]: 'Completed',
-};
-
 function Inner() {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<ContractRow | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<ContractRow | null>(null);
-  const [clientFilter, setClientFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-
-  const list = useContracts({
-    ...(clientFilter ? { clientId: clientFilter } : {}),
-    ...(statusFilter ? { status: statusFilter as ContractStatus } : {}),
-  });
+  const router = useRouter();
+  const confirm = useConfirm();
+  const list = useListState('contracts', { q: '', status: '', clientId: '', show: '', sort: 'name:asc' });
+  const { params } = list;
+  const contracts = useContracts();
   const clients = useClients();
-  const create = useCreateContract();
-  const update = useUpdateContract();
   const del = useDeleteContract();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<ContractRow | null>(null);
+  useNewParam(() => setCreateOpen(true));
 
-  const clientMap = new Map((clients.data ?? []).map((c) => [c._id, c.name]));
+  const month = thisMonthLocal();
+  const clientName = useMemo(() => new Map((clients.data ?? []).map((c) => [c._id, c.name])), [clients.data]);
+  const nameOf = (id: string) => clientName.get(id) ?? (clients.isLoading ? '…' : 'Deleted client');
 
-  const form = useForm<CreateContractInput>({
-    resolver: zodResolver(createContractSchema),
-    defaultValues: {
-      name: '',
-      clientId: '',
-      monthlyAmountPaise: 0,
-      currency: 'INR',
-      status: ContractStatus.ACTIVE,
+  const remove = async (c: ContractRow) => {
+    const ok = await confirm({
+      title: `Delete ${c.name}?`,
+      description: 'Invoices already generated from it stay as they are, but you won’t be able to bill this contract again.',
+      confirmText: 'Delete contract',
+      destructive: true,
+    });
+    if (ok) del.mutate(c._id);
+  };
+
+  const columns: Column<ContractRow>[] = [
+    {
+      id: 'name',
+      header: 'Contract',
+      sortable: true,
+      sortValue: (c) => c.name.toLowerCase(),
+      cell: (c) => (
+        <div className="min-w-0">
+          <Link href={`/contracts/${c._id}`} className="font-medium hover:underline">
+            {c.name}
+          </Link>
+          {c.description && <p className="max-w-xs truncate text-xs text-muted-foreground">{c.description}</p>}
+        </div>
+      ),
+      csv: (c) => c.name,
     },
-  });
-
-  const onSubmit = form.handleSubmit((values) =>
-    create.mutate(values, {
-      onSuccess: () => {
-        setOpen(false);
-        form.reset();
+    {
+      id: 'client',
+      header: 'Client',
+      sortable: true,
+      sortValue: (c) => nameOf(c.clientId).toLowerCase(),
+      cell: (c) =>
+        clientName.has(c.clientId) ? (
+          <Link href={`/clients/${c.clientId}`} className="hover:underline">
+            {nameOf(c.clientId)}
+          </Link>
+        ) : (
+          <span className="text-muted-foreground">{nameOf(c.clientId)}</span>
+        ),
+      csv: (c) => nameOf(c.clientId),
+    },
+    {
+      id: 'monthly',
+      header: 'Monthly',
+      align: 'right',
+      sortable: true,
+      sortValue: (c) => c.monthlyAmountPaise,
+      cell: (c) => formatPaise(c.monthlyAmountPaise, c.currency),
+      csv: (c) => csvMoney(c.monthlyAmountPaise),
+    },
+    { id: 'currency', header: 'Currency', cell: () => null, className: 'hidden', csv: (c) => c.currency },
+    {
+      id: 'status',
+      header: 'Status',
+      sortable: true,
+      sortValue: (c) => c.status,
+      cell: (c) => {
+        const d = daysToEnd(c);
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant={CONTRACT_STATUS_TONE[c.status]}>{contractStatusLabel(c.status)}</Badge>
+            {endsSoon(c) && <Badge variant="warning">{d === 0 ? 'Ends today' : `Ends in ${d} day${d === 1 ? '' : 's'}`}</Badge>}
+            {c.status === ContractStatus.ACTIVE && d !== undefined && d < 0 && <Badge variant="danger">Past end date</Badge>}
+            {dueThisMonth(c, month) && <Badge variant="info">To bill</Badge>}
+          </div>
+        );
       },
-    }),
-  );
+      csv: (c) => contractStatusLabel(c.status),
+    },
+    {
+      id: 'term',
+      header: 'Term',
+      hideBelow: 'md',
+      sortable: true,
+      sortValue: (c) => c.endDate ?? '9999',
+      cell: (c) => (
+        <span className="text-muted-foreground">
+          {c.startDate ? formatDate(c.startDate) : 'No start'} – {c.endDate ? formatDate(c.endDate) : 'ongoing'}
+        </span>
+      ),
+      csv: (c) => `${c.startDate?.slice(0, 10) ?? ''} – ${c.endDate?.slice(0, 10) ?? ''}`,
+    },
+    {
+      id: 'billingDay',
+      header: 'Bills on',
+      hideBelow: 'lg',
+      cell: (c) => (c.billingDay ? `Day ${c.billingDay}` : <span className="text-muted-foreground">No reminder</span>),
+      csv: (c) => c.billingDay ?? '',
+    },
+    {
+      id: 'billed',
+      header: 'Billed so far',
+      align: 'right',
+      hideBelow: 'lg',
+      sortable: true,
+      sortValue: (c) => c.billing?.billedPaise ?? 0,
+      cell: (c) => (c.billing?.billedPaise ? formatPaise(c.billing.billedPaise, c.currency) : <span className="text-muted-foreground">—</span>),
+      csv: (c) => csvMoney(c.billing?.billedPaise ?? 0),
+    },
+    {
+      id: 'actions',
+      header: '',
+      className: 'w-20',
+      cell: (c) => (
+        <div className="flex justify-end gap-1">
+          <button type="button" aria-label={`Edit ${c.name}`} onClick={() => setEditing(c)} className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button type="button" aria-label={`Delete ${c.name}`} onClick={() => void remove(c)} className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-destructive">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+  const visible = columns.filter((c) => c.className !== 'hidden');
 
-  const editForm = useForm<UpdateContractForm>({
-    resolver: zodResolver(updateContractSchema) as never,
+  const all = contracts.data ?? [];
+  const forClient = params.clientId ? all.filter((c) => c.clientId === params.clientId) : all;
+  const q = params.q.trim().toLowerCase();
+  const rows = forClient.filter((c) => {
+    if (params.status && c.status !== params.status) return false;
+    if (params.show === 'due' && !dueThisMonth(c, month)) return false;
+    if (params.show === 'ending' && !endsSoon(c)) return false;
+    if (q && !`${c.name} ${c.description ?? ''} ${nameOf(c.clientId)}`.toLowerCase().includes(q)) return false;
+    return true;
   });
+  const sorted = sortRows(rows, columns, list.sort);
 
-  useEffect(() => {
-    if (editing) {
-      editForm.reset({
-        name: editing.name,
-        clientId: editing.clientId,
-        description: editing.description,
-        monthlyAmountPaise: editing.monthlyAmountPaise,
-        currency: editing.currency,
-        status: editing.status,
-        startDate: editing.startDate?.slice(0, 10),
-        endDate: editing.endDate?.slice(0, 10),
-        notes: editing.notes,
-        billingDay: editing.billingDay,
-      } as never);
-    }
-  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onEditSubmit = editForm.handleSubmit((values) => {
-    if (!editing) return;
-    update.mutate(
-      { id: editing._id, body: values as never },
-      { onSuccess: () => setEditing(null) },
-    );
-  });
+  const active = forClient.filter((c) => c.status === ContractStatus.ACTIVE);
+  const mrr = totalsByCurrency(active, (c) => c.monthlyAmountPaise, (c) => c.currency);
+  const due = forClient.filter((c) => dueThisMonth(c, month));
+  const dueTotals = totalsByCurrency(due, (c) => c.monthlyAmountPaise, (c) => c.currency);
+  const ending = forClient.filter(endsSoon);
+  const clientLabel = params.clientId ? nameOf(params.clientId) : undefined;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Contracts"
-        description="Manage retainer and monthly development contracts."
-        action={<Button onClick={() => setOpen(true)}>New contract</Button>}
+        description={clientLabel ? `Retainers with ${clientLabel}.` : 'Retainers and monthly contracts — what to bill and what’s ending.'}
+        action={
+          <>
+            <Button variant="outline" size="sm" disabled={!rows.length} onClick={() => exportColumnsCsv('contracts', columns, sorted)}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+            </Button>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> New contract
+            </Button>
+          </>
+        }
       />
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create contract</DialogTitle>
-          </DialogHeader>
-          <form className="grid gap-3" onSubmit={onSubmit}>
-            <div className="space-y-1">
-              <Label>Name</Label>
-              <Input {...form.register('name')} placeholder="e.g. Monthly Development Retainer" />
-            </div>
-            <div className="space-y-1">
-              <Label>Client</Label>
-              <select
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                {...form.register('clientId')}
-              >
-                <option value="">Select client…</option>
-                {(clients.data ?? []).map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              {form.formState.errors.clientId && (
-                <p className="text-xs text-destructive">{form.formState.errors.clientId.message}</p>
-              )}
-            </div>
-            <div className="space-y-1">
-              <Label>Description</Label>
-              <Input {...form.register('description')} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Monthly amount (paise)</Label>
-                <Input
-                  type="number"
-                  {...form.register('monthlyAmountPaise', { valueAsNumber: true })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Currency</Label>
-                <Input {...form.register('currency')} defaultValue="INR" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Start date</Label>
-                <Input type="date" {...form.register('startDate')} />
-              </div>
-              <div className="space-y-1">
-                <Label>End date</Label>
-                <Input type="date" {...form.register('endDate')} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Status</Label>
-                <select
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  {...form.register('status')}
-                >
-                  {(Object.values(ContractStatus) as ContractStatus[]).map((s) => (
-                    <option key={s} value={s}>
-                      {STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label>Billing day</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={28}
-                  placeholder="e.g. 1"
-                  {...form.register('billingDay', { valueAsNumber: true })}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Day of month the dashboard reminds you to invoice this contract.
-                </p>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <textarea
-                className="min-h-20 w-full rounded border bg-background px-3 py-2 text-sm"
-                {...form.register('notes')}
-              />
-            </div>
-            <DialogFooter>
-              <Button type="submit" disabled={create.isPending}>
-                {create.isPending ? 'Creating…' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Monthly recurring"
+          loading={contracts.isLoading}
+          value={formatTotals(mrr, formatPaise)}
+          hint={`${active.length} active contract${active.length === 1 ? '' : 's'}`}
+          href={`/contracts?status=${ContractStatus.ACTIVE}${params.clientId ? `&clientId=${params.clientId}` : ''}`}
+        />
+        <StatCard
+          label={`Due to bill · ${monthLabel(month)}`}
+          loading={contracts.isLoading}
+          tone={due.length ? 'warning' : 'default'}
+          value={due.length ? formatTotals(dueTotals, formatPaise) : 'All billed'}
+          hint={due.length ? `${due.length} contract${due.length === 1 ? '' : 's'} not invoiced yet` : 'Nothing left to invoice this month'}
+          href={`/contracts?show=due${params.clientId ? `&clientId=${params.clientId}` : ''}`}
+        />
+        <StatCard
+          label="Ending in 30 days"
+          loading={contracts.isLoading}
+          tone={ending.length ? 'warning' : 'default'}
+          value={String(ending.length)}
+          hint={ending.length ? 'Time to talk renewal' : 'No renewals coming up'}
+          href={`/contracts?show=ending${params.clientId ? `&clientId=${params.clientId}` : ''}`}
+        />
+        <StatCard label="All contracts" loading={contracts.isLoading} value={String(forClient.length)} hint={`${forClient.length - active.length} paused or ended`} />
+      </div>
 
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit contract</DialogTitle>
-          </DialogHeader>
-          <form className="grid gap-3" onSubmit={onEditSubmit}>
-            <div className="space-y-1">
-              <Label>Name</Label>
-              <Input {...editForm.register('name')} />
-            </div>
-            <div className="space-y-1">
-              <Label>Client</Label>
-              <select
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                {...editForm.register('clientId')}
-              >
-                {(clients.data ?? []).map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Description</Label>
-              <Input {...editForm.register('description')} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Monthly amount (paise)</Label>
-                <Input type="number" {...editForm.register('monthlyAmountPaise', { valueAsNumber: true })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Currency</Label>
-                <Input {...editForm.register('currency')} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Start date</Label>
-                <Input type="date" {...editForm.register('startDate')} />
-              </div>
-              <div className="space-y-1">
-                <Label>End date</Label>
-                <Input type="date" {...editForm.register('endDate')} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Status</Label>
-                <select
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  {...editForm.register('status')}
-                >
-                  {(Object.values(ContractStatus) as ContractStatus[]).map((s) => (
-                    <option key={s} value={s}>
-                      {STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label>Billing day</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={28}
-                  placeholder="e.g. 1"
-                  {...editForm.register('billingDay', { valueAsNumber: true })}
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <textarea
-                className="min-h-20 w-full rounded border bg-background px-3 py-2 text-sm"
-                {...editForm.register('notes')}
-              />
-            </div>
-            <DialogFooter>
-              <Button type="submit" disabled={update.isPending}>
-                {update.isPending ? 'Saving…' : 'Save changes'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <FilterBar>
+        <SearchFilter value={params.q} onChange={(v) => list.set({ q: v })} placeholder="Search contract or client" />
+        <Combobox
+          className="w-auto min-w-[180px] sm:w-56"
+          options={(clients.data ?? []).map((c) => ({ value: c._id, label: c.name }))}
+          value={params.clientId || undefined}
+          onChange={(v) => list.set({ clientId: v ?? '' })}
+          placeholder="All clients"
+          searchPlaceholder="Search clients"
+          allowClear
+        />
+        <SelectFilter value={params.status} onChange={(v) => list.set({ status: v })} allLabel="Any status" options={CONTRACT_STATUS_OPTIONS} />
+        <SelectFilter
+          value={params.show}
+          onChange={(v) => list.set({ show: v })}
+          allLabel="All contracts"
+          options={[
+            { value: 'due', label: 'Due to bill this month' },
+            { value: 'ending', label: 'Ending in 30 days' },
+          ]}
+        />
+        <ResetFilters count={list.activeFilterCount} onReset={list.reset} />
+      </FilterBar>
 
-      <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete contract</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Delete <span className="font-medium text-foreground">{confirmDelete?.name}</span>? This cannot be undone.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={del.isPending}
-              onClick={() =>
-                confirmDelete &&
-                del.mutate(confirmDelete._id, { onSuccess: () => setConfirmDelete(null) })
-              }
-            >
-              {del.isPending ? 'Deleting…' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DataTable
+        columns={visible}
+        rows={sorted}
+        rowKey={(c) => c._id}
+        loading={contracts.isLoading}
+        error={contracts.error}
+        onRetry={() => contracts.refetch()}
+        sort={list.sort}
+        onSortChange={list.setSort}
+        rowHref={(c) => `/contracts/${c._id}`}
+        empty={
+          <EmptyState
+            icon={Handshake}
+            title={list.activeFilterCount ? 'No contracts match these filters' : 'No contracts yet'}
+            description={list.activeFilterCount ? undefined : 'Add a retainer to get monthly billing reminders and one-click invoices.'}
+            action={
+              list.activeFilterCount ? (
+                <Button size="sm" variant="outline" onClick={list.reset}>
+                  Clear filters
+                </Button>
+              ) : (
+                <Button size="sm" onClick={() => setCreateOpen(true)}>
+                  Add a contract
+                </Button>
+              )
+            }
+          />
+        }
+      />
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>All contracts</CardTitle>
-          <div className="flex items-center gap-2">
-            <select
-              value={clientFilter}
-              onChange={(e) => setClientFilter(e.target.value)}
-              className="h-8 rounded border bg-background px-2 text-sm"
-            >
-              <option value="">All clients</option>
-              {(clients.data ?? []).map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-8 rounded border bg-background px-2 text-sm"
-            >
-              <option value="">All statuses</option>
-              {(Object.values(ContractStatus) as ContractStatus[]).map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <THead>
-              <TR>
-                <TH>Name</TH>
-                <TH>Client</TH>
-                <TH>Monthly</TH>
-                <TH>Billing day</TH>
-                <TH>Status</TH>
-                <TH>Start</TH>
-                <TH>Notes</TH>
-                <TH></TH>
-              </TR>
-            </THead>
-            <TBody>
-              {(list.data ?? []).map((c) => (
-                <TR key={c._id}>
-                  <TD className="font-medium">{c.name}</TD>
-                  <TD>{clientMap.get(c.clientId) ?? c.clientId.slice(-6)}</TD>
-                  <TD>{formatPaise(c.monthlyAmountPaise, c.currency)}</TD>
-                  <TD className="text-muted-foreground">
-                    {c.billingDay ? `Day ${c.billingDay}` : '— (no reminder)'}
-                  </TD>
-                  <TD>
-                    <span
-                      className={
-                        c.status === ContractStatus.ACTIVE
-                          ? 'text-green-600'
-                          : c.status === ContractStatus.COMPLETED
-                            ? 'text-muted-foreground'
-                            : 'text-amber-600'
-                      }
-                    >
-                      {STATUS_LABELS[c.status]}
-                    </span>
-                  </TD>
-                  <TD>{c.startDate ? new Date(c.startDate).toLocaleDateString() : '—'}</TD>
-                  <TD className="max-w-xs truncate text-muted-foreground">{c.notes || '—'}</TD>
-                  <TD>
-                    <div className="flex items-center gap-3">
-                      <a href={`/contracts/${c._id}`} className="text-xs text-primary hover:underline">
-                        View →
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => setEditing(c)}
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete(c)}
-                        className="text-xs text-muted-foreground hover:text-destructive"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </TD>
-                </TR>
-              ))}
-              {!list.isLoading && (list.data ?? []).length === 0 && (
-                <TR>
-                  <TD colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
-                    No contracts match these filters.
-                  </TD>
-                </TR>
-              )}
-            </TBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <ContractFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        defaultClientId={params.clientId || undefined}
+        onSaved={(c) => router.push(`/contracts/${c._id}`)}
+      />
+      <ContractFormDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} contract={editing ?? undefined} />
     </div>
   );
 }

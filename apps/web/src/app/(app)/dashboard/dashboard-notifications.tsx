@@ -12,8 +12,7 @@ export function DashboardNotifications() {
   if (!birthdays.length && !payrollReminder) return null;
 
   return (
-    <div className="p-6 md:p-12 border-b border-border space-y-3">
-      <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-4">Notifications</p>
+    <div className="space-y-2">
 
       {payrollReminder && (
         <div className="flex items-center justify-between border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 rounded-lg px-4 py-3">
@@ -23,9 +22,9 @@ export function DashboardNotifications() {
           </div>
           <Link
             href="/payroll"
-            className="ml-4 shrink-0 rounded-md bg-amber-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-amber-700"
+            className="ml-4 shrink-0 rounded-md bg-amber-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
           >
-            Go to Payroll →
+            Run payroll
           </Link>
         </div>
       )}
@@ -46,9 +45,9 @@ export function DashboardNotifications() {
           </div>
           <Link
             href={`/team/${b.userId}`}
-            className="ml-4 shrink-0 rounded-md bg-rose-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-rose-700"
+            className="ml-4 shrink-0 rounded-md bg-rose-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-rose-700"
           >
-            View Profile →
+            Say hello
           </Link>
         </div>
       ))}

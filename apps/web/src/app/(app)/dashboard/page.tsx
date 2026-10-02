@@ -1,353 +1,343 @@
+// Dashboard — owner: the agency's money and what needs attention; team: my work and my earnings.
 'use client';
 
+import { ArrowRight, CalendarClock, CheckCircle2, Megaphone, Receipt, Send } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import { Role } from '@agency/shared';
+import { Bar, BarChart, CartesianGrid, Legend, Line, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-import { ChartTooltip } from '@/components/ui/chart-tooltip';
-import { Skeleton } from '@/components/ui/skeleton';
-import { formatPaise } from '@/lib/formatters';
+import { Role, TaskStatus } from '@agency/shared';
+
+import { cn } from '@/lib/cn';
+import { todayLocal } from '@/lib/form';
+import { formatDate, formatPaise } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
+import { useQuickActions } from '@/store/quick-actions.store';
 
-import {
-  useMemberDashboard,
-  useOwnerCharts,
-  useOwnerDashboard,
-  useTeamEarnings,
-} from '@/features/dashboard/dashboard.hooks';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ChartTooltip } from '@/components/ui/chart-tooltip';
+import { ProgressBar } from '@/components/ui/progress-bar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { EmptyState } from '@/components/ui/states';
+import { useOwnerCharts, useOwnerDashboard } from '@/features/dashboard/dashboard.hooks';
+import { useAnnouncements } from '@/features/notifications/notifications.hooks';
+import { useImportStatus, useMyEarnings, useOwed } from '@/features/payouts/payouts.hooks';
+import { useMyTasks } from '@/features/tasks/tasks.hooks';
+
 import { BillingReminders } from './billing-reminders';
 import { DashboardNotifications } from './dashboard-notifications';
 import { MoneyOverview } from './money-overview';
 
-const shortMonth = (m: string) => {
-  const mo = m.split('-')[1] ?? '';
-  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo - 1] ?? m;
-};
-const toINR = (paise: number) => paise / 100;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const shortMonth = (m: string) => MONTHS[Number(m.split('-')[1]) - 1] ?? m;
+const rupees = (paise: number) => Math.round(paise / 100);
+
+function greeting(): string {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
-  const role = user?.role;
-  const isOwner = role === Role.OWNER;
-  const owner = useOwnerDashboard(isOwner);
-  const member = useMemberDashboard();
-  const charts = useOwnerCharts(isOwner);
-
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const [earningsMonth, setEarningsMonth] = useState(currentMonth);
-  const teamEarnings = useTeamEarnings(earningsMonth, isOwner);
-
-  const chartData = (charts.data?.revenueByMonth ?? []).map((r, i) => ({
-    month: shortMonth(r.month),
-    Revenue: Math.round(toINR(r.collectedPaise)),
-    Payroll: Math.round(toINR(charts.data?.payrollByMonth[i]?.totalNetPaise ?? 0)),
-    Expenses: Math.round(toINR((charts.data?.expensesByMonth[i]?.totalPaise ?? 0) + (charts.data?.freelancerByMonth[i]?.totalPaise ?? 0))),
-    Profit: Math.round(toINR(charts.data?.profitByMonth[i]?.profitPaise ?? 0)),
-  }));
-
+  const firstName = user?.name?.split(' ')[0];
   return (
-    <div className="max-w-[1400px] mx-auto pb-16">
-      {/* Header */}
-      <header className="border-b border-border py-6 md:py-10 mb-6 md:mb-10 px-4 md:px-0">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
-          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground">
-            Agency Ledger
-          </h1>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground font-mono">
-            Operator // {user?.name?.split(' ')[0] ?? 'System'}
-          </p>
-        </div>
-      </header>
-
-      {isOwner && <DashboardNotifications />}
-      {isOwner && <BillingReminders />}
-      {isOwner && <MoneyOverview />}
-
-      {isOwner && (
-        <div className="border-t border-border">
-          {/* Revenue row: this month / this FY / collected all time / outstanding */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-border divide-x divide-border">
-            <StatBlock
-              title={`Revenue — ${new Date().toLocaleString('en-IN', { month: 'short' })} ${new Date().getFullYear()}`}
-              value={owner.isLoading ? '—' : formatPaise(owner.data?.revenueThisMonth ?? 0, 'INR')}
-            />
-            <StatBlock
-              title={owner.data?.fyLabel ?? 'This Financial Year'}
-              value={owner.isLoading ? '—' : formatPaise(owner.data?.revenueThisFinancialYear ?? 0, 'INR')}
-            />
-            <StatBlock
-              title="Profit This Month"
-              value={owner.isLoading ? '—' : formatPaise(owner.data?.profitThisMonth ?? 0, 'INR')}
-              valueClassName={(owner.data?.profitThisMonth ?? 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}
-            />
-            <StatBlock
-              title="Profit This FY"
-              value={owner.isLoading ? '—' : formatPaise(owner.data?.profitThisFinancialYear ?? 0, 'INR')}
-              valueClassName={(owner.data?.profitThisFinancialYear ?? 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}
-            />
-          </div>
-
-          {/* Non-client income + last payroll run — feeds the profit numbers above but was never shown on its own */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-border divide-x divide-border">
-            <StatBlock
-              title="Other Income — This Month"
-              value={owner.isLoading ? '—' : formatPaise(owner.data?.otherIncomeThisMonth ?? 0, 'INR')}
-            />
-            <StatBlock
-              title="Other Income — This FY"
-              value={owner.isLoading ? '—' : formatPaise(owner.data?.otherIncomeThisFinancialYear ?? 0, 'INR')}
-            />
-            <StatBlock
-              title="Last Payroll Run"
-              value={
-                owner.isLoading
-                  ? '—'
-                  : owner.data?.lastPayrollRun
-                    ? `${owner.data.lastPayrollRun.month} · ${formatPaise(owner.data.lastPayrollRun.totalNetPaise, 'INR')}`
-                    : 'No runs yet'
-              }
-            />
-            <StatBlock
-              title="Overdue Invoices"
-              value={owner.isLoading ? '—' : formatPaise(owner.data?.invoices.overdue ?? 0, 'INR')}
-              valueClassName={(owner.data?.invoices.overdue ?? 0) > 0 ? 'text-destructive' : undefined}
-            />
-          </div>
-
-          {/* Top Section: Primary Metric + Chart vs Secondary Stack */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 border-b border-border">
-            {/* Primary Left */}
-            <div className="lg:col-span-8 lg:border-r border-border p-6 md:p-8 flex flex-col">
-              <p className="text-xs uppercase tracking-wider font-mono text-muted-foreground mb-4">All-Time Collected</p>
-              <div className="text-4xl md:text-5xl lg:text-6xl leading-none font-semibold tracking-tight mb-8">
-                {owner.isLoading ? <Skeleton className="h-16 w-1/2 rounded-md" /> : formatPaise(owner.data?.invoices.collected ?? 0, 'INR')}
-              </div>
-
-              {/* Revenue + Profit dual-line chart */}
-              <div className="h-56 md:h-72 w-full mt-auto">
-                {charts.isLoading ? (
-                  <Skeleton className="h-full w-full rounded-md" />
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                      <CartesianGrid stroke="hsl(var(--border))" horizontal vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                      <YAxis hide />
-                      <Tooltip
-                        content={<ChartTooltip formatValue={(v) => `₹${Math.round(v).toLocaleString('en-IN')}`} />}
-                        cursor={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
-                      />
-                      <Legend
-                        wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'hsl(var(--muted-foreground))' }}
-                        iconType="plainline"
-                        iconSize={14}
-                      />
-                      <Line
-                        type="monotone" dataKey="Revenue" stroke="hsl(var(--foreground))" strokeWidth={2}
-                        strokeLinecap="round" strokeLinejoin="round" dot={false} isAnimationActive={false}
-                        activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--background))' }}
-                      />
-                      <Line
-                        type="monotone" dataKey="Profit" stroke="#10b981" strokeWidth={2}
-                        strokeLinecap="round" strokeLinejoin="round" dot={false} isAnimationActive={false} strokeDasharray="4 4"
-                        activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--background))' }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-
-            {/* Secondary Right */}
-            <div className="lg:col-span-4 flex flex-col">
-              <StatBlock
-                title="Active Projects"
-                value={owner.isLoading ? '—' : owner.data?.activeProjects.toString() ?? '0'}
-              />
-              <StatBlock
-                title="Active SOWs"
-                value={owner.isLoading ? '—' : owner.data?.activeSows.toString() ?? '0'}
-              />
-              <StatBlock
-                title={`Costs — ${new Date().toLocaleString('en-IN', { month: 'short' })} ${new Date().getFullYear()}`}
-                value={owner.isLoading ? '—' : formatPaise(owner.data?.expensesThisMonth ?? 0, 'INR')}
-              />
-              <StatBlock
-                title={`Expenses — ${new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleString('en-IN', { month: 'short' })} ${new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).getFullYear()}`}
-                value={owner.isLoading ? '—' : formatPaise(owner.data?.expensesNextMonth ?? 0, 'INR')}
-              />
-              <StatBlock
-                title="Outstanding"
-                value={owner.isLoading ? '—' : formatPaise(owner.data?.invoices.outstanding ?? 0, 'INR')}
-                className="border-b-0 flex-1"
-                valueClassName="text-destructive"
-              />
-            </div>
-          </div>
-
-          {/* Cost Breakdown */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 border-b border-border">
-            <div className="lg:col-span-4 lg:border-r border-border border-b lg:border-b-0 p-6 md:p-8 flex flex-col justify-between">
-              <p className="text-xs uppercase tracking-wider font-mono text-muted-foreground mb-4">Cost Breakdown</p>
-              <div className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
-                Payroll &<br />Expenses
-              </div>
-            </div>
-            <div className="lg:col-span-8 p-6 md:p-8">
-              <div className="h-56 md:h-72 w-full">
-                {charts.isLoading ? (
-                  <Skeleton className="h-full w-full rounded-md" />
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barSize={12} barGap={4}>
-                      <CartesianGrid stroke="hsl(var(--border))" horizontal vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        content={<ChartTooltip formatValue={(v) => `₹${Math.round(v).toLocaleString('en-IN')}`} />}
-                        cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'hsl(var(--muted-foreground))' }} iconType="circle" iconSize={8} />
-                      <Bar dataKey="Payroll" fill="hsl(var(--foreground))" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="Expenses" fill="hsl(var(--muted-foreground))" opacity={0.5} radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Team Payroll Ledger */}
-          <div className="p-6 md:p-8 border-b border-border">
-            <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-wider font-mono text-muted-foreground mb-2">Ledger</p>
-                <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">Team Payroll</h2>
-              </div>
-              <input
-                type="month"
-                value={earningsMonth}
-                onChange={(e) => setEarningsMonth(e.target.value)}
-                className="bg-transparent border-b border-border rounded-none px-0 py-1 text-base md:text-lg font-medium tracking-tight focus:outline-none focus:border-foreground w-40 text-foreground transition-colors"
-              />
-            </div>
-
-            <div>
-              {teamEarnings.isLoading ? (
-                <div className="space-y-4">
-                  {[1,2,3].map((i) => <Skeleton key={i} className="h-10 w-full rounded-md" />)}
-                </div>
-              ) : (teamEarnings.data?.members.length ?? 0) === 0 ? (
-                <p className="py-12 text-center text-sm font-mono uppercase tracking-widest text-muted-foreground">No ledger entries.</p>
-              ) : (
-                <div className="overflow-x-auto -mx-4 md:-mx-8 px-4 md:px-8">
-                  <table className="w-full text-left border-collapse min-w-[600px]">
-                    <thead>
-                      <tr>
-                        <th className="pb-3 pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap">Team Member</th>
-                        <th className="pb-3 pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Gross Pay</th>
-                        <th className="pb-3 pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Deductions</th>
-                        <th className="pb-3 pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wider border-b border-border whitespace-nowrap text-right">Net Deposit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(teamEarnings.data?.members ?? []).map((m) => (
-                        <tr key={m.userId} className="group hover:bg-muted/30 transition-colors">
-                          <td className="py-4 text-sm font-medium text-foreground border-b border-border align-middle">
-                            <Link href={`/team/${m.userId}`} className="hover:underline">
-                              {m.name}
-                            </Link>
-                          </td>
-                          <td className="py-4 text-sm text-foreground border-b border-border align-middle text-right">{formatPaise(m.grossPaise, 'INR')}</td>
-                          <td className="py-4 text-sm text-destructive border-b border-border align-middle text-right">
-                            {m.deductionsPaise > 0 ? `−${formatPaise(m.deductionsPaise, 'INR')}` : '—'}
-                          </td>
-                          <td className="py-4 text-sm font-semibold text-foreground border-b border-border align-middle text-right">{formatPaise(m.netPaise, 'INR')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td className="py-4 text-sm font-medium text-foreground border-b-0 align-middle">Total Aggregated</td>
-                        <td className="py-4 text-sm text-muted-foreground border-b-0 align-middle text-right">
-                          {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.grossPaise, 0), 'INR')}
-                        </td>
-                        <td className="py-4 text-sm text-destructive border-b-0 align-middle text-right">
-                          {(() => {
-                            const tot = (teamEarnings.data?.members ?? []).reduce((s, m) => s + m.deductionsPaise, 0);
-                            return tot > 0 ? `−${formatPaise(tot, 'INR')}` : '—';
-                          })()}
-                        </td>
-                        <td className="py-4 text-sm font-semibold text-foreground border-b-0 align-middle text-right">
-                          {formatPaise((teamEarnings.data?.members ?? []).reduce((s, m) => s + m.netPaise, 0), 'INR')}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Personal Snapshot */}
-      <div className="mt-12 md:mt-16 px-4 md:px-0">
-        <p className="text-xs uppercase tracking-wider font-mono text-muted-foreground mb-6">Personal Snapshot</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-t border-b border-border divide-y md:divide-y-0 md:divide-x divide-border">
-          <StatBlock 
-            title="Active Assignments" 
-            value={member.isLoading ? '—' : (member.data?.openTasks ?? 0).toString()} 
-            className="border-b-0"
-          />
-          <StatBlock 
-            title="Pending Time-off" 
-            value={member.isLoading ? '—' : (member.data?.pendingLeaves ?? 0).toString()} 
-            className="border-b-0"
-          />
-          <StatBlock 
-            title="Latest Deposit" 
-            value={member.isLoading ? '—' : (member.data?.lastPayslip ? formatPaise(member.data.lastPayslip.netPaise, 'INR') : '—')} 
-            className="border-b-0"
-          />
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={`${greeting()}${firstName ? `, ${firstName}` : ''}`}
+        description={new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}
+        action={user?.role === Role.OWNER ? <OwnerQuickActions /> : undefined}
+      />
+      {user?.role === Role.OWNER ? <OwnerDashboard /> : <MemberDashboard />}
     </div>
   );
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function StatBlock({
-  title,
-  value,
-  className = '',
-  valueClassName = '',
-}: {
-  title: string;
-  value: string;
-  className?: string;
-  valueClassName?: string;
-}) {
+function OwnerQuickActions() {
+  const openLogPayment = useQuickActions((s) => s.openLogPayment);
   return (
-    <div className={`p-5 md:p-6 border-b border-border flex flex-col justify-center ${className}`}>
-      <p className="text-xs uppercase tracking-wider font-mono text-muted-foreground mb-2">
-        {title}
-      </p>
-      <p className={`text-2xl md:text-3xl font-semibold tracking-tight ${valueClassName || 'text-foreground'}`}>
-        {value}
-      </p>
+    <>
+      <Button size="sm" variant="outline" asChild>
+        <Link href="/invoices?new=1">
+          <Receipt className="mr-1.5 h-3.5 w-3.5" /> New invoice
+        </Link>
+      </Button>
+      <Button size="sm" onClick={() => openLogPayment()}>
+        <Send className="mr-1.5 h-3.5 w-3.5" /> Log payment
+      </Button>
+    </>
+  );
+}
+
+function OwnerDashboard() {
+  const owner = useOwnerDashboard(true);
+  const charts = useOwnerCharts(true);
+  const owed = useOwed();
+  const imports = useImportStatus();
+  const d = owner.data;
+  const loading = owner.isLoading;
+  const weOwe = [...(owed.data?.team ?? []), ...(owed.data?.freelancers ?? [])].reduce((s, r) => s + r.pendingPaise, 0);
+  const month = new Date().toLocaleString('en-IN', { month: 'long' });
+
+  const chartData = (charts.data?.revenueByMonth ?? []).map((r, i) => {
+    const costs =
+      (charts.data?.payrollByMonth[i]?.totalNetPaise ?? 0) +
+      (charts.data?.expensesByMonth[i]?.totalPaise ?? 0) +
+      (charts.data?.freelancerByMonth[i]?.totalPaise ?? 0) +
+      (charts.data?.teamPayoutsByMonth?.[i]?.totalPaise ?? 0);
+    return {
+      month: shortMonth(r.month),
+      Revenue: rupees(r.collectedPaise + (charts.data?.incomeByMonth?.[i]?.totalPaise ?? 0)),
+      Costs: rupees(costs),
+      Profit: rupees(charts.data?.profitByMonth[i]?.profitPaise ?? 0),
+      'Team payouts': rupees(charts.data?.teamPayoutsByMonth?.[i]?.totalPaise ?? 0),
+      Freelancers: rupees(charts.data?.freelancerByMonth[i]?.totalPaise ?? 0),
+      Payroll: rupees(charts.data?.payrollByMonth[i]?.totalNetPaise ?? 0),
+      Expenses: rupees(charts.data?.expensesByMonth[i]?.totalPaise ?? 0),
+    };
+  });
+  const cb = d?.costBreakdownThisMonth;
+
+  return (
+    <div className="space-y-6">
+      {imports.data?.pending && (
+        <Link href="/payments" className="flex items-center gap-3 rounded-lg border border-sky-600/30 bg-sky-600/5 px-4 py-3 text-sm hover:bg-sky-600/10">
+          <span className="flex-1">
+            <span className="font-medium">Older payments need importing.</span> Bring them into Payments out so balances and profit are complete.
+          </span>
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      )}
+      <DashboardNotifications />
+      <BillingReminders />
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <StatCard label={`Collected in ${month}`} loading={loading} value={formatPaise(d?.revenueThisMonth ?? 0)} hint={`${formatPaise(d?.revenueThisFinancialYear ?? 0)} this FY · excl. GST`} href="/invoices" />
+        <StatCard
+          label={`Profit in ${month}`}
+          loading={loading}
+          tone={(d?.profitThisMonth ?? 0) < 0 ? 'danger' : 'success'}
+          value={formatPaise(d?.profitThisMonth ?? 0)}
+          hint={`${formatPaise(d?.profitThisFinancialYear ?? 0)} ${d?.fyLabel ?? 'this FY'}`}
+        />
+        <StatCard label="Clients owe you" loading={loading} tone={(d?.invoices.outstanding ?? 0) > 0 ? 'warning' : 'default'} value={formatPaise(d?.invoices.outstanding ?? 0)} href="/invoices?status=open" />
+        <StatCard label="Overdue" loading={loading} tone={(d?.invoices.overdue ?? 0) > 0 ? 'danger' : 'default'} value={formatPaise(d?.invoices.overdue ?? 0)} href="/invoices?status=OVERDUE" />
+        <StatCard label="You owe team & freelancers" loading={owed.isLoading} tone={weOwe > 0 ? 'warning' : 'default'} value={formatPaise(weOwe)} href="/payments" />
+        <StatCard label="Active projects" loading={loading} value={String(d?.activeProjects ?? 0)} href="/projects?status=ACTIVE" />
+      </div>
+
+      <Card className="overflow-hidden">
+        <MoneyOverview />
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Revenue vs costs — last 12 months</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              {charts.isLoading ? (
+                <Skeleton className="h-full w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barGap={2} barSize={10}>
+                    <CartesianGrid stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={44} tickFormatter={(v: number) => (Math.abs(v) >= 100000 ? `${(v / 100000).toFixed(1)}L` : `${Math.round(v / 1000)}k`)} />
+                    <Tooltip content={<ChartTooltip formatValue={(v) => `₹${Math.round(v).toLocaleString('en-IN')}`} />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={8} />
+                    <Bar dataKey="Revenue" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="Costs" fill="hsl(var(--muted-foreground))" opacity={0.45} radius={[3, 3, 0, 0]} />
+                    <Line type="monotone" dataKey="Profit" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Where money went in {month}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {loading || !cb ? (
+              <Skeleton className="h-40 w-full" />
+            ) : (
+              (() => {
+                const parts = [
+                  { label: 'Team payouts', value: cb.teamPayoutsPaise, href: '/payments?payeeType=MEMBER&range=this-month' },
+                  { label: 'Freelancers', value: cb.freelancerPayoutsPaise, href: '/payments?payeeType=FREELANCER&range=this-month' },
+                  { label: 'Payroll', value: cb.payrollPaise, href: '/payroll' },
+                  { label: 'Expenses', value: cb.expensesPaise, href: '/expenses?range=this-month' },
+                ];
+                const total = parts.reduce((s, p) => s + p.value, 0);
+                if (!total) return <p className="text-sm text-muted-foreground">Nothing spent yet this month.</p>;
+                return (
+                  <>
+                    <p className="text-2xl font-semibold tabular-nums">{formatPaise(total)}</p>
+                    {parts.map((p) => (
+                      <Link key={p.label} href={p.href} className="block space-y-1 rounded-md p-1 hover:bg-muted/40">
+                        <div className="flex justify-between text-sm">
+                          <span>{p.label}</span>
+                          <span className="tabular-nums">{formatPaise(p.value)}</span>
+                        </div>
+                        <ProgressBar value={p.value} max={total} />
+                      </Link>
+                    ))}
+                    <p className="text-xs text-muted-foreground">Expected expenses next month: {formatPaise(d?.expensesNextMonth ?? 0)}</p>
+                  </>
+                );
+              })()
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Team payouts by month</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-48">
+            {charts.isLoading ? (
+              <Skeleton className="h-full w-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} barSize={12} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                  <CartesianGrid stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <Tooltip content={<ChartTooltip formatValue={(v) => `₹${Math.round(v).toLocaleString('en-IN')}`} />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
+                  <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" iconSize={8} />
+                  <Bar dataKey="Team payouts" stackId="c" fill="hsl(var(--primary))" />
+                  <Bar dataKey="Freelancers" stackId="c" fill="hsl(var(--primary))" opacity={0.55} />
+                  <Bar dataKey="Payroll" stackId="c" fill="hsl(var(--muted-foreground))" opacity={0.5} />
+                  <Bar dataKey="Expenses" stackId="c" fill="hsl(var(--muted-foreground))" opacity={0.25} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function MemberDashboard() {
+  const tasks = useMyTasks();
+  const earnings = useMyEarnings();
+  const announcements = useAnnouncements();
+  const today = todayLocal();
+  const open = (tasks.data ?? []).filter((t) => t.status !== TaskStatus.DONE);
+  const overdue = open.filter((t) => t.dueDate && t.dueDate.slice(0, 10) < today);
+  const dueToday = open.filter((t) => t.dueDate?.slice(0, 10) === today);
+  const upcoming = [...open].sort((a, b) => (a.dueDate ?? '9').localeCompare(b.dueDate ?? '9')).slice(0, 6);
+  const e = earnings.data;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Open tasks" loading={tasks.isLoading} value={String(open.length)} href="/tasks" />
+        <StatCard label="Overdue" loading={tasks.isLoading} tone={overdue.length ? 'danger' : 'default'} value={String(overdue.length)} hint={dueToday.length ? `${dueToday.length} due today` : undefined} href="/tasks" />
+        <StatCard label="Received this month" loading={earnings.isLoading} value={formatPaise(e?.totals.thisMonthPaise ?? 0)} href="/earnings?tab=payments" />
+        <StatCard label="Pending payments" loading={earnings.isLoading} tone={(e?.totals.pendingPaise ?? 0) > 0 ? 'warning' : 'default'} value={formatPaise(e?.totals.pendingPaise ?? 0)} href="/earnings" />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-5">
+        <Card className="lg:col-span-3">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle>Up next</CardTitle>
+            <Link href="/tasks" className="text-xs text-primary hover:underline">
+              All my tasks
+            </Link>
+          </CardHeader>
+          <CardContent className="p-0">
+            {upcoming.length === 0 ? (
+              <EmptyState icon={CheckCircle2} title="You're all clear" description="No open tasks assigned to you." className="py-8" />
+            ) : (
+              <ul className="divide-y">
+                {upcoming.map((t) => {
+                  const late = t.dueDate && t.dueDate.slice(0, 10) < today;
+                  return (
+                    <li key={t._id}>
+                      <Link href={`/tasks/${t._id}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-muted/30">
+                        <span className="flex-1 truncate text-sm">{t.title}</span>
+                        <StatusBadge status={t.status} />
+                        {t.dueDate && (
+                          <span className={cn('flex items-center gap-1 text-xs', late ? 'text-destructive' : 'text-muted-foreground')}>
+                            <CalendarClock className="h-3 w-3" /> {formatDate(t.dueDate)}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-6 lg:col-span-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle>My projects</CardTitle>
+              <Link href="/earnings" className="text-xs text-primary hover:underline">
+                Earnings
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              {(e?.projects ?? []).filter((p) => p.projectId).length === 0 ? (
+                <EmptyState title="No projects yet" className="py-6" />
+              ) : (
+                <ul className="divide-y">
+                  {e!.projects
+                    .filter((p) => p.projectId)
+                    .slice(0, 5)
+                    .map((p) => (
+                      <li key={p.projectId}>
+                        <Link href={`/projects/${p.projectId}`} className="block px-5 py-2.5 hover:bg-muted/30">
+                          <div className="flex justify-between gap-2 text-sm">
+                            <span className="truncate font-medium">{p.projectName}</span>
+                            {p.pendingPaise > 0 && <span className="text-xs text-amber-700 dark:text-amber-500">{formatPaise(p.pendingPaise)} pending</span>}
+                          </div>
+                          {p.agreedPaise > 0 && <ProgressBar value={p.paidPaise} max={p.agreedPaise} className="mt-1.5" />}
+                        </Link>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle>Announcements</CardTitle>
+              <Link href="/announcements" className="text-xs text-primary hover:underline">
+                All
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              {(announcements.data ?? []).length === 0 ? (
+                <EmptyState icon={Megaphone} title="Nothing new" className="py-6" />
+              ) : (
+                <ul className="divide-y">
+                  {announcements.data!.slice(0, 3).map((a) => (
+                    <li key={a._id}>
+                      <Link href="/announcements" className="block px-5 py-2.5 hover:bg-muted/30">
+                        <p className="truncate text-sm font-medium">{a.title}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(a.publishedAt ?? a.createdAt)}</p>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

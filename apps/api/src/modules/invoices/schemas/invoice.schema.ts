@@ -13,6 +13,8 @@ export class InvoiceLineItem {
   @Prop({ type: MS.Types.ObjectId, ref: 'Project', index: true }) projectId?: Types.ObjectId;
   /** Milestone subdoc id within `projectId`; kept in sync with Project.milestones. */
   @Prop({ type: MS.Types.ObjectId }) milestoneId?: Types.ObjectId;
+  /** Set when this line bills a retainer — lets one invoice cover a client's several contracts. */
+  @Prop({ type: MS.Types.ObjectId, ref: 'Contract', index: true }) contractId?: Types.ObjectId;
 }
 const InvoiceLineItemSchema = SchemaFactory.createForClass(InvoiceLineItem);
 
@@ -46,6 +48,12 @@ export class Invoice {
   @Prop({ type: [PaymentSchema], default: [] }) payments!: Payment[];
   @Prop({ default: '' }) notes!: string;
   @Prop({ type: String }) pdfKey?: string;
+  /** When it was first marked as sent — amounts are locked from then on. */
+  @Prop({ type: Date }) sentAt?: Date;
+  /** Set once the overdue notification has gone out, so it fires once per invoice. Cleared when the due date moves. */
+  @Prop({ type: Date }) overdueNotifiedAt?: Date;
+  @Prop({ type: Date }) writtenOffAt?: Date;
+  @Prop({ type: String }) writeOffReason?: string;
   @Prop({ type: Date }) deletedAt?: Date;
 }
 

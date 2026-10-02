@@ -48,11 +48,18 @@ export class MailService implements OnModuleInit {
     }
   }
 
-  async sendInvite(to: string, name: string, link: string): Promise<void> {
+  async sendInvite(to: string, name: string, link: string, opts: { portalFor?: string } = {}): Promise<void> {
+    const safeName = escapeHtml(name);
+    const intro = opts.portalFor
+      ? `You've been given access to the client portal for <strong>${escapeHtml(opts.portalFor)}</strong>, where you can follow your projects, see shared updates and files, and view invoices.`
+      : "You've been invited to join the team workspace.";
     await this.send({
       to,
-      subject: 'You have been invited to the agency panel',
-      html: `<p>Hi ${name},</p><p>You have been invited. Click below to set your password:</p><p><a href="${link}">${link}</a></p><p>This link expires in 72 hours.</p>`,
+      subject: opts.portalFor ? `Your client portal access — ${opts.portalFor}` : 'You have been invited to the agency workspace',
+      html: `<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111">
+        <p>Hi ${safeName},</p><p>${intro}</p>
+        <p><a href="${link}" style="display:inline-block;background:#a8502b;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Set your password</a></p>
+        <p style="color:#666;font-size:13px">Or paste this link into your browser: ${link}<br/>The link expires in 72 hours.</p></div>`,
     });
   }
 
@@ -63,4 +70,8 @@ export class MailService implements OnModuleInit {
       html: `<p>Click the link below to reset your password:</p><p><a href="${link}">${link}</a></p><p>This link expires in 2 hours. Ignore if you did not request this.</p>`,
     });
   }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

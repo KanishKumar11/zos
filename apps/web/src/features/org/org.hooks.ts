@@ -1,7 +1,9 @@
-// React Query hooks for departments + designations.
+// React Query hooks for departments + designations. Create/update errors are left to the forms
+// (shown inline); deletes toast the server's reason (e.g. "still has 3 members").
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
+import { getErrorMessage } from '@/lib/api-client';
 import { qk } from '@/lib/query-keys';
 
 import {
@@ -27,10 +29,9 @@ export function useCreateDepartment() {
   return useMutation({
     mutationFn: (body: CreateDepartmentInput) => departmentsApi.create(body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.departments.list() });
+      qc.invalidateQueries({ queryKey: qk.departments.all });
       toast.success('Department created');
     },
-    onError: (err: Error) => toast.error(err.message),
   });
 }
 export function useUpdateDepartment() {
@@ -39,10 +40,9 @@ export function useUpdateDepartment() {
     mutationFn: (vars: { id: string; body: UpdateDepartmentInput }) =>
       departmentsApi.update(vars.id, vars.body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.departments.list() });
+      qc.invalidateQueries({ queryKey: qk.departments.all });
       toast.success('Department updated');
     },
-    onError: (err: Error) => toast.error(err.message),
   });
 }
 export function useDeleteDepartment() {
@@ -50,10 +50,11 @@ export function useDeleteDepartment() {
   return useMutation({
     mutationFn: (id: string) => departmentsApi.remove(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.departments.list() });
+      qc.invalidateQueries({ queryKey: qk.departments.all });
+      qc.invalidateQueries({ queryKey: qk.designations.all });
       toast.success('Department deleted');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }
 
@@ -72,7 +73,6 @@ export function useCreateDesignation() {
       qc.invalidateQueries({ queryKey: qk.designations.all });
       toast.success('Designation created');
     },
-    onError: (err: Error) => toast.error(err.message),
   });
 }
 export function useUpdateDesignation() {
@@ -84,7 +84,6 @@ export function useUpdateDesignation() {
       qc.invalidateQueries({ queryKey: qk.designations.all });
       toast.success('Designation updated');
     },
-    onError: (err: Error) => toast.error(err.message),
   });
 }
 export function useDeleteDesignation() {
@@ -95,7 +94,7 @@ export function useDeleteDesignation() {
       qc.invalidateQueries({ queryKey: qk.designations.all });
       toast.success('Designation deleted');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }
 

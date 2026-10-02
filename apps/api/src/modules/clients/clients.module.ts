@@ -2,6 +2,10 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { Contract, ContractSchema } from '../contracts/schemas/contract.schema';
+import { Invoice, InvoiceSchema } from '../invoices/schemas/invoice.schema';
+import { Project, ProjectSchema } from '../projects/schemas/project.schema';
+import { User, UserSchema } from '../users/schemas/user.schema';
 import { ClientsController } from './clients.controller';
 import { ClientsService } from './clients.service';
 import { CrmService } from './crm.service';
@@ -13,6 +17,10 @@ import { Opportunity, OpportunitySchema } from './schemas/opportunity.schema';
     MongooseModule.forFeature([
       { name: Client.name, schema: ClientSchema },
       { name: Opportunity.name, schema: OpportunitySchema },
+      { name: Project.name, schema: ProjectSchema },
+      { name: Invoice.name, schema: InvoiceSchema },
+      { name: Contract.name, schema: ContractSchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
   controllers: [ClientsController],

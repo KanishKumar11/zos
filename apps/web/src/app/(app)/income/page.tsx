@@ -1,208 +1,303 @@
+// Other income — money in that isn't a client invoice (affiliate payouts, referrals, interest, refunds).
 'use client';
 
+import { MoreHorizontal, Pencil, Plus, Trash2, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { TrendingUp } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Role } from '@agency/shared';
 
-import { RoleGate } from '@/components/auth/role-gate';
-import { PageHeader } from '@/components/layout/page-header';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import { getErrorMessage } from '@/lib/api-client';
+import { csvMoney } from '@/lib/csv';
+import { describeRange } from '@/lib/date-range';
+import { todayLocal } from '@/lib/form';
 import { formatDate, formatPaise } from '@/lib/formatters';
+import { useListState } from '@/lib/list-state';
 
+import { RoleGate } from '@/components/auth/role-gate';
+import { DataTable, exportColumnsCsv, type Column } from '@/components/data/data-table';
+import { DateRangeFilter, ExportButton, FilterBar, ResetFilters, SearchFilter, SelectFilter } from '@/components/data/filter-bar';
+import { PageHeader } from '@/components/layout/page-header';
+import { useNewParam } from '@/components/layout/quick-actions';
+import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
-  type CreateIncomeInput,
-  useCreateIncome,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Pagination } from '@/components/ui/pagination';
+import { StatCard } from '@/components/ui/stat-card';
+import { EmptyState } from '@/components/ui/states';
+import { ViewReceiptButton } from '@/features/expenses/receipt-field';
+import { IncomeFormDialog } from '@/features/income/income-form-dialog';
+import { INCOME_CATEGORIES, incomeCategoryLabel } from '@/features/income/income-meta';
+import {
+  incomeApi,
   useDeleteIncome,
   useIncome,
   useIncomeSummary,
+  type IncomeFilters,
+  type IncomeRow,
+  type IncomeSort,
 } from '@/features/income/income.hooks';
 
-const CATEGORIES = ['AFFILIATE', 'REFERRAL', 'INTEREST', 'REFUND', 'OTHER'];
-
-const CATEGORY_LABEL: Record<string, string> = {
-  AFFILIATE: 'Affiliate', REFERRAL: 'Referral', INTEREST: 'Interest',
-  REFUND: 'Refund', OTHER: 'Other',
-};
+const PAGE_SIZE = 25;
+const SORT_IDS = new Set(['date', 'amount']);
 
 export default function IncomePage() {
   return (
-    <RoleGate allow={[Role.OWNER]} fallback={<p className="text-sm text-muted-foreground">Restricted.</p>}>
+    <RoleGate allow={[Role.OWNER]} fallback={<EmptyState title="Only the owner can see income" />}>
       <Inner />
     </RoleGate>
   );
 }
 
 function Inner() {
-  const [open, setOpen] = useState(false);
-  const [catFilter, setCatFilter] = useState('');
-  const list = useIncome(catFilter ? { category: catFilter } : undefined);
-  const summary = useIncomeSummary();
-  const create = useCreateIncome();
+  const list = useListState('income', { q: '', category: '', range: '', from: '', to: '', sort: 'date:desc' });
+  const { params } = list;
+  const confirm = useConfirm();
   const del = useDeleteIncome();
 
-  const form = useForm<CreateIncomeInput>({
-    defaultValues: { title: '', amountPaise: 0, category: 'OTHER', date: new Date().toISOString().slice(0, 10), currency: 'INR' },
-  });
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<IncomeRow | undefined>();
+  const openCreate = () => {
+    setEditing(undefined);
+    setFormOpen(true);
+  };
+  const openEdit = (r: IncomeRow) => {
+    setEditing(r);
+    setFormOpen(true);
+  };
+  useNewParam(openCreate);
 
-  const onSubmit = form.handleSubmit((values) =>
-    create.mutate(values, {
-      onSuccess: () => { setOpen(false); form.reset(); },
-    }),
-  );
+  const filters: IncomeFilters = {
+    q: params.q || undefined,
+    category: params.category || undefined,
+    from: params.from || undefined,
+    to: params.to || undefined,
+  };
+  const sort = (SORT_IDS.has(list.sort?.by ?? '') ? `${list.sort!.by}:${list.sort!.dir}` : 'date:desc') as IncomeSort;
+  const income = useIncome({ ...filters, page: list.page, limit: PAGE_SIZE, sort });
+  const summary = useIncomeSummary(filters);
+  const totals = income.data?.totals;
+  const filtered = list.activeFilterCount > 0;
+
+  const askDelete = async (r: IncomeRow) => {
+    const ok = await confirm({
+      title: `Delete "${r.title}"?`,
+      description: `${formatPaise(r.amountPaise, r.currency)} received on ${formatDate(r.date)} will be taken out of income totals and the dashboard's profit figures. This can't be undone.`,
+      destructive: true,
+    });
+    if (ok) del.mutate(r._id);
+  };
+
+  const columns: Column<IncomeRow>[] = [
+    {
+      id: 'date',
+      header: 'Date',
+      sortable: true,
+      cell: (r) => <span className="whitespace-nowrap">{formatDate(r.date)}</span>,
+      csv: (r) => r.date.slice(0, 10),
+      footer: <span className="text-muted-foreground">{filtered ? 'Total (filtered)' : 'Total'}</span>,
+    },
+    {
+      id: 'title',
+      header: 'Income',
+      cell: (r) => (
+        <div className="min-w-0">
+          <span className="font-medium">{r.title}</span>
+          {r.description && <span className="block line-clamp-1 max-w-[320px] text-xs text-muted-foreground">{r.description}</span>}
+        </div>
+      ),
+      csv: (r) => r.title,
+    },
+    {
+      id: 'category',
+      header: 'Category',
+      hideBelow: 'sm',
+      cell: (r) => <span className="text-muted-foreground">{incomeCategoryLabel(r.category)}</span>,
+      csv: (r) => incomeCategoryLabel(r.category),
+    },
+    {
+      id: 'source',
+      header: 'Source',
+      hideBelow: 'md',
+      cell: (r) => <span className="text-muted-foreground">{r.source || '—'}</span>,
+      csv: (r) => r.source ?? '',
+    },
+    {
+      id: 'receipt',
+      header: <span className="sr-only">Receipt</span>,
+      hideBelow: 'sm',
+      cell: (r) => (r.receiptRef ? <ViewReceiptButton receiptKey={r.receiptRef} compact /> : null),
+    },
+    {
+      id: 'amount',
+      header: 'Amount',
+      align: 'right',
+      sortable: true,
+      cell: (r) => <span className="font-medium">{formatPaise(r.amountPaise, r.currency)}</span>,
+      csv: (r) => csvMoney(r.amountPaise),
+      csvHeader: 'Amount (₹)',
+      footer: totals ? formatPaise(totals.amountPaise) : null,
+    },
+    {
+      id: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      className: 'w-10',
+      cell: (r) => (
+        // Menu items render in a portal, but their clicks still bubble to the row — stop them here.
+        <div onClick={(ev) => ev.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Actions for ${r.title}`}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openEdit(r)}>
+                <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void askDelete(r)} className="text-destructive focus:text-destructive">
+                <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ];
+  const csvOnly: Column<IncomeRow>[] = [{ id: 'notes', header: 'Notes', cell: () => null, csv: (r) => r.description ?? '' }];
+
+  const [exporting, setExporting] = useState(false);
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const rows: IncomeRow[] = [];
+      for (let page = 1; ; page++) {
+        const res = await incomeApi.list({ ...filters, sort, page, limit: 500 });
+        rows.push(...res.items);
+        if (page >= res.meta.totalPages) break;
+      }
+      exportColumnsCsv(`other-income-${todayLocal()}`, [...columns, ...csvOnly], rows);
+    } catch (err) {
+      toast.error(`Export failed. ${getErrorMessage(err)}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const top = summary.data?.byCategory[0];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
-        title="Income"
-        description="Track non-client revenue — affiliate payouts, referrals, and other misc income."
+        title="Other income"
+        description="Money in that isn't a client invoice — affiliate payouts, referrals, interest and refunds."
         action={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button>Add income</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add income</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={onSubmit} className="grid gap-3">
-                <div className="space-y-1">
-                  <Label>Title</Label>
-                  <Input {...form.register('title', { required: true })} placeholder="e.g. Hostinger Affiliate Payout" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Amount (paise)</Label>
-                    <Input type="number" {...form.register('amountPaise', { required: true, valueAsNumber: true })} placeholder="e.g. 561873 for ₹5,618.73" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Date</Label>
-                    <Input type="date" {...form.register('date', { required: true })} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Category</Label>
-                    <select className="w-full rounded border bg-background px-3 py-2 text-sm" {...form.register('category')}>
-                      {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Source</Label>
-                    <Input {...form.register('source')} placeholder="e.g. Hostinger" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label>Notes</Label>
-                  <Input {...form.register('description')} placeholder="Optional description" />
-                </div>
-                <DialogFooter>
-                  <Button type="submit" disabled={create.isPending}>
-                    {create.isPending ? 'Saving…' : 'Save'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <>
+            <ExportButton onClick={() => void exportAll()} disabled={exporting || !totals?.count} />
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add income
+            </Button>
+          </>
         }
       />
 
-      {/* Summary cards */}
-      {summary.data && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Total</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{formatPaise(summary.data.grandTotalPaise, 'INR')}</p>
-            </CardContent>
-          </Card>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard
+          label={filtered ? 'Received (filtered)' : 'Received'}
+          loading={income.isLoading}
+          value={formatPaise(totals?.amountPaise ?? 0)}
+          hint={params.from || params.to ? describeRange(params.from, params.to) : 'All time'}
+        />
+        <StatCard label="Entries" loading={income.isLoading} value={String(totals?.count ?? 0)} />
+        <StatCard
+          label="Biggest category"
+          loading={summary.isLoading}
+          value={top ? incomeCategoryLabel(top._id) : '—'}
+          hint={top ? formatPaise(top.totalPaise) : undefined}
+        />
+      </div>
+
+      {summary.data && summary.data.byCategory.length > 1 && (
+        <div className="flex flex-wrap gap-2" aria-label="By category">
           {summary.data.byCategory.map((c) => (
-            <Card key={c._id}>
-              <CardContent className="p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{CATEGORY_LABEL[c._id] ?? c._id}</p>
-                <p className="mt-2 text-xl font-semibold tabular-nums">{formatPaise(c.totalPaise, 'INR')}</p>
-                <p className="text-[11px] text-muted-foreground">{c.count} {c.count === 1 ? 'entry' : 'entries'}</p>
-              </CardContent>
-            </Card>
+            <button
+              key={c._id}
+              type="button"
+              onClick={() => list.set({ category: params.category === c._id ? '' : c._id })}
+              className="rounded-lg border bg-card px-3 py-1.5 text-xs transition-colors hover:border-foreground/25 hover:bg-accent/40"
+            >
+              <span className="text-muted-foreground">{incomeCategoryLabel(c._id)}</span>{' '}
+              <span className="font-medium tabular-nums">{formatPaise(c.totalPaise)}</span>
+            </button>
           ))}
         </div>
       )}
 
-      {/* Filter + table */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            All income
-          </CardTitle>
-          <select
-            value={catFilter}
-            onChange={(e) => setCatFilter(e.target.value)}
-            className="rounded border bg-background px-2 py-1 text-sm"
-          >
-            <option value="">All categories</option>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-          </select>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <THead>
-              <TR>
-                <TH>Date</TH>
-                <TH>Title</TH>
-                <TH>Category</TH>
-                <TH>Source</TH>
-                <TH className="text-right">Amount</TH>
-                <TH />
-              </TR>
-            </THead>
-            <TBody>
-              {(list.data?.items ?? []).map((e) => (
-                <TR key={e._id}>
-                  <TD className="tabular-nums text-muted-foreground">{formatDate(e.date)}</TD>
-                  <TD className="font-medium">{e.title}</TD>
-                  <TD>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide">
-                      {CATEGORY_LABEL[e.category] ?? e.category}
-                    </span>
-                  </TD>
-                  <TD className="text-muted-foreground">{e.source ?? '—'}</TD>
-                  <TD className="text-right tabular-nums font-medium">{formatPaise(e.amountPaise, e.currency)}</TD>
-                  <TD>
-                    <button
-                      type="button"
-                      onClick={() => del.mutate(e._id)}
-                      className="text-[11px] text-muted-foreground hover:text-destructive"
-                    >
-                      Remove
-                    </button>
-                  </TD>
-                </TR>
-              ))}
-              {!list.isLoading && (list.data?.items ?? []).length === 0 && (
-                <TR>
-                  <TD colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                    No income recorded yet.
-                  </TD>
-                </TR>
-              )}
-            </TBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <FilterBar>
+        <SearchFilter value={params.q} onChange={(q) => list.set({ q })} placeholder="Search title, source, notes" />
+        <SelectFilter
+          value={params.category}
+          onChange={(category) => list.set({ category })}
+          allLabel="All categories"
+          options={INCOME_CATEGORIES.map((c) => ({ value: c, label: incomeCategoryLabel(c) }))}
+        />
+        <DateRangeFilter preset={params.range} from={params.from} to={params.to} onChange={(r) => list.set(r)} />
+        <ResetFilters count={list.activeFilterCount} onReset={list.reset} />
+      </FilterBar>
+
+      <DataTable
+        columns={columns}
+        rows={income.data?.items}
+        rowKey={(r) => r._id}
+        loading={income.isLoading}
+        error={income.error}
+        onRetry={() => void income.refetch()}
+        sort={list.sort && SORT_IDS.has(list.sort.by) ? list.sort : { by: 'date', dir: 'desc' }}
+        onSortChange={(s) => list.set({ sort: s ? `${s.by}:${s.dir}` : 'date:desc' })}
+        onRowClick={openEdit}
+        showFooter
+        empty={
+          filtered ? (
+            <EmptyState
+              title="No income matches these filters"
+              action={
+                <Button variant="outline" size="sm" onClick={list.reset}>
+                  Clear filters
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={TrendingUp}
+              title="No other income yet"
+              description="Record affiliate payouts, referral fees, interest and refunds so profit figures include them."
+              action={
+                <Button size="sm" onClick={openCreate}>
+                  Add income
+                </Button>
+              }
+            />
+          )
+        }
+      />
+      {income.data && (
+        <Pagination
+          page={list.page}
+          totalPages={income.data.meta.totalPages}
+          total={income.data.meta.total}
+          pageSize={PAGE_SIZE}
+          onPage={list.setPage}
+        />
+      )}
+
+      <IncomeFormDialog open={formOpen} onOpenChange={setFormOpen} income={editing} />
     </div>
   );
 }

@@ -50,6 +50,13 @@ export class Payslip {
   @Prop({ type: Number, required: true }) workingDays!: number;
   @Prop({ type: Number, required: true }) presentDays!: number;
   @Prop({ type: Number, required: true }) lopDays!: number;
+  /** Working days that have happened when this slip was computed. */
+  @Prop({ type: Number }) elapsedWorkingDays?: number;
+  @Prop({ type: Number, default: 0 }) absentDays!: number;
+  @Prop({ type: Number, default: 0 }) leaveDays!: number;
+  /** Past working days with no attendance record (only unpaid if the workspace setting says so). */
+  @Prop({ type: Number, default: 0 }) unmarkedDays!: number;
+  @Prop({ type: Number, default: 0 }) notJoinedDays!: number;
   @Prop() pdfKey?: string;
   @Prop({ default: 'INR' }) currency!: string;
   @Prop({ type: [PayslipAdjustmentSchema], default: [] }) adjustments!: PayslipAdjustment[];

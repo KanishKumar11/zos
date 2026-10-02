@@ -8,7 +8,7 @@ import { Roles } from '@/common/decorators/roles.decorator';
 import { ObjectIdPipe } from '@/common/pipes/object-id.pipe';
 import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 
-import { CreateIncomeDto, UpdateIncomeDto } from './dto/income.dto';
+import { CreateIncomeDto, IncomeSummaryQueryDto, ListIncomeQueryDto, UpdateIncomeDto } from './dto/income.dto';
 import { IncomeService } from './income.service';
 
 @Controller('income')
@@ -17,25 +17,13 @@ export class IncomeController {
   constructor(private readonly svc: IncomeService) {}
 
   @Get()
-  list(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('category') category?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ) {
-    return this.svc.list({
-      page: page ? +page : undefined,
-      limit: limit ? +limit : undefined,
-      category,
-      from,
-      to,
-    });
+  list(@Query() q: ListIncomeQueryDto) {
+    return this.svc.list(q);
   }
 
   @Get('summary')
-  summary(@Query('from') from?: string, @Query('to') to?: string) {
-    return this.svc.summary(from, to);
+  summary(@Query() q: IncomeSummaryQueryDto) {
+    return this.svc.summary(q);
   }
 
   @Get(':id')
@@ -49,12 +37,12 @@ export class IncomeController {
   }
 
   @Patch(':id')
-  update(@Param('id', ObjectIdPipe) id: string, @Body() body: UpdateIncomeDto) {
-    return this.svc.update(id, body);
+  update(@Param('id', ObjectIdPipe) id: string, @Body() body: UpdateIncomeDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.update(id, body, user.sub);
   }
 
   @Delete(':id')
-  remove(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.remove(id).then(() => ({ ok: true }));
+  remove(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.remove(id, user.sub).then(() => ({ ok: true }));
   }
 }

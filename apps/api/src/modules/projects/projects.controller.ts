@@ -1,46 +1,74 @@
-// Projects controller. Read open to authenticated; create/update/delete OWNER+ADMIN+LEAD; OWNER-only fields enforced in service.
+// Projects controller. Read open to authenticated; create/update/delete OWNER+ADMIN+LEAD.
+// Every handler reachable by non-OWNERs returns through presentProject (see projects.presenter.ts).
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Types } from 'mongoose';
 
 import {
   Role,
-  addMemberPaymentSchema,
   createMilestoneSchema,
   createProjectSchema,
   listProjectsQuerySchema,
+  projectFreelancerInputSchema,
   projectMemberInputSchema,
   setMemberCostSchema,
   updateMilestoneSchema,
+  updateProjectFreelancerSchema,
   updateProjectSchema,
-  type AddMemberPaymentInput,
   type CreateMilestoneInput,
   type CreateProjectInput,
   type ListProjectsQuery,
+  type ProjectFreelancerInput,
   type ProjectMemberInput,
   type SetMemberCostInput,
   type UpdateMilestoneInput,
+  type UpdateProjectFreelancerInput,
   type UpdateProjectInput,
 } from '@agency/shared';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { SerializeResource } from '@/common/decorators/owner-only.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
 import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 import { ObjectIdPipe } from '@/common/pipes/object-id.pipe';
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe';
 
+import { PayoutsService } from '../payouts/payouts.service';
+import { presentProject, presentProjects } from './projects.presenter';
 import { ProjectsService } from './projects.service';
+import type { ProjectDocument } from './schemas/project.schema';
 
 @Controller('projects')
-@SerializeResource('project')
 export class ProjectsController {
-  constructor(private readonly svc: ProjectsService) {}
+  constructor(
+    private readonly svc: ProjectsService,
+    private readonly payouts: PayoutsService,
+  ) {}
+
+  /** Non-owners get the work view plus what they themselves were paid (from the ledger). */
+  private async present(doc: ProjectDocument, user: JwtPayload) {
+    const [names, paid] = await Promise.all([
+      this.svc.peopleNames(doc),
+      user.role === Role.OWNER ? undefined : this.payouts.memberPaidByProject(user.sub, [doc._id as Types.ObjectId]),
+    ]);
+    const out = presentProject(doc, user, paid?.get(String(doc._id)));
+    out.members = (out.members ?? []).map((m: { userId: unknown }) => ({ ...m, name: names.users.get(String(m.userId)) }));
+    if (Array.isArray(out.freelancers)) {
+      out.freelancers = out.freelancers.map((f: { freelancerId: unknown }) => ({
+        ...f,
+        name: names.freelancers.get(String(f.freelancerId)),
+      }));
+    }
+    return out;
+  }
 
   @Get()
-  list(
+  async list(
     @CurrentUser() user: JwtPayload,
     @Query(new ZodValidationPipe(listProjectsQuerySchema)) q: ListProjectsQuery,
   ) {
-    return this.svc.list(q, user);
+    const page = await this.svc.list(q, user);
+    if (user.role === Role.OWNER) return presentProjects(page, user);
+    const paid = await this.payouts.memberPaidByProject(user.sub, page.items.map((p) => p._id as Types.ObjectId));
+    return presentProjects(page, user, paid);
   }
 
   @Roles(Role.OWNER, Role.ADMIN, Role.LEAD)
@@ -50,45 +78,47 @@ export class ProjectsController {
   }
 
   @Get(':id')
-  byId(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
-    return this.svc.byId(id, user);
+  async byId(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.present(await this.svc.byId(id, user), user);
   }
 
   @Roles(Role.OWNER, Role.ADMIN, Role.LEAD)
   @Post()
-  create(
+  async create(
     @CurrentUser() user: JwtPayload,
     @Body(new ZodValidationPipe(createProjectSchema)) body: CreateProjectInput,
   ) {
-    return this.svc.create(body, user);
+    return this.present(await this.svc.create(body, user), user);
   }
 
   @Roles(Role.OWNER, Role.ADMIN, Role.LEAD)
   @Patch(':id')
-  update(
+  async update(
     @Param('id', ObjectIdPipe) id: string,
     @CurrentUser() user: JwtPayload,
     @Body(new ZodValidationPipe(updateProjectSchema)) body: UpdateProjectInput,
   ) {
-    return this.svc.update(id, body, user);
+    return this.present(await this.svc.update(id, body, user), user);
   }
 
   @Roles(Role.OWNER, Role.ADMIN, Role.LEAD)
   @Post(':id/members')
-  addMember(
+  async addMember(
     @Param('id', ObjectIdPipe) id: string,
+    @CurrentUser() user: JwtPayload,
     @Body(new ZodValidationPipe(projectMemberInputSchema)) body: ProjectMemberInput,
   ) {
-    return this.svc.addMember(id, body);
+    return this.present(await this.svc.addMember(id, body, user), user);
   }
 
   @Roles(Role.OWNER, Role.ADMIN, Role.LEAD)
   @Delete(':id/members/:userId')
-  removeMember(
+  async removeMember(
     @Param('id', ObjectIdPipe) id: string,
     @Param('userId', ObjectIdPipe) userId: string,
+    @CurrentUser() user: JwtPayload,
   ) {
-    return this.svc.removeMember(id, userId);
+    return this.present(await this.svc.removeMember(id, userId), user);
   }
 
   @Roles(Role.OWNER)
@@ -96,35 +126,43 @@ export class ProjectsController {
   setMemberCost(
     @Param('id', ObjectIdPipe) id: string,
     @Param('userId', ObjectIdPipe) userId: string,
+    @CurrentUser() user: JwtPayload,
     @Body(new ZodValidationPipe(setMemberCostSchema)) body: SetMemberCostInput,
   ) {
-    return this.svc.setMemberCost(id, userId, body.amountPaise);
+    return this.svc.setMemberCost(id, userId, body.amountPaise, user);
   }
 
+  // ── Freelancer deals (OWNER) ─────────────────────────────────────────────────────
+
   @Roles(Role.OWNER)
-  @Post(':id/members/:userId/payments')
-  addMemberPayment(
+  @Post(':id/freelancers')
+  addFreelancer(
     @Param('id', ObjectIdPipe) id: string,
-    @Param('userId', ObjectIdPipe) userId: string,
-    @Body(new ZodValidationPipe(addMemberPaymentSchema)) body: AddMemberPaymentInput,
+    @CurrentUser() user: JwtPayload,
+    @Body(new ZodValidationPipe(projectFreelancerInputSchema)) body: ProjectFreelancerInput,
   ) {
-    return this.svc.addMemberPayment(id, userId, { amountPaise: body.amountPaise, paidAt: new Date(body.paidAt), note: body.note, forPeriod: body.forPeriod });
+    return this.svc.addFreelancer(id, body, user);
   }
 
   @Roles(Role.OWNER)
-  @Delete(':id/members/:userId/payments/:paymentId')
-  removeMemberPayment(
+  @Patch(':id/freelancers/:freelancerId')
+  updateFreelancer(
     @Param('id', ObjectIdPipe) id: string,
-    @Param('userId', ObjectIdPipe) userId: string,
-    @Param('paymentId', ObjectIdPipe) paymentId: string,
+    @Param('freelancerId', ObjectIdPipe) freelancerId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body(new ZodValidationPipe(updateProjectFreelancerSchema)) body: UpdateProjectFreelancerInput,
   ) {
-    return this.svc.removeMemberPayment(id, userId, paymentId);
+    return this.svc.updateFreelancer(id, freelancerId, body, user);
   }
 
   @Roles(Role.OWNER)
-  @Get(':id/member-costs')
-  memberCosts(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.memberCosts(id);
+  @Delete(':id/freelancers/:freelancerId')
+  removeFreelancer(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('freelancerId', ObjectIdPipe) freelancerId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.svc.removeFreelancer(id, freelancerId, user);
   }
 
   @Roles(Role.OWNER)
@@ -132,6 +170,8 @@ export class ProjectsController {
   projectBalance(@Param('id', ObjectIdPipe) id: string) {
     return this.svc.projectBalance(id);
   }
+
+  // ── Milestones (OWNER) ───────────────────────────────────────────────────────────
 
   @Roles(Role.OWNER)
   @Post(':id/milestones')
@@ -163,7 +203,7 @@ export class ProjectsController {
 
   @Roles(Role.OWNER, Role.ADMIN)
   @Delete(':id')
-  remove(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.softDelete(id).then(() => ({ ok: true }));
+  remove(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.softDelete(id, user).then(() => ({ ok: true }));
   }
 }

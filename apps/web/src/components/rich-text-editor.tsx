@@ -122,3 +122,25 @@ function ToolbarButton({
     </Button>
   );
 }
+
+/**
+ * Read-only renderer for stored rich text. Content is parsed through the editor schema in an
+ * inert document, so only known nodes/marks survive — scripts, event handlers and unknown tags
+ * are dropped. Use this instead of dangerouslySetInnerHTML for any user-authored HTML.
+ */
+export function RichTextView({ html, className }: { html: string; className?: string }) {
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: html || '',
+    editable: false,
+    immediatelyRender: false,
+    editorProps: { attributes: { class: cn('prose prose-sm max-w-none', className) } },
+  });
+
+  useEffect(() => {
+    if (editor && (html || '') !== editor.getHTML()) editor.commands.setContent(html || '', false);
+  }, [html, editor]);
+
+  if (!editor) return <div className={cn('prose prose-sm max-w-none text-muted-foreground', className)}>…</div>;
+  return <EditorContent editor={editor} />;
+}

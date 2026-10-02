@@ -18,7 +18,10 @@ export interface AnnouncementRow {
   body: string;
   audienceType: AudienceType;
   audienceIds: string[];
+  audienceRoles?: string[];
   pinned: boolean;
+  /** Owner/admin only. */
+  readCount?: number;
   createdBy: string;
   publishedAt?: string;
   createdAt: string;
@@ -66,6 +69,13 @@ export function useCreateAnnouncement() {
       toast.success('Announcement published');
     },
     onError: (err: Error) => toast.error(err.message),
+  });
+}
+export function useUpdateAnnouncement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; body: UpdateAnnouncementInput }) => announcementsApi.update(vars.id, vars.body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['announcements'] }),
   });
 }
 export function useDeleteAnnouncement() {

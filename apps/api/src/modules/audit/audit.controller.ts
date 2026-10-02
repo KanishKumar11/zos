@@ -1,12 +1,10 @@
 // Audit controller — OWNER + ADMIN read-only.
 import { Controller, Get, Query } from '@nestjs/common';
 
-import { AuditAction, Role } from '@agency/shared';
+import { AuditAction, Role, paginationQuerySchema, type PaginationQuery } from '@agency/shared';
 
 import { Roles } from '@/common/decorators/roles.decorator';
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe';
-import { paginationQuerySchema } from '@agency/shared';
-import type { PaginationQuery } from '@agency/shared';
 
 import { AuditService } from './audit.service';
 
@@ -19,9 +17,25 @@ export class AuditController {
   list(
     @Query(new ZodValidationPipe(paginationQuerySchema)) pagination: PaginationQuery,
     @Query('entity') entity?: string,
+    @Query('entityId') entityId?: string,
     @Query('actorId') actorId?: string,
-    @Query('action') action?: AuditAction,
+    @Query('action') action?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.svc.list(pagination, { entity, actorId, action });
+    const validAction = action && (Object.values(AuditAction) as string[]).includes(action) ? (action as AuditAction) : undefined;
+    return this.svc.list(pagination, {
+      entity: entity || undefined,
+      entityId: entityId || undefined,
+      actorId: actorId || undefined,
+      action: validAction,
+      from: from || undefined,
+      to: to || undefined,
+    });
+  }
+
+  @Get('entities')
+  entities() {
+    return this.svc.entities();
   }
 }

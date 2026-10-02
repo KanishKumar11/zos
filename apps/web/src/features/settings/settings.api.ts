@@ -24,6 +24,7 @@ export interface SettingsRow {
   country?: string;
   gstin?: string;
   pan?: string;
+  treatMissingAttendanceAsAbsent?: boolean;
 }
 export interface HolidayRow {
   _id: string;

@@ -2,7 +2,9 @@
 import {
   Body,
   Controller,
+  Delete,
   HttpCode,
+  Param,
   HttpStatus,
   Post,
   Get,
@@ -10,22 +12,29 @@ import {
   Res,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Request, Response } from 'express';
 
 import {
   acceptInviteSchema,
+  changePasswordSchema,
   inviteUserSchema,
+  type ChangePasswordInput,
   loginSchema,
   performPasswordResetSchema,
   requestPasswordResetSchema,
+  AuditAction,
   Role,
 } from '@agency/shared';
+import { emitAudit } from '@/common/utils/audit.util';
 
 import { REFRESH_COOKIE_NAME } from '@/common/constants/app.constants';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { PortalAccess } from '@/common/decorators/portal-access.decorator';
 import { Public } from '@/common/decorators/public.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
 import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
+import { ObjectIdPipe } from '@/common/pipes/object-id.pipe';
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe';
 
 import type {
@@ -44,6 +53,7 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly mail: MailService,
     private readonly config: ConfigService,
+    private readonly events: EventEmitter2,
   ) {}
 
   // ── Public ───────────────────────────────────────────────────────────────────────
@@ -72,6 +82,7 @@ export class AuthController {
     return { accessToken: tokens.accessToken };
   }
 
+  @PortalAccess()
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -114,9 +125,26 @@ export class AuthController {
   }
 
   // ── Authed ───────────────────────────────────────────────────────────────────────
+  @PortalAccess()
   @Get('me')
   me(@CurrentUser() user: JwtPayload) {
     return this.auth.me(user.sub);
+  }
+
+  /** Change password while signed in; other sessions are signed out, this one gets fresh tokens. */
+  @PortalAccess()
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @CurrentUser() user: JwtPayload,
+    @Body(new ZodValidationPipe(changePasswordSchema)) input: ChangePasswordInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.auth.changePassword(user.sub, input.currentPassword, input.newPassword);
+    const tokens = await this.auth.issueFor(user.sub, { ip: req.ip, ua: req.get('user-agent') ?? undefined });
+    this.attachCookies(res, tokens.accessToken, tokens.refreshToken, tokens.refreshExpiresAt);
+    return { ok: true };
   }
 
   // ── Owner/Admin: invite ──────────────────────────────────────────────────────────
@@ -126,14 +154,47 @@ export class AuthController {
     @CurrentUser() user: JwtPayload,
     @Body(new ZodValidationPipe(inviteUserSchema)) input: InviteUserInput,
   ) {
-    const { token, expiresAt } = await this.auth.createInvite(input, user.sub);
+    const { token, expiresAt, inviteId } = await this.auth.createInvite(input, user.sub);
+    const emailed = await this.sendInviteMail(input.email, input.name, token);
+    emitAudit(this.events, {
+      actorId: user.sub,
+      action: AuditAction.MEMBER_INVITED,
+      entity: 'invite',
+      entityId: inviteId,
+      summary: `Invited ${input.name} <${input.email}> as ${input.role.toLowerCase()}${emailed ? '' : ' (email not sent)'}`,
+    });
+    return { ok: true, expiresAt, emailed, inviteId };
+  }
+
+  @Roles(Role.OWNER, Role.ADMIN)
+  @Get('invites')
+  invites() {
+    return this.auth.listInvites({ staffOnly: true });
+  }
+
+  @Roles(Role.OWNER, Role.ADMIN)
+  @Post('invites/:id/resend')
+  async resendInvite(@Param('id', ObjectIdPipe) id: string) {
+    const r = await this.auth.resendInvite(id);
+    const emailed = await this.sendInviteMail(r.email, r.name, r.token);
+    return { ok: true, expiresAt: r.expiresAt, emailed };
+  }
+
+  @Roles(Role.OWNER, Role.ADMIN)
+  @Delete('invites/:id')
+  revokeInvite(@Param('id', ObjectIdPipe) id: string) {
+    return this.auth.revokeInvite(id);
+  }
+
+  /** Emails an invite link. Returns false (instead of failing the request) when mail is down. */
+  private async sendInviteMail(email: string, name: string, token: string, portalFor?: string): Promise<boolean> {
     const link = `${this.config.get<string>('app.webUrl')}/accept-invite?token=${token}`;
     try {
-      await this.mail.sendInvite(input.email, input.name, link);
+      await this.mail.sendInvite(email, name, link, { portalFor });
+      return true;
     } catch {
-      // surface invite token for owner debugging in non-prod
+      return false;
     }
-    return { ok: true, expiresAt };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────────

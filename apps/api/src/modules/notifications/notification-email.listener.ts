@@ -19,6 +19,9 @@ const EMAIL_TYPES = new Set<NotificationType>([
   NotificationType.ANNOUNCEMENT_POSTED,
   NotificationType.INVOICE_OVERDUE,
   NotificationType.TASK_ASSIGNED,
+  NotificationType.PAYMENT_RECEIVED,
+  NotificationType.PROJECT_UPDATE,
+  NotificationType.INVOICE_SENT,
 ]);
 
 @Injectable()
@@ -33,6 +36,7 @@ export class NotificationEmailListener {
   @OnEvent(EVENT_NAMES.notification.create, { async: true })
   async onNotification(payload: CreateNotificationInput): Promise<void> {
     if (!EMAIL_TYPES.has(payload.type)) return;
+    if ((payload.data as { noEmail?: boolean } | undefined)?.noEmail) return;
     try {
       const user = await this.users.byId(payload.userId);
       if (!user || !user.email) return;

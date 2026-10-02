@@ -8,7 +8,7 @@ import { Roles } from '@/common/decorators/roles.decorator';
 import { ObjectIdPipe } from '@/common/pipes/object-id.pipe';
 import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 
-import { CreateExpenseDto, UpdateExpenseDto } from './dto/expense.dto';
+import { CreateExpenseDto, ExpenseSummaryQueryDto, ListExpensesQueryDto, UpdateExpenseDto } from './dto/expense.dto';
 import { ExpensesService } from './expenses.service';
 
 @Controller('expenses')
@@ -17,27 +17,13 @@ export class ExpensesController {
   constructor(private readonly svc: ExpensesService) {}
 
   @Get()
-  list(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('category') category?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('contributorId') contributorId?: string,
-  ) {
-    return this.svc.list({
-      page: page ? +page : undefined,
-      limit: limit ? +limit : undefined,
-      category,
-      from,
-      to,
-      contributorId,
-    });
+  list(@Query() q: ListExpensesQueryDto) {
+    return this.svc.list(q);
   }
 
   @Get('summary')
-  summary(@Query('from') from?: string, @Query('to') to?: string) {
-    return this.svc.summary(from, to);
+  summary(@Query() q: ExpenseSummaryQueryDto) {
+    return this.svc.summary(q);
   }
 
   @Get(':id')
@@ -50,13 +36,19 @@ export class ExpensesController {
     return this.svc.create(body, user.sub);
   }
 
+  /** Copy a monthly / yearly expense into the next period. */
+  @Post(':id/repeat')
+  repeat(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.repeat(id, user.sub);
+  }
+
   @Patch(':id')
-  update(@Param('id', ObjectIdPipe) id: string, @Body() body: UpdateExpenseDto) {
-    return this.svc.update(id, body);
+  update(@Param('id', ObjectIdPipe) id: string, @Body() body: UpdateExpenseDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.update(id, body, user.sub);
   }
 
   @Delete(':id')
-  remove(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.remove(id).then(() => ({ ok: true }));
+  remove(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.remove(id, user.sub).then(() => ({ ok: true }));
   }
 }

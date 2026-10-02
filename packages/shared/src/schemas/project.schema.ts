@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 import { ProjectMemberRole, ProjectStatus } from '../enums';
-import { objectIdSchema, isoDateSchema } from './common.schema';
+import { isoDateSchema, objectIdSchema, optionalObjectIdSchema } from './common.schema';
 
 export const projectMemberInputSchema = z.object({
   userId: objectIdSchema,
@@ -34,9 +34,12 @@ export const createProjectSchema = z.object({
   brief: z.string().max(20_000).optional(),
   members: z.array(projectMemberInputSchema).optional(),
   // OWNER-only fields (server enforces guard)
-  clientId: objectIdSchema.optional(),
+  clientId: optionalObjectIdSchema,
   clientBudgetPaise: z.number().int().min(0).optional(),
-  agencyMarginPaise: z.number().int().min(0).optional(),
+  /** Budget minus team/freelancer cost — legitimately negative when a project runs over. */
+  agencyMarginPaise: z.number().int().optional(),
+  /** When false the project is hidden from the client portal. */
+  portalVisible: z.boolean().optional(),
   currency: z.string().length(3).optional(),
 });
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;

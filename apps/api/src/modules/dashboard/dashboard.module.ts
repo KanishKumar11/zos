@@ -3,10 +3,6 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { Expense, ExpenseSchema } from '../expenses/schemas/expense.schema';
-import {
-  FreelancerPayment,
-  FreelancerPaymentSchema,
-} from '../freelancer-payments/schemas/freelancer-payment.schema';
 import { Income, IncomeSchema } from '../income/schemas/income.schema';
 import { Invoice, InvoiceSchema } from '../invoices/schemas/invoice.schema';
 import {
@@ -18,6 +14,7 @@ import {
   PayrollRunSchema,
 } from '../payroll/schemas/payroll-run.schema';
 import { Payslip, PayslipSchema } from '../payroll/schemas/payslip.schema';
+import { Payout, PayoutSchema } from '../payouts/schemas/payout.schema';
 import { Project, ProjectSchema } from '../projects/schemas/project.schema';
 import { Sow, SowSchema } from '../sow/schemas/sow.schema';
 import { Task, TaskSchema } from '../tasks/schemas/task.schema';
@@ -37,7 +34,7 @@ import { DashboardService } from './dashboard.service';
       { name: LeaveRequest.name, schema: LeaveRequestSchema },
       { name: Expense.name, schema: ExpenseSchema },
       { name: Income.name, schema: IncomeSchema },
-      { name: FreelancerPayment.name, schema: FreelancerPaymentSchema },
+      { name: Payout.name, schema: PayoutSchema },
       { name: User.name, schema: UserSchema },
     ]),
   ],

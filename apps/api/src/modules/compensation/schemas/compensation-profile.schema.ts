@@ -30,6 +30,8 @@ export class CompensationProfile {
 
   @Prop({ type: Date, required: true }) effectiveFrom!: Date;
   @Prop() notes?: string;
+  /** The history row this profile was last copied from (see CompensationService.byUserId). */
+  @Prop({ type: MS.Types.ObjectId }) sourceHistoryId?: Types.ObjectId;
 }
 
 export type CompensationProfileDocument = HydratedDocument<CompensationProfile>;

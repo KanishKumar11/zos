@@ -1,13 +1,17 @@
-// Topbar — page context, theme toggle, notification bell, user menu.
+// Topbar — breadcrumbs, search (⌘K), "+ New" quick actions, notifications, theme, user menu.
 'use client';
 
-import { Bell, LogOut, Moon, Sun, Settings } from 'lucide-react';
+import { Bell, ChevronRight, LogOut, Menu, Moon, Plus, Search, Settings, Sun, UserRound } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+
+import { Role } from '@agency/shared';
 
 import { initials } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
+import { usePageMetaStore } from '@/store/page-meta.store';
+import { useQuickActions } from '@/store/quick-actions.store';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -21,57 +25,129 @@ import {
 import { useLogout } from '@/features/auth/auth.hooks';
 import { useUnreadCount } from '@/features/notifications/notifications.hooks';
 
-function usePageTitle() {
+import { navLabelFor } from './nav-config';
+import { useNewActions } from './quick-actions';
+
+function Breadcrumbs() {
   const pathname = usePathname();
-  const segments = pathname.split('/').filter(Boolean);
-  if (segments.length === 0) return 'Dashboard';
-  const last = segments[segments.length - 1];
-  if (!last) return 'Dashboard';
-  return last.charAt(0).toUpperCase() + last.slice(1).replace(/-/g, ' ');
+  const { title, crumbs } = usePageMetaStore();
+  const current = title || navLabelFor(pathname) || '';
+  return (
+    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 text-[13px]">
+      {crumbs.map((c) => (
+        <span key={`${c.label}${c.href}`} className="hidden min-w-0 items-center gap-1 sm:flex">
+          {c.href ? (
+            <Link href={c.href} className="truncate text-muted-foreground transition-colors hover:text-foreground">
+              {c.label}
+            </Link>
+          ) : (
+            <span className="truncate text-muted-foreground">{c.label}</span>
+          )}
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+        </span>
+      ))}
+      <span className="truncate font-medium text-foreground/90">{current}</span>
+    </nav>
+  );
+}
+
+function NewMenu() {
+  const actions = useNewActions();
+  const router = useRouter();
+  if (actions.length === 0) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" className="h-8 gap-1 px-2.5">
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">New</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        {actions.map((a) => {
+          const Icon = a.icon;
+          return (
+            <DropdownMenuItem
+              key={a.id}
+              className="cursor-pointer"
+              onClick={() => (a.run ? a.run() : a.href && router.push(a.href))}
+            >
+              <Icon className="mr-2 h-3.5 w-3.5" />
+              {a.label}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 export function Topbar() {
   const user = useAuthStore((s) => s.user);
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const logout = useLogout();
   const unread = useUnreadCount();
   const count = unread.data?.count ?? 0;
-  const pageTitle = usePageTitle();
+  const setPaletteOpen = useQuickActions((s) => s.setPaletteOpen);
+  const setMobileNavOpen = useQuickActions((s) => s.setMobileNavOpen);
+  const canSettings = user?.role === Role.OWNER || user?.role === Role.ADMIN;
 
   return (
-    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b bg-card/80 px-5 backdrop-blur-sm">
-      {/* Page title */}
-      <h1 className="text-[13px] font-medium text-foreground/80">{pageTitle}</h1>
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur-sm md:px-6">
+      <button
+        type="button"
+        className="-ml-1 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
+        aria-label="Open navigation"
+        onClick={() => setMobileNavOpen(true)}
+      >
+        <Menu className="h-5 w-5" />
+      </button>
 
-      {/* Actions */}
-      <div className="flex items-center gap-1">
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Notifications" asChild>
+      <Breadcrumbs />
+
+      <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setPaletteOpen(true)}
+          className="hidden h-8 items-center gap-2 rounded-md border bg-background px-2.5 text-[13px] text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground sm:flex"
+        >
+          <Search className="h-3.5 w-3.5" />
+          <span>Search…</span>
+          <kbd className="ml-4 rounded border bg-muted px-1.5 font-sans text-[10px]">Ctrl K</kbd>
+        </button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground sm:hidden"
+          aria-label="Search"
+          onClick={() => setPaletteOpen(true)}
+        >
+          <Search className="h-4 w-4" />
+        </Button>
+
+        <NewMenu />
+
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label={`Notifications${count ? `, ${count} unread` : ''}`} asChild>
           <Link href="/notifications" className="relative">
             <Bell className="h-4 w-4" />
             {count > 0 && (
-              <span
-                className="absolute -right-0.5 -top-0.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-semibold leading-none text-destructive-foreground"
-                aria-label={`${count} unread`}
-              >
+              <span className="absolute -right-0.5 -top-0.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-semibold leading-none text-destructive-foreground">
                 {count > 99 ? '99+' : count}
               </span>
             )}
           </Link>
         </Button>
 
-        {/* Theme toggle */}
         <Button
           variant="ghost"
           size="icon"
           className="h-8 w-8 text-muted-foreground hover:text-foreground"
           aria-label="Toggle theme"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
         >
-          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
-        {/* User dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -82,7 +158,7 @@ export function Topbar() {
               {user ? initials(user.name) : '?'}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col gap-0.5">
                 <span className="text-[13px] font-medium leading-none">{user?.name}</span>
@@ -91,16 +167,21 @@ export function Topbar() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/settings" className="cursor-pointer">
-                <Settings className="mr-2 h-3.5 w-3.5" />
-                Settings
+              <Link href="/profile" className="cursor-pointer">
+                <UserRound className="mr-2 h-3.5 w-3.5" />
+                My profile
               </Link>
             </DropdownMenuItem>
+            {canSettings && (
+              <DropdownMenuItem asChild>
+                <Link href="/settings" className="cursor-pointer">
+                  <Settings className="mr-2 h-3.5 w-3.5" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => logout.mutate()}
-            >
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => logout.mutate()}>
               <LogOut className="mr-2 h-3.5 w-3.5" />
               Sign out
             </DropdownMenuItem>
@@ -110,4 +191,3 @@ export function Topbar() {
     </header>
   );
 }
-

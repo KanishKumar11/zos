@@ -1,10 +1,17 @@
 // Invoice PDF template — Zlaark branded design.
 export interface InvoicePdfData {
-  agency: { name: string; address?: string; gstin?: string; pan?: string };
-  client: { name: string; company?: string; gstin?: string; cin?: string; address?: string };
+  /** `state` is the agency's GST state (Settings). */
+  agency: { name: string; address?: string; gstin?: string; pan?: string; state?: string };
+  /** `state` is the client's place of supply — decides IGST vs CGST + SGST. */
+  client: { name: string; company?: string; gstin?: string; cin?: string; address?: string; state?: string };
   number: string;
+  /** Invoice status (DRAFT / WRITTEN_OFF change the badge). */
+  status?: string;
+  isOverdue?: boolean;
   issueDate?: Date;
   dueDate?: Date;
+  /** Client payment terms; 0 = due on receipt. */
+  paymentTermsDays?: number;
   currency: string;
   lineItems: { description: string; qty: number; unitPaise: number; projectName?: string }[];
   subTotalPaise: number;
@@ -16,18 +23,37 @@ export interface InvoicePdfData {
   payments?: { paidAt: Date; amountPaise: number; reference?: string; method?: string }[];
 }
 
-const fmtNum = (paise: number): string => {
+/** Escape user-entered text before it goes into the HTML. */
+const esc = (v: string | number | undefined | null): string =>
+  String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+const SYMBOL: Record<string, string> = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
+/** Prefix for amounts: ₹ for INR, $ / € / £, otherwise the ISO code ("AED "). */
+const symbolFor = (currency: string): string => SYMBOL[currency] ?? `${esc(currency)} `;
+
+/** Indian digit grouping for INR, international for everything else; paise shown only when present. */
+const makeFmtNum = (currency: string) => (paise: number): string => {
   const v = paise / 100;
-  return v.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return v.toLocaleString(currency === 'INR' ? 'en-IN' : 'en-US', {
+    minimumFractionDigits: Number.isInteger(v) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
 };
 
 const fmtDate = (d?: Date) =>
   d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 
-// Indian-system rupee amount in words (e.g. "Rupees Eighteen Thousand Only").
-const amountToWords = (paise: number): string => {
+const CURRENCY_WORD: Record<string, string> = { INR: 'Rupees', USD: 'US Dollars', EUR: 'Euros', GBP: 'Pounds Sterling' };
+
+// Amount in words — Indian system (lakh / crore) for INR, international (million / billion) otherwise.
+const amountToWords = (paise: number, currency = 'INR'): string => {
+  const unit = CURRENCY_WORD[currency] ?? currency;
   const rupees = Math.round(paise / 100);
-  if (rupees <= 0) return 'Rupees Zero Only';
+  if (rupees <= 0) return `${unit} Zero Only`;
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
   const two = (n: number): string =>
@@ -39,6 +65,16 @@ const amountToWords = (paise: number): string => {
   };
   let n = rupees;
   let w = '';
+  if (currency !== 'INR') {
+    const billion = Math.floor(n / 1e9); n %= 1e9;
+    const million = Math.floor(n / 1e6); n %= 1e6;
+    const thou = Math.floor(n / 1000); n %= 1000;
+    if (billion) w += three(billion) + ' Billion ';
+    if (million) w += three(million) + ' Million ';
+    if (thou) w += three(thou) + ' Thousand ';
+    if (n) w += three(n);
+    return unit + ' ' + w.trim().replace(/\s+/g, ' ') + ' Only';
+  }
   const crore = Math.floor(n / 10000000); n %= 10000000;
   const lakh = Math.floor(n / 100000); n %= 100000;
   const thousand = Math.floor(n / 1000); n %= 1000;
@@ -46,7 +82,7 @@ const amountToWords = (paise: number): string => {
   if (lakh) w += two(lakh) + ' Lakh ';
   if (thousand) w += two(thousand) + ' Thousand ';
   if (n) w += three(n);
-  return 'Rupees ' + w.trim().replace(/\s+/g, ' ') + ' Only';
+  return unit + ' ' + w.trim().replace(/\s+/g, ' ') + ' Only';
 };
 
 // Zlaark logo — SVG inlined with cropped viewBox (0 118 370 134) to show only the logo area.
@@ -98,24 +134,63 @@ const GRAIN =
   "<rect width='180' height='180' filter='url(%23n)'/></svg>";
 
 export function renderInvoiceHtml(data: InvoicePdfData): string {
-  const balance = Math.max(0, data.totalPaise - data.paidPaise);
-  const isPaid = balance === 0 && data.totalPaise > 0;
-  const isPartial = !isPaid && data.paidPaise > 0;
+  const sym = symbolFor(data.currency);
+  const fmtNum = makeFmtNum(data.currency);
+  const writtenOff = data.status === 'WRITTEN_OFF';
+  const isDraft = data.status === 'DRAFT';
+  const balance = writtenOff ? 0 : Math.max(0, data.totalPaise - data.paidPaise);
+  const isPaid = !writtenOff && balance === 0 && data.totalPaise > 0;
+  const isPartial = !isPaid && !writtenOff && data.paidPaise > 0;
 
   const status = isPaid
     ? { label: 'Paid', fg: '#2F7A45', bg: '#F1F7F2', ring: 'rgba(47,122,69,0.20)' }
-    : isPartial
-      ? { label: 'Partial', fg: '#A76A16', bg: '#FDF6EA', ring: 'rgba(167,106,22,0.20)' }
-      : { label: 'Unpaid', fg: '#B3402C', bg: '#FDF0EC', ring: 'rgba(179,64,44,0.20)' };
+    : writtenOff
+      ? { label: 'Written off', fg: '#6B625C', bg: '#F4F1EE', ring: 'rgba(26,22,20,0.12)' }
+      : isDraft
+        ? { label: 'Draft', fg: '#6B625C', bg: '#F4F1EE', ring: 'rgba(26,22,20,0.12)' }
+        : data.isOverdue
+          ? { label: 'Overdue', fg: '#B3402C', bg: '#FDF0EC', ring: 'rgba(179,64,44,0.20)' }
+          : isPartial
+            ? { label: 'Partial', fg: '#A76A16', bg: '#FDF6EA', ring: 'rgba(167,106,22,0.20)' }
+            : { label: 'Unpaid', fg: '#B3402C', bg: '#FDF0EC', ring: 'rgba(179,64,44,0.20)' };
+
+  // GST split: same state -> CGST + SGST (half each); different states -> IGST. Unknown -> one GST line.
+  const norm = (v?: string) => (v ?? '').trim().toLowerCase();
+  const bothStates = !!norm(data.agency.state) && !!norm(data.client.state);
+  const intraState = bothStates && norm(data.agency.state) === norm(data.client.state);
+  const halfPct = Math.round((data.gstPercent / 2) * 100) / 100;
+  const cgst = Math.floor(data.gstPaise / 2);
+  const gstRows: [string, number][] = !data.gstPercent
+    ? []
+    : !bothStates
+      ? [[`GST (${data.gstPercent}%)`, data.gstPaise]]
+      : intraState
+        ? [
+            [`CGST (${halfPct}%)`, cgst],
+            [`SGST (${halfPct}%)`, data.gstPaise - cgst],
+          ]
+        : [[`IGST (${data.gstPercent}%)`, data.gstPaise]];
+
+  // "Payment due by 17 Oct 2026" / "Payment due on receipt" — from the stored due date, else the client's terms.
+  const dueOnReceipt =
+    (!!data.dueDate && !!data.issueDate && fmtDate(data.dueDate) === fmtDate(data.issueDate)) ||
+    (!data.dueDate && data.paymentTermsDays === 0);
+  const termsLine = dueOnReceipt
+    ? 'Payment due on receipt'
+    : data.dueDate
+      ? `Payment due by ${fmtDate(data.dueDate)}`
+      : data.paymentTermsDays
+        ? `Payment due within ${data.paymentTermsDays} days`
+        : 'Payment due on receipt';
 
   const itemRow = (li: InvoicePdfData['lineItems'][number]): string => {
     const total = Math.round(li.qty * li.unitPaise);
     const cell = `padding:13px 20px;border-bottom:1px solid ${C.hairSoft}`;
     return `<tr style="${NOBREAK}">
-        <td style="${cell};color:${C.ink};font-weight:500">${li.description}</td>
+        <td style="${cell};color:${C.ink};font-weight:500">${esc(li.description)}</td>
         <td style="${cell};text-align:right;color:${C.inkSoft};font-variant-numeric:tabular-nums">${li.qty}</td>
-        <td style="${cell};text-align:right;color:${C.inkMid};font-variant-numeric:tabular-nums">₹${fmtNum(li.unitPaise)}</td>
-        <td style="${cell};text-align:right;font-weight:700;color:${C.ink};font-variant-numeric:tabular-nums">₹${fmtNum(total)}</td>
+        <td style="${cell};text-align:right;color:${C.inkMid};font-variant-numeric:tabular-nums">${sym}${fmtNum(li.unitPaise)}</td>
+        <td style="${cell};text-align:right;font-weight:700;color:${C.ink};font-variant-numeric:tabular-nums">${sym}${fmtNum(total)}</td>
       </tr>`;
   };
 
@@ -124,12 +199,12 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
   const groupHeaderRow = (name: string): string =>
     `<tr><td colspan="4" style="padding:12px 20px 8px;background:${C.brandWash};border-bottom:1px solid ${C.hairSoft}">
       <span style="display:inline-block;width:3px;height:9px;background:${C.brand};border-radius:1px;vertical-align:middle;margin-right:8px"></span>
-      <span style="${MICRO};color:${C.brandInk}">${name}</span>
+      <span style="${MICRO};color:${C.brandInk}">${esc(name)}</span>
     </td></tr>`;
 
   const groupSubtotalRow = (paise: number): string =>
     `<tr><td colspan="3" style="padding:8px 20px;text-align:right;font-size:11px;color:${C.inkSoft};border-bottom:1px solid ${C.hairSoft}">Subtotal</td>
-      <td style="padding:8px 20px;text-align:right;font-size:12px;font-weight:700;color:${C.inkMid};border-bottom:1px solid ${C.hairSoft};font-variant-numeric:tabular-nums">₹${fmtNum(paise)}</td></tr>`;
+      <td style="padding:8px 20px;text-align:right;font-size:12px;font-weight:700;color:${C.inkMid};border-bottom:1px solid ${C.hairSoft};font-variant-numeric:tabular-nums">${sym}${fmtNum(paise)}</td></tr>`;
 
   // Preserve the caller's line order; only start a new group when the project changes.
   const groups: { name?: string; items: InvoicePdfData['lineItems'] }[] = [];
@@ -172,8 +247,8 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
           .map(
             (p) =>
               `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;padding:8px 0;border-bottom:1px solid ${C.hairSoft}">
-                <span style="color:${C.inkMid}">${fmtDate(p.paidAt)}${p.reference ? ` · ${p.reference}` : ''}${p.method ? ` · ${p.method}` : ''}</span>
-                <span style="font-weight:700;color:#2F7A45;font-variant-numeric:tabular-nums">+₹${fmtNum(p.amountPaise)}</span>
+                <span style="color:${C.inkMid}">${fmtDate(p.paidAt)}${p.reference ? ` · ${esc(p.reference)}` : ''}${p.method ? ` · ${esc(p.method)}` : ''}</span>
+                <span style="font-weight:700;color:#2F7A45;font-variant-numeric:tabular-nums">+${sym}${fmtNum(p.amountPaise)}</span>
               </div>`,
           )
           .join('')}
@@ -213,7 +288,7 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
                 ([label, value]) =>
                   `<tr>
                     <td style="padding:4px 0;width:74px;${MICRO};color:${C.inkSoft};vertical-align:top;letter-spacing:0.12em">${label}</td>
-                    <td style="padding:4px 0;font-size:11.5px;font-weight:600;color:${C.ink};font-variant-numeric:tabular-nums">${value}</td>
+                    <td style="padding:4px 0;font-size:11.5px;font-weight:600;color:${C.ink};font-variant-numeric:tabular-nums">${esc(value)}</td>
                   </tr>`,
               )
               .join('')}
@@ -224,7 +299,7 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
   const notesHtml = data.notes
     ? panel(
         'Notes',
-        `<p style="font-size:11px;color:${C.inkMid};line-height:1.75">${data.notes}</p>`,
+        `<p style="font-size:11px;color:${C.inkMid};line-height:1.75;white-space:pre-line">${esc(data.notes)}</p>`,
       )
     : '';
 
@@ -233,21 +308,21 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
       ? `<div style="display:flex;gap:14px;align-items:stretch;margin-top:22px">${payToHtml}${notesHtml}</div>`
       : '';
 
-  const amountWords = amountToWords(data.totalPaise);
+  const amountWords = amountToWords(data.totalPaise, data.currency);
 
   // Right-hand note inside the amount card — adapts to paid / partial / unpaid.
   const heroPill = isPartial
     ? `<div style="display:inline-flex;align-items:center;gap:14px;padding:7px 18px;background:${C.card};border-radius:9999px;box-shadow:inset 0 0 0 1px ${C.hair}">
-        <span style="font-size:10.5px;color:#2F7A45;font-weight:600;font-variant-numeric:tabular-nums">Paid ₹${fmtNum(data.paidPaise)}</span>
+        <span style="font-size:10.5px;color:#2F7A45;font-weight:600;font-variant-numeric:tabular-nums">Paid ${sym}${fmtNum(data.paidPaise)}</span>
         <span style="width:1px;height:11px;background:${C.hair};display:inline-block"></span>
-        <span style="font-size:10.5px;color:#A76A16;font-weight:600;font-variant-numeric:tabular-nums">Due ₹${fmtNum(balance)}</span>
+        <span style="font-size:10.5px;color:#A76A16;font-weight:600;font-variant-numeric:tabular-nums">Due ${sym}${fmtNum(balance)}</span>
       </div>`
     : isPaid
       ? `<div style="display:inline-flex;align-items:center;padding:7px 18px;background:${C.card};border-radius:9999px;box-shadow:inset 0 0 0 1px rgba(47,122,69,0.22)">
         <span style="font-size:10.5px;color:#2F7A45;font-weight:600">Paid in full${data.payments && data.payments.length ? ' · ' + fmtDate(data.payments[data.payments.length - 1]!.paidAt) : ''}</span>
       </div>`
       : `<div style="display:inline-flex;align-items:center;padding:7px 18px;background:${C.card};border-radius:9999px;box-shadow:inset 0 0 0 1px ${C.brandHair}">
-        <span style="font-size:10.5px;color:${C.brandInk};font-weight:600">${data.dueDate ? 'Due by ' + fmtDate(data.dueDate) : 'Payment due on receipt'}</span>
+        <span style="font-size:10.5px;color:${C.brandInk};font-weight:600">${writtenOff ? 'Written off' : dueOnReceipt ? 'Due on receipt' : data.dueDate ? 'Due by ' + fmtDate(data.dueDate) : termsLine}</span>
       </div>`;
 
   const party = (
@@ -258,12 +333,12 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
   ): string =>
     `<div style="flex:1;border-left:2px solid ${accent};padding-left:15px">
       <p style="${MICRO};color:${accent === C.brand ? C.brand : C.inkSoft};margin-bottom:9px">${label}</p>
-      <p style="font-size:15px;font-weight:700;color:${C.ink};line-height:1.3">${name}</p>
+      <p style="font-size:15px;font-weight:700;color:${C.ink};line-height:1.3">${esc(name)}</p>
       ${lines
         .filter(Boolean)
         .map(
           (l) =>
-            `<p style="font-size:10.5px;color:${C.inkMid};margin-top:4px;line-height:1.6">${l}</p>`,
+            `<p style="font-size:10.5px;color:${C.inkMid};margin-top:4px;line-height:1.6">${esc(l)}</p>`,
         )
         .join('')}
     </div>`;
@@ -298,7 +373,7 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
     <div style="margin-top:2px">${LOGO_SVG}</div>
     <div style="text-align:right">
       <p style="${MICRO};color:${C.inkSoft};margin-bottom:8px">Invoice</p>
-      <div style="font-size:19px;font-weight:800;color:${C.ink};letter-spacing:0.06em;font-variant-numeric:tabular-nums;margin-bottom:11px">${data.number}</div>
+      <div style="font-size:19px;font-weight:800;color:${C.ink};letter-spacing:0.06em;font-variant-numeric:tabular-nums;margin-bottom:11px">${esc(data.number)}</div>
       <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:9999px;background:${status.bg};box-shadow:inset 0 0 0 1px ${status.ring}">
         <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:${status.fg}"></span>
         <span style="${MICRO};color:${status.fg};letter-spacing:0.14em">${status.label}</span>
@@ -336,11 +411,11 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
   <!-- Amount — double-bezel card, editorial split, ghost ₹ in the margin -->
   <div style="padding:6px;border-radius:26px;background:${C.brandWash};box-shadow:inset 0 0 0 1px ${C.brandHair};${NOBREAK}">
     <div style="position:relative;overflow:hidden;border-radius:20px;padding:24px 28px 0;background:radial-gradient(115% 135% at 8% -20%,#FFE4CD 0%,#FFF4EA 46%,${C.card} 84%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.9),inset 0 0 0 1px rgba(255,255,255,0.55)">
-      <span class="display" style="position:absolute;right:-26px;top:-58px;font-size:215px;color:rgba(248,95,0,0.05);line-height:1">₹</span>
+      <span class="display" style="position:absolute;right:-26px;top:-58px;font-size:215px;color:rgba(248,95,0,0.05);line-height:1">${sym.trim()}</span>
       <div style="position:relative;display:flex;justify-content:space-between;align-items:flex-end;gap:24px">
         <div>
           <p style="${MICRO};color:${C.brandInk};opacity:0.62;margin-bottom:6px">${isPaid ? 'Amount Received' : 'Total Amount'}</p>
-          <div class="display" style="font-size:60px;color:${C.brand};line-height:0.95;letter-spacing:-0.015em">₹${fmtNum(data.totalPaise)}</div>
+          <div class="display" style="font-size:60px;color:${C.brand};line-height:0.95;letter-spacing:-0.015em">${sym}${fmtNum(data.totalPaise)}</div>
         </div>
         <div style="padding-bottom:6px">${heroPill}</div>
       </div>
@@ -368,22 +443,28 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
           <tbody>${lineItemsHtml}</tbody>
           <tfoot>
             ${
-              data.gstPercent
-                ? `<tr><td colspan="3" style="padding:10px 20px;text-align:right;font-size:11.5px;color:${C.inkMid}">GST (${data.gstPercent}%)</td><td style="padding:10px 20px;text-align:right;font-size:12.5px;color:${C.ink};font-variant-numeric:tabular-nums">₹${fmtNum(data.gstPaise)}</td></tr>`
+              gstRows.length
+                ? `<tr><td colspan="3" style="padding:10px 20px 4px;text-align:right;font-size:11.5px;color:${C.inkMid}">Subtotal</td><td style="padding:10px 20px 4px;text-align:right;font-size:12.5px;color:${C.ink};font-variant-numeric:tabular-nums">${sym}${fmtNum(data.subTotalPaise)}</td></tr>` +
+                  gstRows
+                    .map(
+                      ([label, paise]) =>
+                        `<tr><td colspan="3" style="padding:4px 20px;text-align:right;font-size:11.5px;color:${C.inkMid}">${label}</td><td style="padding:4px 20px;text-align:right;font-size:12.5px;color:${C.ink};font-variant-numeric:tabular-nums">${sym}${fmtNum(paise)}</td></tr>`,
+                    )
+                    .join('')
                 : ''
             }
             <tr style="background:${C.paper}">
               <td colspan="3" style="padding:12px 20px;text-align:right;${MICRO};color:${C.inkMid};border-top:1px solid ${C.hair}">Total</td>
-              <td style="padding:12px 20px;text-align:right;font-size:14px;font-weight:800;color:${C.ink};border-top:1px solid ${C.hair};font-variant-numeric:tabular-nums">₹${fmtNum(data.totalPaise)}</td>
+              <td style="padding:12px 20px;text-align:right;font-size:14px;font-weight:800;color:${C.ink};border-top:1px solid ${C.hair};font-variant-numeric:tabular-nums">${sym}${fmtNum(data.totalPaise)}</td>
             </tr>
             ${
               data.paidPaise > 0 && balance > 0
-                ? `<tr><td colspan="3" style="padding:9px 20px;text-align:right;font-size:11.5px;color:#2F7A45">Paid</td><td style="padding:9px 20px;text-align:right;font-size:12.5px;color:#2F7A45;font-weight:700;font-variant-numeric:tabular-nums">−₹${fmtNum(data.paidPaise)}</td></tr>`
+                ? `<tr><td colspan="3" style="padding:9px 20px;text-align:right;font-size:11.5px;color:#2F7A45">Paid</td><td style="padding:9px 20px;text-align:right;font-size:12.5px;color:#2F7A45;font-weight:700;font-variant-numeric:tabular-nums">−${sym}${fmtNum(data.paidPaise)}</td></tr>`
                 : ''
             }
             ${
               balance > 0
-                ? `<tr style="background:${C.brandWash}"><td colspan="3" style="padding:13px 20px;text-align:right;${MICRO};color:${C.brandInk}">Balance Due</td><td style="padding:13px 20px;text-align:right;font-size:15px;font-weight:800;color:${C.brand};font-variant-numeric:tabular-nums">₹${fmtNum(balance)}</td></tr>`
+                ? `<tr style="background:${C.brandWash}"><td colspan="3" style="padding:13px 20px;text-align:right;${MICRO};color:${C.brandInk}">Balance Due</td><td style="padding:13px 20px;text-align:right;font-size:15px;font-weight:800;color:${C.brand};font-variant-numeric:tabular-nums">${sym}${fmtNum(balance)}</td></tr>`
                 : ''
             }
           </tfoot>
@@ -405,7 +486,7 @@ export function renderInvoiceHtml(data: InvoicePdfData): string {
     <div style="text-align:right">
       <p style="font-size:11.5px;color:${C.inkMid}"><span style="${MICRO};color:${C.ink}">Mail</span>&nbsp;&nbsp;<span style="font-weight:600;color:${C.brand}">kanish@zlaark.com</span></p>
       <p style="font-size:11.5px;color:${C.inkMid};margin-top:5px"><span style="${MICRO};color:${C.ink}">Tel</span>&nbsp;&nbsp;<span style="font-variant-numeric:tabular-nums">+91 88721 40807</span></p>
-      <p style="${MICRO};color:${C.inkSoft};opacity:0.75;margin-top:10px;letter-spacing:0.12em">Payment due upon receipt · UPI or Bank Transfer</p>
+      <p style="${MICRO};color:${C.inkSoft};opacity:0.75;margin-top:10px;letter-spacing:0.12em">${termsLine} · UPI or Bank Transfer</p>
     </div>
   </div>
 

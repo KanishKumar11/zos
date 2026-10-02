@@ -16,6 +16,14 @@ export class Invite {
   @Prop() acceptedAt?: Date;
   @Prop({ type: MS.Types.ObjectId, ref: 'User' }) acceptedUserId?: Types.ObjectId;
   @Prop({ type: MS.Types.ObjectId, ref: 'User', required: true }) invitedBy!: Types.ObjectId;
+  /** CLIENT invites only — the client company the portal user will belong to. */
+  @Prop({ type: MS.Types.ObjectId, ref: 'Client', index: true }) clientId?: Types.ObjectId;
+  /** CLIENT invites only — job title at the client. */
+  @Prop() title?: string;
+  /** Set when the invite is cancelled or replaced by a newer one. */
+  @Prop() revokedAt?: Date;
+  @Prop({ type: Date }) lastSentAt?: Date;
+  @Prop({ type: Number, default: 1 }) sendCount!: number;
 }
 
 export type InviteDocument = HydratedDocument<Invite>;

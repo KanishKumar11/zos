@@ -1,4 +1,5 @@
-// FreelancerPayment schema — tracks agreed contract value + payment history per freelancer.
+// FreelancerPayment schema — LEGACY free-text freelancer records. Read only by the payouts import;
+// new data lives in the freelancer directory, project.freelancers[] and the payouts ledger.
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { type HydratedDocument, Schema as MS, Types } from 'mongoose';
 
@@ -24,6 +25,8 @@ export class FreelancerPayment {
   @Prop({ default: 'INR' }) currency!: string;
   @Prop() notes?: string;
   @Prop({ type: Date }) deletedAt?: Date;
+  /** Set once this record has been imported into the payouts ledger + freelancer directory. */
+  @Prop({ type: Date }) migratedAt?: Date;
 }
 
 export type FreelancerPaymentDocument = HydratedDocument<FreelancerPayment>;

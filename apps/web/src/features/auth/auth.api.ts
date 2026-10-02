@@ -16,7 +16,7 @@ export const authApi = {
   logout: () => api.post('/auth/logout'),
 
   me: () =>
-    unwrap<{ id: string; email: string; name: string; role: Role; avatarUrl: string | null }>(
+    unwrap<{ id: string; email: string; name: string; role: Role; avatarUrl: string | null; clientId: string | null }>(
       api.get('/auth/me'),
     ).then(
       (u): AuthUser => ({
@@ -25,8 +25,12 @@ export const authApi = {
         name: u.name,
         role: u.role,
         avatarUrl: u.avatarUrl ?? undefined,
+        clientId: u.clientId ?? undefined,
       }),
     ),
+
+  changePassword: (input: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+    unwrap<{ ok: true }>(api.post('/auth/change-password', input)),
 
   acceptInvite: (input: { token: string; password: string; name?: string; phone?: string }) =>
     unwrap<{ userId: string }>(api.post('/auth/accept-invite', input)),

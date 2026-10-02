@@ -4,7 +4,7 @@ import { cn } from '@/lib/cn';
 
 export const Table = React.forwardRef<HTMLTableElement, React.TableHTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto border border-border">
+    <div className="relative w-full overflow-auto rounded-lg border border-border bg-card">
       <table ref={ref} className={cn('w-full caption-bottom text-sm', className)} {...props} />
     </div>
   ),
@@ -12,7 +12,7 @@ export const Table = React.forwardRef<HTMLTableElement, React.TableHTMLAttribute
 Table.displayName = 'Table';
 
 export const THead = ({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) => (
-  <thead className={cn('[&_tr]:border-b border-border bg-muted/20', className)} {...props} />
+  <thead className={cn('[&_tr]:border-b border-border bg-muted/40', className)} {...props} />
 );
 export const TBody = ({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) => (
   <tbody className={cn('[&_tr:last-child]:border-0 divide-y divide-border', className)} {...props} />
@@ -22,7 +22,7 @@ export const TR = ({ className, ...props }: React.HTMLAttributes<HTMLTableRowEle
 );
 export const TH = ({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
   <th
-    className={cn('h-10 px-4 text-left align-middle text-[10px] font-mono font-bold uppercase tracking-[0.1em] text-muted-foreground', className)}
+    className={cn('h-10 px-4 text-left align-middle text-xs font-medium text-muted-foreground whitespace-nowrap', className)}
     {...props}
   />
 );

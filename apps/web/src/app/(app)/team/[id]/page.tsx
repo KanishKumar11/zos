@@ -1,159 +1,188 @@
-// Team member detail page — overview + admin actions (role/status), deactivate/reactivate.
+// Team member detail — profile, employment details, access & role, documents, onboarding and
+// (OWNER) earnings, projects & payments, payslips and shared-cost contributions.
 'use client';
 
+import { Pencil } from 'lucide-react';
 import Link from 'next/link';
-import { use, useState } from 'react';
+import { use, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-import { Role, UserStatus } from '@agency/shared';
+import { Role } from '@agency/shared';
 
+import { ApiRequestError } from '@/lib/api-client';
+import { formatDate, formatDateTime, formatPaise } from '@/lib/formatters';
+import { useAuthStore } from '@/store/auth.store';
+import { useQuickActions } from '@/store/quick-actions.store';
+
+import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { FileUploader } from '@/components/file-uploader';
-
-import { PageHeader } from '@/components/layout/page-header';
-import { formatPaise } from '@/lib/formatters';
-import { isOwner } from '@/lib/roles';
-import { useAuthStore } from '@/store/auth.store';
-
-import {
-  useAddMemberDocument,
-  useAdminUpdateUser,
-  useDeactivateUser,
-  useReactivateUser,
-  useRemoveMemberDocument,
-  useSetOnboarding,
-  useTeamMember,
-  useToggleOnboarding,
-} from '@/features/team/team.hooks';
-import { teamApi } from '@/features/team/team.api';
-import { useMemberStats } from '@/features/dashboard/dashboard.hooks';
-import { useUserPayslips, type PayslipRow } from '@/features/payroll/payroll.hooks';
-import { useExpenses } from '@/features/expenses/expenses.hooks';
 import { ChartTooltip } from '@/components/ui/chart-tooltip';
-import { env } from '@/lib/env';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
+import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { useMemberStats } from '@/features/dashboard/dashboard.hooks';
+import { useExpenses } from '@/features/expenses/expenses.hooks';
+import { useDepartments, useDesignations } from '@/features/org/org.hooks';
+import { MemberPayslips } from '@/features/payroll/member-payslips';
+import { useUserPayslips } from '@/features/payroll/payroll.hooks';
+import { PersonPayments } from '@/features/payouts/person-payments';
+import { usePayeeBalances } from '@/features/payouts/payouts.hooks';
+import { MemberAdminActions } from '@/features/team/member-admin-actions';
+import { MemberDocuments } from '@/features/team/member-documents';
+import { MemberEmploymentSheet } from '@/features/team/member-employment-sheet';
+import { MemberOnboarding } from '@/features/team/member-onboarding';
+import { ROLE_LABEL } from '@/features/team/team.api';
+import { useStaffDirectory, useTeamMember } from '@/features/team/team.hooks';
 
 export default function TeamMemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const me = useAuthStore((s) => s.user);
   const member = useTeamMember(id);
-  const adminUpdate = useAdminUpdateUser();
-  const deactivate = useDeactivateUser();
-  const reactivate = useReactivateUser();
-
-  const [role, setRole] = useState<Role | ''>('');
-  const [status, setStatus] = useState<UserStatus | ''>('');
-  const [docKind, setDocKind] = useState<'OFFER_LETTER' | 'NDA' | 'CONTRACT' | 'ID_PROOF' | 'OTHER'>('OFFER_LETTER');
-  const [docName, setDocName] = useState('');
-  const [newOnboardItem, setNewOnboardItem] = useState('');
-
-  const addDoc = useAddMemberDocument();
-  const removeDoc = useRemoveMemberDocument();
-  const setOnboarding = useSetOnboarding();
-  const toggleOnboard = useToggleOnboarding();
-  const stats = useMemberStats(id, me?.role === Role.OWNER);
-  const payslips = useUserPayslips(id, me?.role === Role.OWNER || me?.role === Role.ADMIN);
-  const [expandedPayslip, setExpandedPayslip] = useState<string | null>(null);
-  const contributions = useExpenses({ contributorId: id, limit: 50 }, me?.role === Role.OWNER);
-
-  if (member.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (!member.data) return <p className="text-sm text-muted-foreground">Member not found.</p>;
-  const u = member.data;
+  const isOwnerViewer = me?.role === Role.OWNER;
   const canManage = me?.role === Role.OWNER || me?.role === Role.ADMIN;
-  const isSelf = me?.id === u._id;
-  const docs = u.documents ?? [];
-  const checklist = u.onboardingChecklist ?? [];
+  const [editOpen, setEditOpen] = useState(false);
 
-  async function openDocument(docId: string) {
-    const { url } = await teamApi.documentUrl(u._id, docId);
-    window.open(url, '_blank', 'noopener');
+  const departments = useDepartments();
+  const designations = useDesignations();
+  const staff = useStaffDirectory({ enabled: !!member.data?.reportingManagerId });
+  const stats = useMemberStats(id, isOwnerViewer);
+  const payslips = useUserPayslips(id, isOwnerViewer);
+  const contributions = useExpenses({ contributorId: id, limit: 50 }, isOwnerViewer);
+  const personBalances = usePayeeBalances('MEMBER', id, { enabled: isOwnerViewer });
+  const openLogPayment = useQuickActions((s) => s.openLogPayment);
+
+  const lookups = useMemo(
+    () => ({
+      dept: new Map((departments.data ?? []).map((d) => [d._id, d.name])),
+      desig: new Map((designations.data ?? []).map((d) => [d._id, d.title])),
+      people: new Map((staff.data ?? []).map((p) => [p._id, p.name])),
+    }),
+    [departments.data, designations.data, staff.data],
+  );
+
+  if (member.isLoading) return <PageSkeleton />;
+  if (!member.data) {
+    const notFound = member.error instanceof ApiRequestError && (member.error.status === 404 || member.error.status === 403);
+    return notFound ? (
+      <EmptyState
+        title={member.error instanceof ApiRequestError && member.error.status === 403 ? "You can't open this person's profile" : 'This person no longer exists'}
+        description="They may have been deleted, or the link is wrong."
+        action={
+          <Link href="/team">
+            <Button variant="outline" size="sm">Back to team</Button>
+          </Link>
+        }
+      />
+    ) : (
+      <ErrorState title="Couldn't open this person" error={member.error} onRetry={() => member.refetch()} />
+    );
   }
+  const u = member.data;
+  const isSelf = me?.id === u._id;
+
+  const deptLabel = u.departmentId ? (lookups.dept.get(u.departmentId) ?? (departments.data ? 'Deleted department' : '…')) : undefined;
+  const desigLabel = u.designationId ? (lookups.desig.get(u.designationId) ?? (designations.data ? 'Deleted designation' : '…')) : undefined;
+  const managerLabel = u.reportingManagerId
+    ? (lookups.people.get(u.reportingManagerId) ?? (staff.data ? 'Former team member' : '…'))
+    : undefined;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={u.name}
+        crumbs={[{ label: 'Team', href: '/team' }]}
         description={u.email}
+        meta={
+          <>
+            <StatusBadge status={u.status} />
+            <Badge variant="outline">{ROLE_LABEL[u.role] ?? u.role}</Badge>
+          </>
+        }
         action={
           me?.role === Role.OWNER ? (
-            <Link href={`/team/${u._id}/compensation`}>
-              <Button variant="outline" size="sm">Compensation</Button>
-            </Link>
+            <>
+              <Button size="sm" onClick={() => openLogPayment({ payeeType: 'MEMBER', userId: u._id })}>
+                Log payment
+              </Button>
+              <Link href={`/team/${u._id}/compensation`}>
+                <Button variant="outline" size="sm">Compensation</Button>
+              </Link>
+            </>
           ) : undefined
         }
       />
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
           <CardTitle>Profile</CardTitle>
+          {canManage && (
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit details
+            </Button>
+          )}
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3 text-sm">
-          <Field label="Role" value={<Badge variant="outline">{u.role}</Badge>} />
+        <CardContent className="grid gap-4 text-sm sm:grid-cols-2 md:grid-cols-3">
+          <Field label="Department" value={deptLabel} />
+          <Field label="Designation" value={desigLabel} />
           <Field
-            label="Status"
-            value={<Badge variant={u.status === UserStatus.ACTIVE ? 'default' : 'secondary'}>{u.status}</Badge>}
+            label="Reports to"
+            value={
+              u.reportingManagerId && managerLabel ? (
+                <Link href={`/team/${u.reportingManagerId}`} className="hover:underline">
+                  {managerLabel}
+                </Link>
+              ) : undefined
+            }
           />
-          <Field label="Phone" value={u.phone ?? '—'} />
-          <Field label="Joined" value={u.dateOfJoining ? new Date(u.dateOfJoining).toLocaleDateString() : '—'} />
-          <Field label="Birthday" value={u.dateOfBirth ? new Date(u.dateOfBirth).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'} />
-          <Field label="Last login" value={u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : '—'} />
+          <Field label="Phone" value={u.phone} />
+          <Field label="Joined" value={u.dateOfJoining ? formatDate(u.dateOfJoining) : undefined} />
+          {u.dateOfBirth !== undefined && (
+            <Field label="Birthday" value={u.dateOfBirth ? formatDate(u.dateOfBirth, { day: 'numeric', month: 'short' }) : undefined} />
+          )}
+          <Field label="Last sign-in" value={u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Never'} />
         </CardContent>
       </Card>
+
+      {canManage && <MemberAdminActions user={u} viewerId={me?.id} viewerRole={me?.role} />}
 
       {/* Earnings & Projects — OWNER only */}
       {me?.role === Role.OWNER && (
         <>
           {(() => {
-            const lastSlip = payslips.data?.at(-1);
-            const pendingAcrossProjects = (stats.data?.projects ?? []).reduce((sum, p) => {
-              const paid = p.payments.reduce((s, pay) => s + pay.amountPaise, 0);
-              return sum + Math.max(0, p.amountPaise - paid);
-            }, 0);
+            const lastSlip = payslips.data?.[0];
+            const pendingAcrossProjects = (personBalances.data ?? []).reduce((sum, b) => sum + b.pendingPaise, 0);
             const totalContributed = (contributions.data?.items ?? []).reduce((sum, e) => {
               const mine = e.contributions.find((c) => c.userId === id);
               return sum + (mine?.amountPaise ?? 0);
             }, 0);
             return (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <Card>
-                  <CardContent className="p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Last Payslip Net</p>
-                    <p className="mt-2 text-xl font-semibold tabular-nums">
-                      {lastSlip ? formatPaise(lastSlip.netPaise, lastSlip.currency) : '—'}
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Pending Project Payouts</p>
-                    <p className={`mt-2 text-xl font-semibold tabular-nums ${pendingAcrossProjects > 0 ? 'text-amber-600' : ''}`}>
-                      {formatPaise(pendingAcrossProjects, 'INR')}
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Shared Cost Contributed</p>
-                    <p className="mt-2 text-xl font-semibold tabular-nums">
-                      {formatPaise(totalContributed, 'INR')}
-                    </p>
-                  </CardContent>
-                </Card>
+                <StatCard
+                  label="Last payslip (net)"
+                  loading={payslips.isLoading}
+                  value={lastSlip ? formatPaise(lastSlip.netPaise, lastSlip.currency) : '—'}
+                />
+                <StatCard
+                  label="Pending project payouts"
+                  loading={personBalances.isLoading}
+                  tone={pendingAcrossProjects > 0 ? 'warning' : 'default'}
+                  value={formatPaise(pendingAcrossProjects, 'INR')}
+                />
+                <StatCard label="Shared costs recovered" loading={contributions.isLoading} value={formatPaise(totalContributed, 'INR')} />
               </div>
             );
           })()}
 
           <Card>
             <CardHeader>
-              <CardTitle>Monthly Earnings — Last 12 Months</CardTitle>
+              <CardTitle>Monthly earnings, last 12 months</CardTitle>
             </CardHeader>
             <CardContent>
               {stats.isLoading ? (
-                <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>
+                <Skeleton className="h-48 w-full" />
               ) : (
                 <div className="h-48 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -183,7 +212,7 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
                 </div>
               )}
               {!stats.isLoading && stats.data && (
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-3 text-sm border-t pt-4">
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t pt-4 text-sm md:grid-cols-3">
                   {(() => {
                     const withData = stats.data.earnings.filter((e) => e.netPaise > 0);
                     const total = withData.reduce((s, e) => s + e.netPaise, 0);
@@ -192,16 +221,16 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
                     return (
                       <>
                         <div>
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Last Month Net</p>
-                          <p className="font-semibold mt-1">{last?.netPaise ? formatPaise(last.netPaise, 'INR') : '—'}</p>
+                          <p className="text-xs text-muted-foreground">Last month net</p>
+                          <p className="mt-1 font-semibold">{last?.netPaise ? formatPaise(last.netPaise, 'INR') : '—'}</p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">12M Average</p>
-                          <p className="font-semibold mt-1">{avg ? formatPaise(avg, 'INR') : '—'}</p>
+                          <p className="text-xs text-muted-foreground">12-month average</p>
+                          <p className="mt-1 font-semibold">{avg ? formatPaise(avg, 'INR') : '—'}</p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">12M Total</p>
-                          <p className="font-semibold mt-1">{total ? formatPaise(total, 'INR') : '—'}</p>
+                          <p className="text-xs text-muted-foreground">12-month total</p>
+                          <p className="mt-1 font-semibold">{total ? formatPaise(total, 'INR') : '—'}</p>
                         </div>
                       </>
                     );
@@ -211,407 +240,57 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Projects</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {stats.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              ) : (stats.data?.projects ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">No projects assigned.</p>
-              ) : (
-                <div className="space-y-4">
-                  {(stats.data?.projects ?? []).map((p) => (
-                    <div key={p.projectId} className="border border-border rounded-lg p-4">
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <div>
-                          <Link href={`/projects/${p.projectId}`} className="font-semibold text-sm hover:underline">
-                            {p.projectName}
-                          </Link>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            <span className="font-mono">{p.projectCode}</span>
-                            {p.role && ` · ${p.role}`}
-                            {' · '}
-                            <span className={p.status === 'ACTIVE' ? 'text-emerald-600' : 'text-muted-foreground'}>{p.status}</span>
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-xs text-muted-foreground">Budget</p>
-                          <p className="text-sm font-semibold">{p.amountPaise ? formatPaise(p.amountPaise, 'INR') : '—'}</p>
-                        </div>
-                      </div>
-                      {p.payments.length > 0 && (
-                        <div className="border-t pt-3 space-y-1">
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Payment History</p>
-                          {p.payments.slice(-5).map((pay, i) => (
-                            <div key={i} className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">
-                                {new Date(pay.paidAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                {pay.note && ` · ${pay.note}`}
-                              </span>
-                              <span className="font-semibold text-emerald-600">+{formatPaise(pay.amountPaise, 'INR')}</span>
-                            </div>
-                          ))}
-                          {p.payments.length > 5 && (
-                            <p className="text-xs text-muted-foreground">+{p.payments.length - 5} more</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Payslips</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {payslips.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              ) : (payslips.data ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">No payslips yet.</p>
-              ) : (
-                <div className="divide-y">
-                  {(payslips.data ?? []).map((s) => {
-                    const isOpen = expandedPayslip === s._id;
-                    return (
-                      <div key={s._id} className="py-2">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedPayslip(isOpen ? null : s._id)}
-                          className="flex w-full items-center justify-between gap-3 py-1 text-left text-sm"
-                        >
-                          <span className="font-medium">{s.month}</span>
-                          <span className="flex items-center gap-4 text-xs">
-                            <span className="text-muted-foreground">
-                              Gross {formatPaise(s.grossPaise, s.currency)}
-                            </span>
-                            <span className="text-destructive">
-                              {s.deductionsPaise > 0 ? `−${formatPaise(s.deductionsPaise, s.currency)}` : '—'}
-                            </span>
-                            <span className="font-semibold">Net {formatPaise(s.netPaise, s.currency)}</span>
-                            <span className="text-muted-foreground">{isOpen ? '▲' : '▼'}</span>
-                          </span>
-                        </button>
-                        {isOpen && <PayslipBreakdownDetail slip={s} />}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Shared Cost Contributions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {contributions.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              ) : (contributions.data?.items ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No shared costs (e.g. Claude/tool subscriptions) recovered from this person&apos;s pay.
-                </p>
-              ) : (
-                <div className="divide-y">
-                  {(contributions.data?.items ?? []).map((e) => {
-                    const mine = e.contributions.find((c) => c.userId === id);
-                    if (!mine) return null;
-                    return (
-                      <div key={e._id} className="flex items-center justify-between py-2 text-sm">
-                        <div>
-                          <p className="font-medium">{e.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(e.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            {mine.note && ` · ${mine.note}`}
-                          </p>
-                        </div>
-                        <span className="font-semibold text-destructive">−{formatPaise(mine.amountPaise, e.currency)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <PersonPayments userId={id} />
         </>
       )}
 
-      {(me?.role === Role.OWNER || me?.role === Role.ADMIN) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Admin actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1">
-                <Label>Change role</Label>
-                <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-                  <option value="">Select…</option>
-                  {Object.values(Role).map((r) => (
-                    <option key={r} value={r} disabled={r === Role.OWNER && !isOwner(me?.role)}>
-                      {r}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Change status</Label>
-                <Select value={status} onChange={(e) => setStatus(e.target.value as UserStatus)}>
-                  <option value="">Select…</option>
-                  {Object.values(UserStatus).map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                disabled={!role && !status}
-                onClick={() => {
-                  adminUpdate.mutate({
-                    id: u._id,
-                    body: {
-                      ...(role ? { role } : {}),
-                      ...(status ? { status } : {}),
-                    },
-                  });
-                }}
-              >
-                Save changes
-              </Button>
-              {u.status === UserStatus.ACTIVE ? (
-                <Button variant="destructive" onClick={() => deactivate.mutate(u._id)}>
-                  Deactivate
-                </Button>
-              ) : (
-                <Button variant="secondary" onClick={() => reactivate.mutate(u._id)}>
-                  Reactivate
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {canManage && <MemberPayslips userId={id} />}
 
-      {(canManage || isSelf) && (
+      {me?.role === Role.OWNER && (
         <Card>
           <CardHeader>
-            <CardTitle>Documents</CardTitle>
+            <CardTitle>Shared cost contributions</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {docs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No documents yet.</p>
+          <CardContent>
+            {contributions.isLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-8" />
+                <Skeleton className="h-8" />
+              </div>
+            ) : contributions.isError ? (
+              <ErrorState error={contributions.error} onRetry={() => contributions.refetch()} className="py-6" />
+            ) : (contributions.data?.items ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No shared costs (e.g. tool subscriptions) recovered from this person&apos;s pay.
+              </p>
             ) : (
-              <ul className="divide-y">
-                {docs.map((d) => (
-                  <li key={d._id} className="flex items-center justify-between py-2 text-sm">
-                    <div>
-                      <p className="font-medium">{d.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {d.kind} · {d.uploadedAt ? new Date(d.uploadedAt).toLocaleDateString() : ''}
-                      </p>
+              <div className="divide-y">
+                {(contributions.data?.items ?? []).map((e) => {
+                  const mine = e.contributions.find((c) => c.userId === id);
+                  if (!mine) return null;
+                  return (
+                    <div key={e._id} className="flex items-center justify-between py-2 text-sm">
+                      <div>
+                        <p className="font-medium">{e.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(e.date)}
+                          {mine.note && ` · ${mine.note}`}
+                        </p>
+                      </div>
+                      <span className="font-semibold tabular-nums text-destructive">−{formatPaise(mine.amountPaise, e.currency)}</span>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => openDocument(d._id)}>
-                        Open
-                      </Button>
-                      {canManage && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeDoc.mutate({ id: u._id, docId: d._id })}
-                        >
-                          Remove
-                        </Button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {canManage && (
-              <div className="grid gap-2 md:grid-cols-3">
-                <div className="space-y-1">
-                  <Label>Kind</Label>
-                  <Select value={docKind} onChange={(e) => setDocKind(e.target.value as typeof docKind)}>
-                    {(['OFFER_LETTER', 'NDA', 'CONTRACT', 'ID_PROOF', 'OTHER'] as const).map((k) => (
-                      <option key={k} value={k}>
-                        {k}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div className="space-y-1 md:col-span-2">
-                  <Label>Display name</Label>
-                  <Input value={docName} onChange={(e) => setDocName(e.target.value)} placeholder="e.g. Offer letter Q2-26" />
-                </div>
-                <div className="md:col-span-3">
-                  <FileUploader
-                    prefix={`users/${u._id}/documents`}
-                    accept="application/pdf,image/*"
-                    label="Upload document"
-                    disabled={!docName.trim()}
-                    onUploaded={async (res) => {
-                      await addDoc.mutateAsync({
-                        id: u._id,
-                        body: {
-                          kind: docKind,
-                          name: docName.trim(),
-                          key: res.key,
-                          contentType: res.file.type,
-                          sizeBytes: res.file.size,
-                        },
-                      });
-                      setDocName('');
-                    }}
-                  />
-                </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
       )}
 
-      {(canManage || isSelf) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Onboarding checklist</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {checklist.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No checklist yet.</p>
-            ) : (
-              <ul className="divide-y">
-                {checklist.map((it, idx) => (
-                  <li key={idx} className="flex items-center gap-3 py-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={it.completed}
-                      disabled={!isSelf && !canManage}
-                      onChange={() => toggleOnboard.mutate({ id: u._id, idx })}
-                    />
-                    <span className={it.completed ? 'line-through text-muted-foreground' : ''}>{it.item}</span>
-                    {it.completedAt && (
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        {new Date(it.completedAt).toLocaleDateString()}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {canManage && (
-              <div className="flex gap-2">
-                <Input
-                  value={newOnboardItem}
-                  onChange={(e) => setNewOnboardItem(e.target.value)}
-                  placeholder="Add checklist item"
-                />
-                <Button
-                  type="button"
-                  disabled={!newOnboardItem.trim()}
-                  onClick={() => {
-                    const next = [
-                      ...checklist.map((c) => ({ item: c.item, completed: c.completed })),
-                      { item: newOnboardItem.trim(), completed: false },
-                    ];
-                    setOnboarding.mutate(
-                      { id: u._id, body: { items: next } },
-                      { onSuccess: () => setNewOnboardItem('') },
-                    );
-                  }}
-                >
-                  Add
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
+      {(canManage || isSelf) && <MemberDocuments user={u} canManage={canManage} />}
+      {(canManage || isSelf) && <MemberOnboarding user={u} canManage={canManage} isSelf={isSelf} />}
 
-function PayslipBreakdownDetail({ slip }: { slip: PayslipRow }) {
-  const b = slip.breakdown;
-  const earnings = [
-    { label: 'Base', value: b.baseAmount },
-    { label: 'HRA', value: b.hra },
-    { label: 'Special allowance', value: b.specialAllowance },
-    { label: 'Bonus', value: b.bonusPaise },
-  ].filter((r) => r.value > 0);
-  const deductions = [
-    { label: 'LOP', value: b.lopDeduction },
-    { label: 'Provident fund', value: b.providentFundEmployee },
-    { label: 'Professional tax', value: b.professionalTax },
-    { label: 'TDS', value: b.tdsMonthly },
-    { label: 'Late deduction', value: b.lateDeduction },
-    { label: 'Manual deduction', value: b.manualDeductionPaise },
-  ].filter((r) => r.value > 0);
-
-  return (
-    <div className="mt-2 grid gap-4 rounded-md border bg-muted/20 p-3 text-xs md:grid-cols-3">
-      <div>
-        <p className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">Earnings</p>
-        {earnings.length === 0 ? (
-          <p className="text-muted-foreground">—</p>
-        ) : (
-          earnings.map((r) => (
-            <div key={r.label} className="flex justify-between py-0.5">
-              <span className="text-muted-foreground">{r.label}</span>
-              <span>{formatPaise(r.value, slip.currency)}</span>
-            </div>
-          ))
-        )}
-      </div>
-      <div>
-        <p className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">Deductions</p>
-        {deductions.length === 0 ? (
-          <p className="text-muted-foreground">—</p>
-        ) : (
-          deductions.map((r) => (
-            <div key={r.label} className="flex justify-between py-0.5">
-              <span className="text-muted-foreground">{r.label}</span>
-              <span className="text-destructive">−{formatPaise(r.value, slip.currency)}</span>
-            </div>
-          ))
-        )}
-        {slip.adjustments.length > 0 && (
-          <div className="mt-2 border-t pt-2">
-            {slip.adjustments.map((a, i) => (
-              <div key={i} className="flex justify-between py-0.5">
-                <span className="text-muted-foreground">{a.reason || a.kind}</span>
-                <span className={a.kind === 'DEDUCTION' ? 'text-destructive' : 'text-emerald-600'}>
-                  {a.kind === 'DEDUCTION' ? '−' : '+'}
-                  {formatPaise(a.amountPaise, slip.currency)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="flex flex-col justify-between">
-        <div>
-          <p className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">Attendance</p>
-          <p>{slip.presentDays} / {slip.workingDays} days present{slip.lopDays > 0 ? ` (${slip.lopDays} LOP)` : ''}</p>
-        </div>
-        <a
-          href={`${env.apiBaseUrl}/payroll/payslips/${slip._id}/pdf`}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 text-primary underline"
-        >
-          Download PDF
-        </a>
-      </div>
+      {canManage && <MemberEmploymentSheet user={u} open={editOpen} onOpenChange={setEditOpen} />}
     </div>
   );
 }
@@ -619,8 +298,8 @@ function PayslipBreakdownDetail({ slip }: { slip: PayslipRow }) {
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1">{value || <span className="text-muted-foreground">Not set</span>}</p>
     </div>
   );
 }

@@ -17,6 +17,14 @@ export class Client {
   @Prop({ default: '' }) gstin!: string;
   @Prop({ default: '' }) cin!: string;
   @Prop({ default: '' }) address!: string;
+  @Prop({ default: '' }) pan!: string;
+  /** GST place of supply. */
+  @Prop({ default: '' }) state!: string;
+  @Prop({ default: '' }) billingEmail!: string;
+  @Prop({ default: '' }) phone!: string;
+  @Prop({ default: '' }) website!: string;
+  /** Default due-date offset for new invoices (days after issue). */
+  @Prop({ type: Number, default: 15 }) paymentTermsDays!: number;
   @Prop({ type: [ClientContactSchema], default: [] }) contacts!: ClientContact[];
   @Prop({ default: '' }) notes!: string;
   @Prop({ type: Date }) deletedAt?: Date;

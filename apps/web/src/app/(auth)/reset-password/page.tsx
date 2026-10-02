@@ -2,6 +2,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { useForm } from 'react-hook-form';
@@ -42,9 +43,13 @@ function Inner() {
             <Input id="confirmPassword" type="password" autoComplete="new-password" {...register('confirmPassword')} />
             {errors.confirmPassword && <p className="text-[11px] text-destructive">{errors.confirmPassword.message}</p>}
           </div>
+          {!token && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">This reset link is incomplete. Request a new one.</p>}
           <Button type="submit" className="mt-1 w-full" disabled={isSubmitting || m.isPending || !token}>
             {m.isPending ? 'Resetting…' : 'Set new password'}
           </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Link expired? <Link href="/forgot-password" className="text-primary hover:underline">Send a new one</Link>
+          </p>
         </form>
       </CardContent>
     </Card>

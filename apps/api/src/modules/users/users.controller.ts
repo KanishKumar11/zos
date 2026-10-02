@@ -18,12 +18,14 @@ import {
 } from '@agency/shared';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { PortalAccess } from '@/common/decorators/portal-access.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
 import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 import { ObjectIdPipe } from '@/common/pipes/object-id.pipe';
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe';
 import { encrypt, maskAccount } from '@/common/utils/crypto.util';
 
+import { presentUser, presentUsers } from './users.presenter';
 import { UsersService } from './users.service';
 
 @Controller('users')
@@ -32,21 +34,26 @@ export class UsersController {
 
   @Roles(Role.OWNER, Role.ADMIN, Role.LEAD)
   @Get()
-  list(@Query(new ZodValidationPipe(listUsersQuerySchema)) q: ListUsersQuery) {
-    return this.svc.list(q);
+  list(
+    @CurrentUser() viewer: JwtPayload,
+    @Query(new ZodValidationPipe(listUsersQuerySchema)) q: ListUsersQuery,
+  ) {
+    return this.svc.list(q).then((page) => presentUsers(page, viewer));
   }
 
+  @PortalAccess()
   @Get('me')
   me(@CurrentUser() user: JwtPayload) {
-    return this.svc.findByIdOrThrow(user.sub);
+    return this.svc.findByIdOrThrow(user.sub).then((u) => presentUser(u, user));
   }
 
+  @PortalAccess()
   @Patch('me')
   updateMe(
     @CurrentUser() user: JwtPayload,
     @Body(new ZodValidationPipe(updateProfileSchema)) body: UpdateProfileInput,
   ) {
-    return this.svc.updateProfile(user.sub, body);
+    return this.svc.updateProfile(user.sub, body).then((u) => presentUser(u, user));
   }
 
   @Patch('me/bank')
@@ -55,7 +62,7 @@ export class UsersController {
     @Body(new ZodValidationPipe(bankDetailsSchema)) body: BankDetailsInput,
   ) {
     const enc = encrypt(body.accountNumber);
-    return this.svc.update(user.sub, {
+    const updated = await this.svc.update(user.sub, {
       bankDetails: {
         accountHolderName: body.accountHolderName,
         accountNumberEncrypted: enc,
@@ -66,11 +73,16 @@ export class UsersController {
         upiId: body.upiId,
       },
     });
+    if (updated) this.svc.auditBankUpdate(user.sub, updated.name, maskAccount(body.accountNumber));
+    return updated ? presentUser(updated, user) : null;
   }
 
+  /** Self, or OWNER/ADMIN/LEAD. Members and interns can't browse other people's records. */
   @Get(':id')
-  byId(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.findByIdOrThrow(id);
+  byId(@Param('id', ObjectIdPipe) id: string, @CurrentUser() viewer: JwtPayload) {
+    const canBrowse = [Role.OWNER, Role.ADMIN, Role.LEAD].includes(viewer.role);
+    if (id !== viewer.sub && !canBrowse) throw new ForbiddenException();
+    return this.svc.findByIdOrThrow(id).then((u) => presentUser(u, viewer));
   }
 
   @Roles(Role.OWNER, Role.ADMIN)
@@ -80,25 +92,25 @@ export class UsersController {
     @CurrentUser() actor: JwtPayload,
     @Body(new ZodValidationPipe(adminUpdateUserSchema)) body: AdminUpdateUserInput,
   ) {
-    return this.svc.adminUpdate(id, body, { sub: actor.sub, role: actor.role });
+    return this.svc.adminUpdate(id, body, { sub: actor.sub, role: actor.role }).then((u) => presentUser(u, actor));
   }
 
   @Roles(Role.OWNER, Role.ADMIN)
   @Post(':id/deactivate')
-  deactivate(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.deactivate(id);
+  deactivate(@Param('id', ObjectIdPipe) id: string, @CurrentUser() actor: JwtPayload) {
+    return this.svc.deactivate(id, actor).then((u) => presentUser(u, actor));
   }
 
   @Roles(Role.OWNER, Role.ADMIN)
   @Post(':id/reactivate')
-  reactivate(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.reactivate(id);
+  reactivate(@Param('id', ObjectIdPipe) id: string, @CurrentUser() actor: JwtPayload) {
+    return this.svc.reactivate(id, actor.sub).then((u) => presentUser(u, actor));
   }
 
   @Roles(Role.OWNER)
   @Delete(':id')
-  remove(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.softDelete(id);
+  remove(@Param('id', ObjectIdPipe) id: string, @CurrentUser() actor: JwtPayload) {
+    return this.svc.softDelete(id, actor.sub);
   }
 
   // -- Member documents (OWNER+ADMIN, or self-read for own docs) -----------

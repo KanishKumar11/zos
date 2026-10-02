@@ -23,6 +23,8 @@ export class Contract {
   @Prop({ type: Date }) endDate?: Date;
   @Prop({ default: '' }) notes!: string;
   @Prop({ type: Number, min: 1, max: 28 }) billingDay?: number;
+  /** Default GST % for invoices generated from this contract. */
+  @Prop({ type: Number, min: 0, max: 50 }) gstPercent?: number;
   @Prop({ type: Date }) deletedAt?: Date;
 }
 

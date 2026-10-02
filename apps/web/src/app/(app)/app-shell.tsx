@@ -1,13 +1,19 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
+import { Suspense, useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useMe } from '@/features/auth/auth.hooks';
 import { useAuthStore } from '@/store/auth.store';
 
+import { CommandPalette } from '@/components/layout/command-palette';
+import { MobileNav } from '@/components/layout/mobile-nav';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
+import { ConfirmHost } from '@/components/ui/confirm-dialog';
+import { PageSkeleton } from '@/components/ui/states';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { LogPaymentSheet } from '@/features/payouts/log-payment-sheet';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const me = useMe();
@@ -30,13 +36,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar />
-        <main className="flex-1 p-6 lg:p-8">{children}</main>
+    <TooltipProvider>
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar />
+          <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-8 md:py-8">
+            <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
+          </main>
+        </div>
       </div>
-    </div>
+      <MobileNav />
+      <CommandPalette />
+      <LogPaymentSheet />
+      <ConfirmHost />
+    </TooltipProvider>
   );
 }
-

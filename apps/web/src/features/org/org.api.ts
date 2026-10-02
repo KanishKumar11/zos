@@ -13,6 +13,8 @@ export interface DepartmentRow {
   name: string;
   description?: string;
   headUserId?: string;
+  /** Team members currently in this department. */
+  memberCount?: number;
 }
 export interface DesignationRow {
   _id: string;

@@ -1,125 +1,162 @@
-// Invoice detail (OWNER-only) — line items, payments, send action.
+// Invoice detail (OWNER-only) — balance, line items, payments and the actions that move an
+// invoice through its life: mark as sent (locks amounts), record / remove payments, write off,
+// reopen, duplicate, delete (drafts only).
 'use client';
 
+import {
+  AlertTriangle,
+  Ban,
+  Copy,
+  Download,
+  Lock,
+  MoreHorizontal,
+  Pencil,
+  RotateCcw,
+  Send,
+  Trash2,
+  Wallet,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { use, useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { use, useState } from 'react';
 
-import { z } from 'zod';
-
-import {
-  InvoiceStatus,
-  Role,
-  recordPaymentSchema,
-  updateInvoiceSchema,
-} from '@agency/shared';
+import { InvoiceStatus, Role } from '@agency/shared';
 
 import { RoleGate } from '@/components/auth/role-gate';
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import { Tooltip } from '@/components/ui/tooltip';
+import { ApiRequestError } from '@/lib/api-client';
 import { env } from '@/lib/env';
-import { formatPaise, toPaise, toRupees } from '@/lib/formatters';
+import { formatDate, formatPaise } from '@/lib/formatters';
 
-import {
-  InvoiceLineItems,
-  emptyToUndefined,
-  emptyToUndefinedNumber,
-} from '@/features/invoices/invoice-line-items';
+import { InvoiceFormDialog } from '@/features/invoices/invoice-form-dialog';
 import {
   useDeleteInvoice,
+  useDuplicateInvoice,
   useInvoice,
-  useRecordPayment,
+  useRemoveInvoicePayment,
+  useReopenInvoice,
   useSendInvoice,
-  useUpdateInvoice,
+  type InvoiceRow,
 } from '@/features/invoices/invoices.hooks';
-import { useProjects } from '@/features/projects/projects.hooks';
-import { PageHeader } from '@/components/layout/page-header';
-
-type UpdateInvoiceForm = z.input<typeof updateInvoiceSchema>;
+import { RecordPaymentSheet } from '@/features/invoices/record-payment-sheet';
+import { WriteOffDialog } from '@/features/invoices/write-off-dialog';
 
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   return (
-    <RoleGate allow={[Role.OWNER]} fallback={<p className="text-sm text-muted-foreground">Restricted.</p>}>
+    <RoleGate allow={[Role.OWNER]} fallback={<p className="text-sm text-muted-foreground">Only the owner can see invoices.</p>}>
       <Inner id={id} />
     </RoleGate>
   );
 }
 
+const OPEN = new Set<InvoiceStatus>([InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]);
+
 function Inner({ id }: { id: string }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const inv = useInvoice(id);
   const send = useSendInvoice();
-  const pay = useRecordPayment();
-  const updateInvoice = useUpdateInvoice();
-  const deleteInvoice = useDeleteInvoice();
-  const today = new Date().toISOString().slice(0, 10);
-  type RecordPaymentForm = z.input<typeof recordPaymentSchema>;
-  const form = useForm<RecordPaymentForm>({
-    resolver: zodResolver(recordPaymentSchema) as never,
-    defaultValues: { paidAt: today, amountPaise: 0 } as never,
-  });
+  const remove = useDeleteInvoice();
+  const duplicate = useDuplicateInvoice();
+  const reopen = useReopenInvoice();
+  const removePayment = useRemoveInvoicePayment();
 
   const [editOpen, setEditOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  /** Payment amount is entered in rupees; the API stores paise. */
-  const [payRupees, setPayRupees] = useState('');
-  const editForm = useForm<UpdateInvoiceForm>({
-    resolver: zodResolver(updateInvoiceSchema) as never,
-  });
+  const [payOpen, setPayOpen] = useState(false);
+  const [writeOffOpen, setWriteOffOpen] = useState(false);
 
-  const projects = useProjects({ pageSize: 200 });
-  const clientProjects = (projects.data?.items ?? []).filter(
-    (p) => !inv.data?.clientId || p.clientId === inv.data.clientId,
-  );
-  const projectMap = new Map((projects.data?.items ?? []).map((p) => [p._id, p.name]));
+  if (inv.isLoading) return <PageSkeleton />;
+  if (inv.error instanceof ApiRequestError && inv.error.status === 404) {
+    return (
+      <EmptyState
+        title="Invoice not found"
+        description="It may have been a draft that was deleted."
+        action={
+          <Button asChild variant="outline" size="sm">
+            <Link href="/invoices">Back to invoices</Link>
+          </Button>
+        }
+      />
+    );
+  }
+  if (inv.isError || !inv.data) {
+    return <ErrorState title="Couldn't open this invoice" error={inv.error} onRetry={() => inv.refetch()} />;
+  }
 
-  useEffect(() => {
-    if (inv.data) {
-      editForm.reset({
-        lineItems: inv.data.lineItems.map((li) => ({
-          description: li.description,
-          qty: li.qty,
-          unitPaise: li.unitPaise,
-          projectId: li.projectId,
-          milestoneId: li.milestoneId,
-        })),
-        gstPercent: inv.data.gstPercent,
-        currency: inv.data.currency,
-        issueDate: inv.data.issueDate?.slice(0, 10),
-        dueDate: inv.data.dueDate?.slice(0, 10),
-        notes: inv.data.notes,
-        status: inv.data.status,
-      } as never);
-    }
-  }, [inv.data]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onEditSubmit = editForm.handleSubmit((values) => {
-    updateInvoice.mutate({ id, body: values as never }, { onSuccess: () => setEditOpen(false) });
-  });
-
-  if (inv.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (!inv.data) return <p className="text-sm text-muted-foreground">Not found.</p>;
   const i = inv.data;
-  const due = Math.max(0, i.totalPaise - i.paidPaise);
+  const isDraft = i.status === InvoiceStatus.DRAFT;
+  const writtenOff = i.status === InvoiceStatus.WRITTEN_OFF;
+  const isOpen = OPEN.has(i.status);
+  const balance = i.balancePaise ?? Math.max(0, i.totalPaise - i.paidPaise);
+  const money = (p: number) => formatPaise(p, i.currency);
+  const pdfHref = `${env.apiBaseUrl}/invoices/${id}/pdf`;
 
-  // Header-level project plus every project billed on a line item.
-  const linkedProjectIds = [
-    ...new Set([i.projectId, ...i.lineItems.map((li) => li.projectId)].filter(Boolean) as string[]),
-  ];
+  const markSent = async () => {
+    const ok = await confirm({
+      title: `Mark ${i.number} as sent?`,
+      description:
+        'This locks the amounts: the client, line items, amounts and GST can no longer be edited. You can still change the due date and notes, and start recording payments.',
+      confirmText: 'Mark as sent',
+    });
+    if (ok) send.mutate(id);
+  };
+
+  const deleteDraft = async () => {
+    const ok = await confirm({
+      title: `Delete draft ${i.number}?`,
+      description: 'The draft is removed and any milestones it billed go back to pending. This cannot be undone.',
+      confirmText: 'Delete draft',
+      destructive: true,
+    });
+    if (ok) remove.mutate(id, { onSuccess: () => router.push('/invoices') });
+  };
+
+  const doReopen = async () => {
+    const ok = await confirm({
+      title: `Reopen ${i.number}?`,
+      description: `The ${money(Math.max(0, i.totalPaise - i.paidPaise))} balance counts as outstanding again and payments can be recorded.`,
+      confirmText: 'Reopen',
+    });
+    if (ok) reopen.mutate(id);
+  };
+
+  const doDuplicate = async () => {
+    const ok = await confirm({
+      title: `Duplicate ${i.number}?`,
+      description: `Creates a new draft for ${i.clientName ?? 'the same client'} with the same line items, a new number and today's date. Milestone links are not copied.`,
+      confirmText: 'Create draft',
+    });
+    if (ok) duplicate.mutate(id, { onSuccess: (copy) => router.push(`/invoices/${copy._id}`) });
+  };
+
+  const removeOne = async (p: InvoiceRow['payments'][number]) => {
+    const ok = await confirm({
+      title: `Remove the ${money(p.amountPaise)} payment?`,
+      description: `Received ${formatDate(p.paidAt)}${p.reference ? ` (ref ${p.reference})` : ''}. The balance due goes back up and the invoice status is recalculated.`,
+      confirmText: 'Remove payment',
+      destructive: true,
+    });
+    if (ok) removePayment.mutate({ id, paymentId: p._id });
+  };
+
   // Per-project totals, so a combined invoice shows what each project owes.
+  const projectName = new Map((i.projects ?? []).map((p) => [p._id, p.name]));
   const projectTotals = new Map<string, number>();
   i.lineItems.forEach((li) => {
     const key = li.projectId ?? '';
@@ -127,274 +164,360 @@ function Inner({ id }: { id: string }) {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title={i.number}
-        description={i.status}
+        crumbs={[{ label: 'Invoices', href: '/invoices' }]}
+        meta={
+          <>
+            <StatusBadge status={i.status} />
+            {i.isOverdue && i.status !== InvoiceStatus.OVERDUE && <Badge variant="danger">Overdue</Badge>}
+          </>
+        }
+        description={
+          <>
+            {i.clientName ? (
+              <Link href={`/clients/${i.clientId}`} className="font-medium text-foreground hover:underline">
+                {i.clientName}
+              </Link>
+            ) : (
+              <span>Deleted client</span>
+            )}
+            {i.issueDate && <> · Issued {formatDate(i.issueDate)}</>}
+            {i.dueDate && (
+              <span className={i.isOverdue ? 'text-destructive' : undefined}>
+                {' '}
+                · {i.issueDate && i.dueDate.slice(0, 10) === i.issueDate.slice(0, 10) ? 'Due on receipt' : `Due ${formatDate(i.dueDate)}`}
+              </span>
+            )}
+          </>
+        }
         action={
-          <div className="flex items-center gap-2">
-            {i.status === InvoiceStatus.DRAFT && (
-              <Button onClick={() => send.mutate(id)} disabled={send.isPending}>
-                {send.isPending ? 'Sending…' : 'Mark as sent'}
+          <>
+            <Button asChild variant="outline" size="sm">
+              <a href={pdfHref} target="_blank" rel="noreferrer">
+                <Download className="mr-1.5 h-3.5 w-3.5" /> PDF
+              </a>
+            </Button>
+            {isDraft && (
+              <Button size="sm" onClick={() => void markSent()} disabled={send.isPending}>
+                <Send className="mr-1.5 h-3.5 w-3.5" /> {send.isPending ? 'Marking…' : 'Mark as sent'}
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Edit</Button>
-            <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)}>Delete</Button>
-          </div>
+            {isOpen && balance > 0 && (
+              <Button size="sm" onClick={() => setPayOpen(true)}>
+                <Wallet className="mr-1.5 h-3.5 w-3.5" /> Record payment
+              </Button>
+            )}
+            {writtenOff && (
+              <Button size="sm" variant="outline" onClick={() => void doReopen()} disabled={reopen.isPending}>
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reopen
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="outline" className="h-8 w-8" aria-label="More actions">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                  <Pencil className="mr-2 h-3.5 w-3.5" />
+                  {isDraft ? 'Edit draft' : 'Edit due date & notes'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void doDuplicate()} disabled={duplicate.isPending || i.clientDeleted}>
+                  <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate as new draft
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {isDraft ? (
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => void deleteDraft()}>
+                    <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete draft
+                  </DropdownMenuItem>
+                ) : (
+                  <>
+                    {isOpen && (
+                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setWriteOffOpen(true)}>
+                        <Ban className="mr-2 h-3.5 w-3.5" /> Write off…
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem disabled className="flex-col items-start gap-0.5">
+                      <span className="flex items-center">
+                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
+                      </span>
+                      <span className="pl-5 text-xs">Only drafts can be deleted{isOpen ? ' — write it off instead' : ''}.</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
         }
       />
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Edit invoice</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={onEditSubmit} className="grid gap-3">
-            <InvoiceLineItems form={editForm} projects={clientProjects} showQty />
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label>GST %</Label>
-                <Input type="number" placeholder="0" {...editForm.register('gstPercent', { setValueAs: emptyToUndefinedNumber })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Issue date</Label>
-                <Input type="date" {...editForm.register('issueDate', { setValueAs: emptyToUndefined })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Due date</Label>
-                <Input type="date" {...editForm.register('dueDate', { setValueAs: emptyToUndefined })} />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Status</Label>
-              <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" {...editForm.register('status')}>
-                {Object.values(InvoiceStatus).map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <textarea
-                className="min-h-20 w-full rounded border bg-background px-3 py-2 text-sm"
-                {...editForm.register('notes')}
-              />
-            </div>
-            <DialogFooter>
-              <Button type="submit" disabled={updateInvoice.isPending}>
-                {updateInvoice.isPending ? 'Saving…' : 'Save changes'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {isDraft && (
+        <Banner icon={Pencil}>
+          This is a draft — nothing has been sent. Mark it as sent once the client has it; that locks the amounts and lets you record payments.
+        </Banner>
+      )}
+      {writtenOff && (
+        <Banner icon={Ban}>
+          Written off{i.writtenOffAt ? ` on ${formatDate(i.writtenOffAt)}` : ''}
+          {i.writeOffReason ? <> — “{i.writeOffReason}”</> : null}. The unpaid{' '}
+          {money(Math.max(0, i.totalPaise - i.paidPaise))} no longer counts as outstanding.
+        </Banner>
+      )}
+      {i.isOverdue && (
+        <Banner icon={AlertTriangle} tone="danger">
+          {money(balance)} is {i.daysOverdue ? `${i.daysOverdue} day${i.daysOverdue === 1 ? '' : 's'} ` : ''}overdue
+          {i.dueDate ? ` (was due ${formatDate(i.dueDate)})` : ''}.
+        </Banner>
+      )}
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete invoice</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Delete invoice <span className="font-medium text-foreground">{i.number}</span>?
-            {i.payments.length > 0 && (
-              <span className="text-destructive"> This invoice has {i.payments.length} recorded payment(s) — they will be removed too.</span>
-            )}
-            {' '}This cannot be undone.
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border bg-card px-4 py-3 sm:col-span-1">
+          <p className="text-xs font-medium text-muted-foreground">Balance due</p>
+          <p
+            className={
+              'mt-1 text-3xl font-semibold tabular-nums tracking-tight ' +
+              (writtenOff ? 'text-muted-foreground line-through' : i.isOverdue ? 'text-destructive' : balance === 0 ? 'text-[hsl(var(--success))]' : '')
+            }
+          >
+            {money(writtenOff ? Math.max(0, i.totalPaise - i.paidPaise) : balance)}
           </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
-            <Button
-              variant="destructive"
-              disabled={deleteInvoice.isPending}
-              onClick={() => deleteInvoice.mutate(id, { onSuccess: () => router.push('/invoices') })}
-            >
-              {deleteInvoice.isPending ? 'Deleting…' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <div className="flex flex-wrap gap-2">
-        <a
-          href={`${env.apiBaseUrl}/invoices/${id}/pdf`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
-        >
-          Download PDF
-        </a>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {writtenOff ? 'Written off' : balance === 0 && i.totalPaise > 0 ? 'Paid in full' : isDraft ? 'Not sent yet' : `of ${money(i.totalPaise)}`}
+          </p>
+        </div>
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <p className="text-xs font-medium text-muted-foreground">Total</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{money(i.totalPaise)}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {money(i.subTotalPaise)} + {i.gstPercent ? `${i.gstPercent}% GST` : 'no GST'}
+          </p>
+        </div>
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <p className="text-xs font-medium text-muted-foreground">Received</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-[hsl(var(--success))]">{money(i.paidPaise)}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {i.payments.length === 0 ? 'No payments yet' : `${i.payments.length} payment${i.payments.length === 1 ? '' : 's'}`}
+          </p>
+        </div>
       </div>
 
-      {(linkedProjectIds.length > 0 || i.contractId) && (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+          <CardTitle className="text-base">Line items</CardTitle>
+          {!isDraft && (
+            <Tooltip content="Sent invoices can't change amounts. Write it off and duplicate it to reissue.">
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Lock className="h-3.5 w-3.5" /> Locked{i.sentAt ? ` since ${formatDate(i.sentAt)}` : ''}
+              </span>
+            </Tooltip>
+          )}
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Description</TH>
+                  <TH className="hidden md:table-cell">Project</TH>
+                  <TH className="text-right">Qty</TH>
+                  <TH className="text-right">Unit price</TH>
+                  <TH className="text-right">Amount</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {i.lineItems.map((li, idx) => (
+                  <TR key={idx}>
+                    <TD>{li.description}</TD>
+                    <TD className="hidden text-muted-foreground md:table-cell">
+                      {li.projectId ? (
+                        projectName.get(li.projectId) ? (
+                          <Link href={`/projects/${li.projectId}`} className="hover:underline">
+                            {projectName.get(li.projectId)}
+                          </Link>
+                        ) : (
+                          'Deleted project'
+                        )
+                      ) : (
+                        '—'
+                      )}
+                    </TD>
+                    <TD className="text-right tabular-nums">{li.qty}</TD>
+                    <TD className="text-right tabular-nums">{money(li.unitPaise)}</TD>
+                    <TD className="text-right tabular-nums">{money(Math.round(li.qty * li.unitPaise))}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+
+          {projectTotals.size > 1 && (
+            <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Split across projects</p>
+              {[...projectTotals.entries()].map(([pid, paise]) => (
+                <div key={pid || 'unassigned'} className="flex justify-between py-0.5">
+                  <span className="text-muted-foreground">
+                    {pid ? (projectName.get(pid) ?? 'Deleted project') : 'Not linked to a project'}
+                  </span>
+                  <span className="font-medium tabular-nums">{money(paise)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <dl className="ml-auto mt-4 grid max-w-xs grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm tabular-nums">
+            <dt className="text-muted-foreground">Subtotal</dt>
+            <dd className="text-right">{money(i.subTotalPaise)}</dd>
+            <dt className="text-muted-foreground">GST {i.gstPercent ? `${i.gstPercent}%` : ''}</dt>
+            <dd className="text-right">{money(i.gstPaise)}</dd>
+            <dt className="font-medium">Total</dt>
+            <dd className="text-right font-semibold">{money(i.totalPaise)}</dd>
+            {i.paidPaise > 0 && (
+              <>
+                <dt className="text-muted-foreground">Received</dt>
+                <dd className="text-right text-[hsl(var(--success))]">−{money(i.paidPaise)}</dd>
+              </>
+            )}
+            <dt className="font-medium">{writtenOff ? 'Written off' : 'Balance due'}</dt>
+            <dd className="text-right font-semibold">{money(writtenOff ? Math.max(0, i.totalPaise - i.paidPaise) : balance)}</dd>
+          </dl>
+
+          {i.notes && (
+            <div className="mt-4 border-t pt-3">
+              <p className="text-xs font-medium text-muted-foreground">Notes</p>
+              <p className="mt-1 whitespace-pre-line text-sm">{i.notes}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+          <CardTitle className="text-base">Payments</CardTitle>
+          {isOpen && balance > 0 && (
+            <Button size="sm" variant="outline" onClick={() => setPayOpen(true)}>
+              Record payment
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {i.payments.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              {isDraft
+                ? 'Send the invoice first — payments can be recorded once it has been sent.'
+                : writtenOff
+                  ? 'No payments were received before this invoice was written off.'
+                  : 'No payments recorded yet.'}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Date</TH>
+                    <TH>Method</TH>
+                    <TH>Reference</TH>
+                    <TH className="text-right">Amount</TH>
+                    <TH className="w-10">
+                      <span className="sr-only">Actions</span>
+                    </TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {i.payments.map((p) => (
+                    <TR key={p._id}>
+                      <TD className="whitespace-nowrap">{formatDate(p.paidAt)}</TD>
+                      <TD>{p.methodLabel || p.method || '—'}</TD>
+                      <TD className="text-muted-foreground">{p.reference || '—'}</TD>
+                      <TD className="text-right font-medium tabular-nums">{money(p.amountPaise)}</TD>
+                      <TD>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          aria-label="Remove payment"
+                          disabled={removePayment.isPending}
+                          onClick={() => void removeOne(p)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {((i.projects?.length ?? 0) > 0 || (i.contracts?.length ?? 0) > 0) && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Related</CardTitle>
+            <CardTitle className="text-base">Related</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            {linkedProjectIds.map((pid) => (
-              <Link
-                key={pid}
-                href={`/projects/${pid}`}
-                className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
-              >
-                → {projectMap.get(pid) ?? 'View Project'}
-              </Link>
-            ))}
-            {i.contractId && (
-              <Link
-                href={`/contracts/${i.contractId}`}
-                className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
-              >
-                → View Contract
-              </Link>
+          <CardContent className="flex flex-wrap gap-2">
+            {(i.projects ?? []).map((p) =>
+              p.name ? (
+                <Link
+                  key={p._id}
+                  href={`/projects/${p._id}?tab=billing`}
+                  className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
+                >
+                  Project · {p.name}
+                </Link>
+              ) : (
+                <span key={p._id} className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm text-muted-foreground">
+                  Deleted project
+                </span>
+              ),
+            )}
+            {(i.contracts ?? []).map((c) =>
+              c.name ? (
+                <Link
+                  key={c._id}
+                  href={`/contracts/${c._id}`}
+                  className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
+                >
+                  Contract · {c.name}
+                </Link>
+              ) : (
+                <span key={c._id} className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm text-muted-foreground">
+                  Deleted contract
+                </span>
+              ),
             )}
           </CardContent>
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Line items</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <THead>
-              <TR>
-                <TH>Description</TH>
-                <TH>Project</TH>
-                <TH>Qty</TH>
-                <TH>Unit</TH>
-                <TH>Total</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {i.lineItems.map((li, idx) => (
-                <TR key={idx}>
-                  <TD>{li.description}</TD>
-                  <TD className="text-muted-foreground">
-                    {li.projectId ? (
-                      <Link href={`/projects/${li.projectId}`} className="hover:underline">
-                        {projectMap.get(li.projectId) ?? '—'}
-                      </Link>
-                    ) : (
-                      '—'
-                    )}
-                  </TD>
-                  <TD>{li.qty}</TD>
-                  <TD>{formatPaise(li.unitPaise, i.currency)}</TD>
-                  <TD>{formatPaise(Math.round(li.qty * li.unitPaise), i.currency)}</TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
-          {projectTotals.size > 1 && (
-            <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                Split across projects
-              </p>
-              {[...projectTotals.entries()].map(([pid, paise]) => (
-                <div key={pid || 'unassigned'} className="flex justify-between py-0.5">
-                  <span className="text-muted-foreground">
-                    {projectMap.get(pid) ?? 'Not linked to a project'}
-                  </span>
-                  <span className="font-medium tabular-nums">{formatPaise(paise, i.currency)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="mt-4 grid gap-1 text-sm">
-            <p>Subtotal: {formatPaise(i.subTotalPaise, i.currency)}</p>
-            <p>GST {i.gstPercent}%: {formatPaise(i.gstPaise, i.currency)}</p>
-            <p className="font-semibold">Total: {formatPaise(i.totalPaise, i.currency)}</p>
-            <p>Paid: {formatPaise(i.paidPaise, i.currency)}</p>
-            <p>Outstanding: {formatPaise(due, i.currency)}</p>
-          </div>
-        </CardContent>
-      </Card>
+      <InvoiceFormDialog open={editOpen} onOpenChange={setEditOpen} invoice={i} />
+      <RecordPaymentSheet invoice={i} open={payOpen} onOpenChange={setPayOpen} />
+      <WriteOffDialog invoice={i} open={writeOffOpen} onOpenChange={setWriteOffOpen} />
+    </div>
+  );
+}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Payments</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Table>
-            <THead>
-              <TR>
-                <TH>Date</TH>
-                <TH>Amount</TH>
-                <TH>Reference</TH>
-                <TH>Method</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {i.payments.map((p) => (
-                <TR key={p._id}>
-                  <TD>{new Date(p.paidAt).toLocaleDateString()}</TD>
-                  <TD>{formatPaise(p.amountPaise, i.currency)}</TD>
-                  <TD>{p.reference || '—'}</TD>
-                  <TD>{p.method || '—'}</TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
-          {due > 0 && (
-            <form
-              className="grid gap-3 md:grid-cols-4"
-              onSubmit={form.handleSubmit((v) =>
-                pay.mutate(
-                  { id, body: v as never },
-                  {
-                    onSuccess: () => {
-                      form.reset({ paidAt: today, amountPaise: 0 } as never);
-                      setPayRupees('');
-                    },
-                  },
-                ),
-              )}
-            >
-              <div className="space-y-1">
-                <Label>Date</Label>
-                <Input type="date" {...form.register('paidAt')} />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-baseline justify-between">
-                  <Label>Amount (₹)</Label>
-                  <button
-                    type="button"
-                    className="text-[11px] text-primary hover:underline"
-                    onClick={() => {
-                      setPayRupees(String(toRupees(due)));
-                      form.setValue('amountPaise', due as never);
-                    }}
-                  >
-                    Full balance
-                  </button>
-                </div>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder={String(toRupees(due))}
-                  value={payRupees}
-                  onChange={(e) => {
-                    setPayRupees(e.target.value);
-                    form.setValue('amountPaise', toPaise(e.target.value) as never);
-                  }}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Reference</Label>
-                <Input {...form.register('reference')} />
-              </div>
-              <div className="flex items-end">
-                <Button type="submit" disabled={pay.isPending}>
-                  {pay.isPending ? 'Saving…' : 'Record'}
-                </Button>
-              </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
+function Banner({
+  icon: Icon,
+  tone = 'muted',
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  tone?: 'muted' | 'danger';
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={
+        'flex items-start gap-2.5 rounded-lg border px-4 py-3 text-sm ' +
+        (tone === 'danger' ? 'border-destructive/30 bg-destructive/5 text-destructive' : 'bg-muted/40 text-muted-foreground')
+      }
+    >
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+      <p>{children}</p>
     </div>
   );
 }

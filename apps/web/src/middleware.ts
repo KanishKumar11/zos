@@ -2,7 +2,8 @@
 // here; the API verifies signatures); uses payload solely to perform UX-level redirects.
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { ruleForPath } from '@/lib/route-rules';
+import { isFeatureRouteDisabled } from '@/lib/features';
+import { homeForRole, isPortalPath, ruleForPath } from '@/lib/route-rules';
 
 const PUBLIC_PATHS = ['/login', '/forgot-password', '/reset-password', '/accept-invite'];
 
@@ -38,7 +39,23 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (isFeatureRouteDisabled(pathname)) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/dashboard';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+
   const role = decodeRole(accessToken);
+
+  // Client portal users and staff each stay in their own area.
+  if (role && (role === 'CLIENT') !== isPortalPath(pathname)) {
+    const url = req.nextUrl.clone();
+    url.pathname = homeForRole(role);
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+
   const rule = ruleForPath(pathname);
   if (rule && role && !rule.allow.includes(role as never)) {
     const url = req.nextUrl.clone();

@@ -13,11 +13,16 @@ import { ErrorCodes } from '@/common/constants/error-codes';
 import { ymd } from '@/common/utils/date.util';
 
 import { HolidaysService } from '../holidays/holidays.service';
+import { todayIn } from '../payroll/payroll-calc';
 import { SettingsService } from '../settings/settings.service';
 import {
   AttendanceEntry,
   type AttendanceEntryDocument,
 } from './schemas/attendance-entry.schema';
+
+/** YYYY-MM-DD for a validated date input (zod coerces 'YYYY-MM-DD' to UTC midnight). */
+const dayKey = (d: Date | string): string =>
+  d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
 
 @Injectable()
 export class AttendanceService {
@@ -28,8 +33,14 @@ export class AttendanceService {
     private readonly holidays: HolidaysService,
   ) {}
 
+  /** Today's date in the workspace timezone (not the server's), so late-night check-ins land on the right day. */
+  private async todayKey(): Promise<string> {
+    const { timezone } = await this.settings.get();
+    return todayIn(timezone);
+  }
+
   async checkIn(userId: string, note?: string): Promise<AttendanceEntryDocument> {
-    const today = ymd(new Date());
+    const today = await this.todayKey();
     const existing = await this.model.findOne({ userId, date: today }).exec();
     if (existing && existing.checkInAt) {
       throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'Already checked in today' });
@@ -50,7 +61,7 @@ export class AttendanceService {
   }
 
   async checkOut(userId: string, note?: string): Promise<AttendanceEntryDocument> {
-    const today = ymd(new Date());
+    const today = await this.todayKey();
     const entry = await this.model.findOne({ userId, date: today }).exec();
     if (!entry || !entry.checkInAt) {
       throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'Not checked in today' });
@@ -75,16 +86,18 @@ export class AttendanceService {
   }
 
   team(query: TeamAttendanceQuery): Promise<AttendanceEntryDocument[]> {
-    const filter: Record<string, unknown> = { date: query.date };
+    const filter: Record<string, unknown> = { date: dayKey(query.date) };
     return this.model.find(filter).exec();
   }
 
   async adminMark(input: AdminMarkAttendanceInput, actorId: string): Promise<AttendanceEntryDocument> {
+    // Entries are keyed by a plain YYYY-MM-DD string; the validated input is a Date.
+    const date = dayKey(input.date);
     const entry = await this.model.findOneAndUpdate(
-      { userId: input.userId, date: input.date },
+      { userId: new Types.ObjectId(input.userId), date },
       {
         userId: new Types.ObjectId(input.userId),
-        date: input.date,
+        date,
         status: input.status,
         workedMinutes: input.workedMinutes ?? 0,
         note: input.note,
@@ -93,6 +106,20 @@ export class AttendanceService {
       { upsert: true, new: true },
     );
     return entry!;
+  }
+
+  /** Raw entries for one person in [fromYmd, toYmdExclusive) — used by payroll's LOP calculation. */
+  async entriesFor(
+    userId: string,
+    fromYmd: string,
+    toYmdExclusive: string,
+  ): Promise<{ date: string; status: AttendanceStatus }[]> {
+    const docs = await this.model
+      .find({ userId: new Types.ObjectId(userId), date: { $gte: fromYmd, $lt: toYmdExclusive } })
+      .select({ date: 1, status: 1 })
+      .lean()
+      .exec();
+    return docs.map((d) => ({ date: d.date, status: d.status }));
   }
 
   /** Used by payroll computation: returns count of PRESENT/HALF_DAY days for [start,endExclusive). */

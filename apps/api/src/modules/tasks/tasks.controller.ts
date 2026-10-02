@@ -74,8 +74,8 @@ export class TasksController {
 
   // ---------- comments ----------
   @Get('tasks/:id/comments')
-  comments(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.commentsFor(id);
+  comments(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.commentsFor(id, user);
   }
 
   @Post('tasks/:id/comments')

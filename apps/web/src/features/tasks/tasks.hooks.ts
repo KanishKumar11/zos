@@ -99,7 +99,21 @@ export function useUpdateTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string; body: UpdateTaskInput }) => tasksApi.update(vars.id, vars.body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+export function useDeleteTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => tasksApi.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success('Task deleted');
+    },
   });
 }
 export function useMoveTask() {

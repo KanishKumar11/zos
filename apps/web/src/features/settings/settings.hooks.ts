@@ -8,6 +8,7 @@ import type {
   UpdateSettingsInput,
 } from '@agency/shared';
 
+import { getErrorMessage } from '@/lib/api-client';
 import { qk } from '@/lib/query-keys';
 
 import { holidaysApi, settingsApi } from './settings.api';
@@ -21,9 +22,9 @@ export function useUpdateSettings() {
     mutationFn: (body: UpdateSettingsInput) => settingsApi.update(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.settings.all() });
+      qc.invalidateQueries({ queryKey: ['payroll'] });
       toast.success('Settings saved');
     },
-    onError: (err: Error) => toast.error(err.message),
   });
 }
 
@@ -38,7 +39,6 @@ export function useCreateHoliday() {
       qc.invalidateQueries({ queryKey: ['holidays'] });
       toast.success('Holiday added');
     },
-    onError: (err: Error) => toast.error(err.message),
   });
 }
 export function useUpdateHoliday() {
@@ -49,7 +49,6 @@ export function useUpdateHoliday() {
       qc.invalidateQueries({ queryKey: ['holidays'] });
       toast.success('Holiday updated');
     },
-    onError: (err: Error) => toast.error(err.message),
   });
 }
 export function useDeleteHoliday() {
@@ -60,6 +59,6 @@ export function useDeleteHoliday() {
       qc.invalidateQueries({ queryKey: ['holidays'] });
       toast.success('Holiday removed');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }

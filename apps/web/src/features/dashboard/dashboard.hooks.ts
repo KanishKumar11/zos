@@ -23,6 +23,15 @@ export interface OwnerDashboard {
   profitThisMonth: number;
   profitThisFinancialYear: number;
   fyLabel: string;
+  costBreakdownThisMonth?: CostBreakdown;
+  costBreakdownThisFinancialYear?: CostBreakdown;
+}
+
+export interface CostBreakdown {
+  payrollPaise: number;
+  expensesPaise: number;
+  teamPayoutsPaise: number;
+  freelancerPayoutsPaise: number;
 }
 
 export interface BirthdayNotification {
@@ -78,6 +87,8 @@ export interface OwnerCharts {
   payrollByMonth: PayrollPoint[];
   expensesByMonth: ExpensePoint[];
   freelancerByMonth: ExpensePoint[];
+  teamPayoutsByMonth?: ExpensePoint[];
+  incomeByMonth?: ExpensePoint[];
   profitByMonth: ProfitPoint[];
 }
 

@@ -1,20 +1,30 @@
 // Announcement + Notification schemas.
 import { z } from 'zod';
 
-import { AudienceType, NotificationType } from '../enums';
+import { AudienceType, NotificationType, Role } from '../enums';
 import { objectIdSchema } from './common.schema';
 
 const announcementBaseSchema = z.object({
   title: z.string().min(2).max(200),
   body: z.string().min(2),
   audienceType: z.nativeEnum(AudienceType).default(AudienceType.ALL),
+  /** DEPARTMENT → department ids, USERS → user ids. */
   audienceIds: z.array(objectIdSchema).optional(),
+  /** ROLE audiences. */
+  audienceRoles: z.array(z.nativeEnum(Role)).optional(),
   pinned: z.boolean().optional(),
 });
 
 export const createAnnouncementSchema = announcementBaseSchema.superRefine((v, ctx) => {
-  if (v.audienceType !== AudienceType.ALL && (!v.audienceIds || v.audienceIds.length === 0)) {
-    ctx.addIssue({ code: 'custom', message: 'audienceIds required for non-ALL audience' });
+  if (v.audienceType === AudienceType.ROLE && !v.audienceRoles?.length) {
+    ctx.addIssue({ code: 'custom', path: ['audienceRoles'], message: 'Choose at least one role' });
+  }
+  if ((v.audienceType === AudienceType.DEPARTMENT || v.audienceType === AudienceType.USERS) && !v.audienceIds?.length) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['audienceIds'],
+      message: v.audienceType === AudienceType.USERS ? 'Choose at least one person' : 'Choose at least one department',
+    });
   }
 });
 export type CreateAnnouncementInput = z.infer<typeof createAnnouncementSchema>;

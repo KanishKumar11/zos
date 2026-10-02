@@ -11,7 +11,7 @@ import {
   type RequestLeaveInput,
 } from '@agency/shared';
 
-import { api, unwrap } from '@/lib/api-client';
+import { api, getErrorMessage, unwrap } from '@/lib/api-client';
 import { qk } from '@/lib/query-keys';
 
 export interface AttendanceEntryRow {
@@ -84,7 +84,7 @@ export function useCheckIn() {
       qc.invalidateQueries({ queryKey: ['attendance'] });
       toast.success('Checked in');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }
 export function useCheckOut() {
@@ -95,7 +95,7 @@ export function useCheckOut() {
       qc.invalidateQueries({ queryKey: ['attendance'] });
       toast.success('Checked out');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }
 export function useAdminMarkAttendance() {
@@ -106,7 +106,7 @@ export function useAdminMarkAttendance() {
       qc.invalidateQueries({ queryKey: ['attendance'] });
       toast.success('Attendance marked');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }
 
@@ -128,7 +128,7 @@ export function useRequestLeave() {
       qc.invalidateQueries({ queryKey: ['leaves'] });
       toast.success('Leave requested');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }
 export function useDecideLeave() {
@@ -139,7 +139,7 @@ export function useDecideLeave() {
       qc.invalidateQueries({ queryKey: ['leaves'] });
       toast.success('Decision recorded');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }
 export function useCancelLeave() {
@@ -150,6 +150,6 @@ export function useCancelLeave() {
       qc.invalidateQueries({ queryKey: ['leaves'] });
       toast.success('Leave cancelled');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }

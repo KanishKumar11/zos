@@ -17,7 +17,10 @@ export class Announcement {
   @Prop({ required: true }) body!: string;
   @Prop({ type: String, enum: Object.values(AudienceType), default: AudienceType.ALL, index: true })
   audienceType!: AudienceType;
+  /** DEPARTMENT → department ids, USERS → user ids. */
   @Prop({ type: [MS.Types.ObjectId], default: [] }) audienceIds!: Types.ObjectId[];
+  /** ROLE audiences (role names). */
+  @Prop({ type: [String], default: [] }) audienceRoles!: string[];
   @Prop({ default: false }) pinned!: boolean;
   @Prop({ type: MS.Types.ObjectId, ref: 'User', required: true }) createdBy!: Types.ObjectId;
   @Prop({ type: Date }) publishedAt?: Date;

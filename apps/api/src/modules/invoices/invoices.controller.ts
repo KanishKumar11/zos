@@ -3,18 +3,23 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@
 import type { Response } from 'express';
 
 import {
-  InvoiceStatus,
   Role,
   createInvoiceSchema,
+  listInvoicesQuerySchema,
   recordPaymentSchema,
   updateInvoiceSchema,
+  writeOffInvoiceSchema,
   type CreateInvoiceInput,
+  type ListInvoicesQuery,
   type RecordPaymentInput,
   type UpdateInvoiceInput,
+  type WriteOffInvoiceInput,
 } from '@agency/shared';
 
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { RequestTimeout } from '@/common/decorators/request-timeout.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
+import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 import { ObjectIdPipe } from '@/common/pipes/object-id.pipe';
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe';
 
@@ -25,14 +30,10 @@ import { InvoicesService } from './invoices.service';
 export class InvoicesController {
   constructor(private readonly svc: InvoicesService) {}
 
+  /** Without `page`: plain array of every match. With `page`: paginated `{ items, meta }` + filtered totals. */
   @Get()
-  list(
-    @Query('status') status?: InvoiceStatus,
-    @Query('clientId') clientId?: string,
-    @Query('projectId') projectId?: string,
-    @Query('contractId') contractId?: string,
-  ) {
-    return this.svc.list({ status, clientId, projectId, contractId });
+  list(@Query(new ZodValidationPipe(listInvoicesQuerySchema)) q: ListInvoicesQuery) {
+    return this.svc.list(q);
   }
 
   @Get('dashboard')
@@ -45,9 +46,14 @@ export class InvoicesController {
     return this.svc.aging();
   }
 
+  @Get('next-number')
+  async nextNumber() {
+    return { number: await this.svc.nextInvoiceNumber(new Date()) };
+  }
+
   @Get(':id')
   byId(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.byId(id);
+    return this.svc.view(id);
   }
 
   @Get(':id/pdf')
@@ -60,33 +66,66 @@ export class InvoicesController {
   }
 
   @Post()
-  create(@Body(new ZodValidationPipe(createInvoiceSchema)) body: CreateInvoiceInput) {
-    return this.svc.create(body);
+  async create(
+    @CurrentUser() actor: JwtPayload,
+    @Body(new ZodValidationPipe(createInvoiceSchema)) body: CreateInvoiceInput,
+  ) {
+    return this.svc.presentOne(await this.svc.create(body, actor));
   }
 
   @Patch(':id')
-  update(
+  async update(
     @Param('id', ObjectIdPipe) id: string,
+    @CurrentUser() actor: JwtPayload,
     @Body(new ZodValidationPipe(updateInvoiceSchema)) body: UpdateInvoiceInput,
   ) {
-    return this.svc.update(id, body);
+    return this.svc.presentOne(await this.svc.update(id, body, actor));
   }
 
   @Post(':id/send')
-  send(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.send(id);
+  async send(@Param('id', ObjectIdPipe) id: string, @CurrentUser() actor: JwtPayload) {
+    return this.svc.presentOne(await this.svc.send(id, actor));
+  }
+
+  @Post(':id/write-off')
+  async writeOff(
+    @Param('id', ObjectIdPipe) id: string,
+    @CurrentUser() actor: JwtPayload,
+    @Body(new ZodValidationPipe(writeOffInvoiceSchema)) body: WriteOffInvoiceInput,
+  ) {
+    return this.svc.presentOne(await this.svc.writeOff(id, body.reason, actor));
+  }
+
+  @Post(':id/reopen')
+  async reopen(@Param('id', ObjectIdPipe) id: string, @CurrentUser() actor: JwtPayload) {
+    return this.svc.presentOne(await this.svc.reopen(id, actor));
+  }
+
+  @Post(':id/duplicate')
+  async duplicate(@Param('id', ObjectIdPipe) id: string, @CurrentUser() actor: JwtPayload) {
+    return this.svc.presentOne(await this.svc.duplicate(id, actor));
   }
 
   @Post(':id/payments')
-  pay(
+  async pay(
     @Param('id', ObjectIdPipe) id: string,
+    @CurrentUser() actor: JwtPayload,
     @Body(new ZodValidationPipe(recordPaymentSchema)) body: RecordPaymentInput,
   ) {
-    return this.svc.recordPayment(id, body);
+    return this.svc.presentOne(await this.svc.recordPayment(id, body, actor));
+  }
+
+  @Delete(':id/payments/:paymentId')
+  async removePayment(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('paymentId', ObjectIdPipe) paymentId: string,
+    @CurrentUser() actor: JwtPayload,
+  ) {
+    return this.svc.presentOne(await this.svc.removePayment(id, paymentId, actor));
   }
 
   @Delete(':id')
-  remove(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.remove(id).then(() => ({ ok: true }));
+  remove(@Param('id', ObjectIdPipe) id: string, @CurrentUser() actor: JwtPayload) {
+    return this.svc.remove(id, actor).then(() => ({ ok: true }));
   }
 }

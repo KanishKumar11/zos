@@ -18,3 +18,23 @@ export const payslipAdjustmentSchema = z.object({
   amountPaise: z.number().int().min(1),
 });
 export type PayslipAdjustmentInput = z.infer<typeof payslipAdjustmentSchema>;
+
+export const markPayrollPaidSchema = z.object({
+  /** Day the money went out (YYYY-MM-DD). Defaults to today. */
+  paidAt: z.coerce.date().optional(),
+  notes: z.string().max(2000).optional(),
+});
+export type MarkPayrollPaidInput = z.infer<typeof markPayrollPaidSchema>;
+
+/** Why someone on the team has no payslip in a run. */
+export enum PayrollSkipReason {
+  NO_COMPENSATION = 'NO_COMPENSATION',
+  PROJECT_BASED = 'PROJECT_BASED',
+  NOT_JOINED = 'NOT_JOINED',
+}
+
+export const PAYROLL_SKIP_REASON_LABEL: Record<PayrollSkipReason, string> = {
+  NO_COMPENSATION: 'No compensation set for this month',
+  PROJECT_BASED: 'Paid per project, not on payroll',
+  NOT_JOINED: 'Joins after this month',
+};

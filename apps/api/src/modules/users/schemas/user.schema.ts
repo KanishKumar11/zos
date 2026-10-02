@@ -51,6 +51,11 @@ export class User {
   @Prop({ type: String, enum: Object.values(UserStatus), default: UserStatus.INVITED, index: true })
   status!: UserStatus;
 
+  /** CLIENT role only — the client company this portal user belongs to. */
+  @Prop({ type: MS.Types.ObjectId, ref: 'Client', index: true }) clientId?: Types.ObjectId;
+  /** CLIENT role only — their job title at the client, e.g. "Marketing head". */
+  @Prop() title?: string;
+
   @Prop({ type: MS.Types.ObjectId, ref: 'Department' }) departmentId?: Types.ObjectId;
   @Prop({ type: MS.Types.ObjectId, ref: 'Designation' }) designationId?: Types.ObjectId;
   @Prop({ type: MS.Types.ObjectId, ref: 'User' }) reportingManagerId?: Types.ObjectId;
@@ -75,3 +80,17 @@ export const UserSchema = SchemaFactory.createForClass(User);
 
 UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ deletedAt: 1, role: 1 });
+
+// Secrets never leave the server, whoever is asking. Role-based trimming (bank details, documents)
+// happens in users.presenter.ts on top of this.
+UserSchema.set('toJSON', {
+  transform: (_doc, ret: Record<string, any>) => {
+    delete ret.passwordHash;
+    delete ret.tokenVersion;
+    if (ret.bankDetails) delete ret.bankDetails.accountNumberEncrypted;
+    if (Array.isArray(ret.documents)) {
+      ret.documents = ret.documents.map(({ key: _key, ...rest }: Record<string, unknown>) => rest);
+    }
+    return ret;
+  },
+});

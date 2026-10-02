@@ -22,18 +22,18 @@ export class AnnouncementsController {
   constructor(private readonly svc: AnnouncementsService) {}
 
   @Get()
-  list() {
-    return this.svc.list();
+  list(@CurrentUser() user: JwtPayload) {
+    return this.svc.list(user);
   }
 
   @Get(':id')
-  byId(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.byId(id);
+  byId(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.byId(id, user);
   }
 
   @Post(':id/read')
   markRead(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
-    return this.svc.markRead(id, user.sub);
+    return this.svc.markRead(id, user.sub, user.role);
   }
 
   @Roles(Role.OWNER, Role.ADMIN)

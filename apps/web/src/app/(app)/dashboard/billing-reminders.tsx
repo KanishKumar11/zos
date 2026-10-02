@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 
 import { ContractStatus } from '@agency/shared';
 
-import { useContracts } from '@/features/contracts/contracts.hooks';
+import { useContracts, useGenerateClientInvoice, type ContractRow } from '@/features/contracts/contracts.hooks';
 import { useInvoices } from '@/features/invoices/invoices.hooks';
-import { useGenerateContractInvoice } from '@/features/contracts/contracts.hooks';
 import { useClients } from '@/features/clients/clients.hooks';
+import { thisMonthLocal } from '@/lib/form';
+import { formatPaise } from '@/lib/formatters';
 
 export function BillingReminders() {
   const contracts = useContracts({ status: ContractStatus.ACTIVE });
@@ -18,40 +19,43 @@ export function BillingReminders() {
 
   const today = new Date();
   const todayDay = today.getDate();
-  const currentMonth = today.toISOString().slice(0, 7);
+  const currentMonth = thisMonthLocal();
 
   const clientMap = new Map((clients.data ?? []).map((c) => [c._id, c.name]));
 
-  const reminders = (contracts.data ?? [])
-    .filter((c) => c.billingDay !== undefined)
-    .map((c) => {
-      const alreadyGenerated = (invoices.data ?? []).some(
-        (inv) =>
-          inv.contractId === c._id &&
-          inv.issueDate &&
-          inv.issueDate.slice(0, 7) === currentMonth,
-      );
-      // A retainer bills in arrears for a completed month — never remind for the
-      // calendar month the contract itself started in (nothing's been delivered yet).
-      const startMonth = c.startDate?.slice(0, 7);
-      const startedBeforeThisMonth = !startMonth || startMonth < currentMonth;
-      const isDue = startedBeforeThisMonth && todayDay >= (c.billingDay ?? 1);
-      return { contract: c, alreadyGenerated, isDue };
-    })
-    .filter((r) => r.isDue && !r.alreadyGenerated);
+  // Contracts already on an invoice issued this month — billed alone (header link)
+  // or alongside the client's other contracts (line-item link).
+  const billedThisMonth = new Set<string>();
+  for (const inv of invoices.data ?? []) {
+    if (inv.issueDate?.slice(0, 7) !== currentMonth) continue;
+    if (inv.contractId) billedThisMonth.add(inv.contractId);
+    inv.lineItems.forEach((li) => li.contractId && billedThisMonth.add(li.contractId));
+  }
 
-  if (reminders.length === 0) return null;
+  const due = (contracts.data ?? []).filter((c) => {
+    if (c.billingDay === undefined || c.billingDay === null || billedThisMonth.has(c._id)) return false;
+    // A retainer bills in arrears for a completed month — never remind for the
+    // calendar month the contract itself started in (nothing's been delivered yet).
+    const startMonth = c.startDate?.slice(0, 7);
+    const startedBeforeThisMonth = !startMonth || startMonth < currentMonth;
+    return startedBeforeThisMonth && todayDay >= (c.billingDay ?? 32);
+  });
+
+  // One reminder per client: its due contracts are billed together on one invoice.
+  const byClient = new Map<string, ContractRow[]>();
+  for (const c of due) byClient.set(c.clientId, [...(byClient.get(c.clientId) ?? []), c]);
+
+  if (byClient.size === 0) return null;
 
   return (
-    <div className="p-6 md:p-12 border-b border-border">
-      <p className="text-[10px] uppercase tracking-[0.2em] font-mono text-muted-foreground mb-6">Action Required</p>
-      <div className="space-y-3">
-        {reminders.map(({ contract }) => (
+    <div>
+      <div className="space-y-2">
+        {[...byClient.entries()].map(([clientId, group]) => (
           <ReminderRow
-            key={contract._id}
-            contractId={contract._id}
-            contractName={contract.name}
-            clientName={clientMap.get(contract.clientId) ?? contract.clientId.slice(-6)}
+            key={clientId}
+            clientId={clientId}
+            contracts={group}
+            clientName={clientMap.get(clientId) ?? 'Deleted client'}
             month={currentMonth}
             onSuccess={(id) => router.push(`/invoices/${id}`)}
           />
@@ -62,29 +66,48 @@ export function BillingReminders() {
 }
 
 function ReminderRow({
-  contractId, contractName, clientName, month, onSuccess,
+  clientId, contracts, clientName, month, onSuccess,
 }: {
-  contractId: string;
-  contractName: string;
+  clientId: string;
+  contracts: ContractRow[];
   clientName: string;
   month: string;
   onSuccess: (invoiceId: string) => void;
 }) {
-  const gen = useGenerateContractInvoice();
+  const gen = useGenerateClientInvoice();
   const [yr, mo] = month.split('-');
   const monthLabel = new Date(Number(yr), Number(mo) - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+  const contractLinks = contracts.map((c, i) => (
+    <span key={c._id}>
+      {i > 0 && (i === contracts.length - 1 ? ' and ' : ', ')}
+      <Link href={`/contracts/${c._id}`} className="underline">{c.name}</Link>
+    </span>
+  ));
+  const total = contracts.reduce((s, c) => s + c.monthlyAmountPaise, 0);
 
   return (
-    <div className="flex items-center justify-between border border-orange-200 bg-orange-50 rounded-lg px-4 py-3">
-      <div>
-        <p className="text-sm font-semibold text-orange-900">
-          Generate invoice for <Link href={`/contracts/${contractId}`} className="underline">{contractName}</Link>
-        </p>
-        <p className="text-xs text-orange-700 mt-0.5">{clientName} · {monthLabel}</p>
-      </div>
+    <div className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-900 dark:bg-orange-950/20">
+      {contracts.length === 1 ? (
+        <div>
+          <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">Generate invoice for {contractLinks}</p>
+          <p className="text-xs text-orange-700 mt-0.5 dark:text-orange-400">{clientName} · {monthLabel}</p>
+        </div>
+      ) : (
+        <div>
+          <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">
+            Generate one invoice for {clientName} · {formatPaise(total, contracts[0]!.currency)}
+          </p>
+          <p className="text-xs text-orange-700 mt-0.5 dark:text-orange-400">
+            {contractLinks} · {monthLabel}
+          </p>
+        </div>
+      )}
       <button
         onClick={() =>
-          gen.mutate({ id: contractId, month }, { onSuccess: (data) => onSuccess(data._id) })
+          gen.mutate(
+            { clientId, month, contractIds: contracts.map((c) => c._id) },
+            { onSuccess: (data) => onSuccess(data._id) },
+          )
         }
         disabled={gen.isPending}
         className="ml-4 shrink-0 rounded-md bg-orange-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-orange-700 disabled:opacity-50"

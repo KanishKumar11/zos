@@ -1,590 +1,555 @@
+// Expenses — business costs with gross / net (after team contributions), project links, repeats.
 'use client';
 
-import { useEffect, useState } from 'react';
-import { type Control, type UseFormRegister, useFieldArray, useForm } from 'react-hook-form';
-import { TrendingDown } from 'lucide-react';
+import { MoreHorizontal, Pencil, Plus, Repeat, Trash2, TrendingDown } from 'lucide-react';
+import Link from 'next/link';
+import { useMemo, useState } from 'react';
 
 import { Role } from '@agency/shared';
 
-import { RoleGate } from '@/components/auth/role-gate';
-import { PageHeader } from '@/components/layout/page-header';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { FileUploader } from '@/components/file-uploader';
-import { formatDate, formatPaise } from '@/lib/formatters';
-import { getDownloadUrl } from '@/lib/upload';
+import { toast } from 'sonner';
 
+import { getErrorMessage } from '@/lib/api-client';
+import { csvMoney } from '@/lib/csv';
+import { describeRange } from '@/lib/date-range';
+import { todayLocal } from '@/lib/form';
+import { formatDate, formatPaise } from '@/lib/formatters';
+import { useListState } from '@/lib/list-state';
+
+import { RoleGate } from '@/components/auth/role-gate';
+import { DataTable, exportColumnsCsv, type Column } from '@/components/data/data-table';
+import { DateRangeFilter, ExportButton, FilterBar, ResetFilters, SearchFilter, SelectFilter } from '@/components/data/filter-bar';
+import { PageHeader } from '@/components/layout/page-header';
+import { useNewParam } from '@/components/layout/quick-actions';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  type CreateExpenseInput,
-  type ExpenseContribution,
-  type ExpenseRow,
-  type UpdateExpenseInput,
-  netExpensePaise,
-  useCreateExpense,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Pagination } from '@/components/ui/pagination';
+import { StatCard } from '@/components/ui/stat-card';
+import { EmptyState } from '@/components/ui/states';
+import { ExpenseFormDialog } from '@/features/expenses/expense-form-dialog';
+import {
+  EXPENSE_CATEGORIES,
+  LEGACY_EXPENSE_CATEGORIES,
+  RECURRING_LABEL,
+  categoryLabel,
+  isRecurring,
+  nextPeriodYmd,
+  storedYmd,
+} from '@/features/expenses/expense-meta';
+import {
+  expensesApi,
   useDeleteExpense,
   useExpenseSummary,
   useExpenses,
-  useUpdateExpense,
+  useRepeatExpense,
+  type ExpenseFilters,
+  type ExpenseRow,
+  type ExpenseSort,
 } from '@/features/expenses/expenses.hooks';
-import { useTeamList } from '@/features/team/team.hooks';
+import { ViewReceiptButton } from '@/features/expenses/receipt-field';
+import { useAllProjects } from '@/features/projects/projects.hooks';
 
-const CATEGORIES = [
-  'TOOLS', 'SOFTWARE', 'INFRASTRUCTURE', 'MARKETING', 'OPERATIONS', 'PAYROLL', 'FREELANCER', 'OTHER',
-];
+const PAGE_SIZE = 25;
+const SORT_IDS = new Set(['date', 'amount']);
 
-const CATEGORY_LABEL: Record<string, string> = {
-  TOOLS: 'Tools', SOFTWARE: 'Software', INFRASTRUCTURE: 'Infrastructure',
-  MARKETING: 'Marketing', OPERATIONS: 'Operations', PAYROLL: 'Payroll',
-  FREELANCER: 'Freelancer', OTHER: 'Other',
-};
-
-const PAGE_SIZE = 20;
+/** yyyy-mm-dd → "3 Nov 2026" (parsed as local noon so it never slips a day). */
+const fmtYmd = (ymd: string) => formatDate(`${ymd}T12:00:00`);
 
 export default function ExpensesPage() {
   return (
-    <RoleGate allow={[Role.OWNER]} fallback={<p className="text-sm text-muted-foreground">Restricted.</p>}>
+    <RoleGate allow={[Role.OWNER]} fallback={<EmptyState title="Only the owner can see expenses" />}>
       <Inner />
     </RoleGate>
   );
 }
 
 function Inner() {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<ExpenseRow | null>(null);
-  const [viewing, setViewing] = useState<ExpenseRow | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<ExpenseRow | null>(null);
-  const [catFilter, setCatFilter] = useState('');
-  const [fromFilter, setFromFilter] = useState('');
-  const [toFilter, setToFilter] = useState('');
-  const [page, setPage] = useState(1);
-
-  const listParams = {
-    page,
-    limit: PAGE_SIZE,
-    ...(catFilter ? { category: catFilter } : {}),
-    ...(fromFilter ? { from: fromFilter } : {}),
-    ...(toFilter ? { to: toFilter } : {}),
-  };
-  const list = useExpenses(listParams);
-  const summary = useExpenseSummary(fromFilter || undefined, toFilter || undefined);
-  const team = useTeamList({});
-  const create = useCreateExpense();
-  const update = useUpdateExpense();
+  const list = useListState('expenses', {
+    q: '',
+    category: '',
+    projectId: '',
+    range: '',
+    from: '',
+    to: '',
+    sort: 'date:desc',
+  });
+  const { params } = list;
+  const confirm = useConfirm();
+  const projects = useAllProjects();
+  const repeat = useRepeatExpense();
   const del = useDeleteExpense();
 
-  const nameMap = new Map((team.data ?? []).map((u) => [u._id, u.name]));
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<ExpenseRow | undefined>();
+  const [viewing, setViewing] = useState<ExpenseRow | null>(null);
 
-  // Reset to page 1 whenever a filter changes.
-  useEffect(() => {
-    setPage(1);
-  }, [catFilter, fromFilter, toFilter]);
+  const openCreate = () => {
+    setEditing(undefined);
+    setFormOpen(true);
+  };
+  const openEdit = (r: ExpenseRow) => {
+    setViewing(null);
+    setEditing(r);
+    setFormOpen(true);
+  };
+  useNewParam(openCreate);
 
-  const form = useForm<CreateExpenseInput>({
-    defaultValues: { title: '', amountPaise: 0, category: 'OTHER', date: new Date().toISOString().slice(0, 10), currency: 'INR' },
-  });
+  const filters: ExpenseFilters = {
+    q: params.q || undefined,
+    category: params.category || undefined,
+    projectId: params.projectId || undefined,
+    from: params.from || undefined,
+    to: params.to || undefined,
+  };
+  const sort = (SORT_IDS.has(list.sort?.by ?? '') ? `${list.sort!.by}:${list.sort!.dir}` : 'date:desc') as ExpenseSort;
+  const expenses = useExpenses({ ...filters, page: list.page, limit: PAGE_SIZE, sort });
+  const summary = useExpenseSummary(filters);
+  const totals = expenses.data?.totals;
+  const filtered = list.activeFilterCount > 0;
 
-  const onSubmit = form.handleSubmit((values) =>
-    create.mutate(values, {
-      onSuccess: () => { setOpen(false); form.reset(); },
-    }),
-  );
-
-  const editForm = useForm<UpdateExpenseInput>();
-
-  useEffect(() => {
-    if (editing) {
-      editForm.reset({
-        title: editing.title,
-        description: editing.description,
-        amountPaise: editing.amountPaise,
-        category: editing.category,
-        date: editing.date.slice(0, 10),
-        vendor: editing.vendor,
-        receiptRef: editing.receiptRef,
-        currency: editing.currency,
-      });
+  const projectOptions: ComboboxOption[] = useMemo(() => {
+    const opts: ComboboxOption[] = (projects.data?.items ?? []).map((p) => ({ value: p._id, label: p.name, keywords: p.code }));
+    if (params.projectId && !opts.some((o) => o.value === params.projectId) && !projects.isLoading) {
+      opts.unshift({ value: params.projectId, label: 'Deleted project' });
     }
-  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
+    return opts;
+  }, [projects.data, projects.isLoading, params.projectId]);
 
-  const onEditSubmit = editForm.handleSubmit((values) => {
-    if (!editing) return;
-    update.mutate({ id: editing._id, body: values }, { onSuccess: () => setEditing(null) });
-  });
+  // ── Row actions ────────────────────────────────────────────────────────────────
 
-  const meta = list.data?.meta;
+  const askRepeat = async (r: ExpenseRow) => {
+    if (!isRecurring(r.recurring)) return;
+    const next = nextPeriodYmd(storedYmd(r.date), r.recurring);
+    const ok = await confirm({
+      title: `Add ${r.title} for ${fmtYmd(next)}?`,
+      description: `This adds a copy dated ${fmtYmd(next)} for ${formatPaise(r.amountPaise, r.currency)}${
+        r.contributions.length ? ', with the same team contributions' : ''
+      }. The receipt isn't copied. If this period's bill is different, edit the copy afterwards.`,
+      confirmText: 'Add copy',
+    });
+    if (ok) repeat.mutate(r._id, { onSuccess: () => setViewing(null) });
+  };
+
+  const askDelete = async (r: ExpenseRow) => {
+    const ok = await confirm({
+      title: `Delete "${r.title}"?`,
+      description: `${formatPaise(r.amountPaise, r.currency)} on ${formatDate(r.date)} will be taken out of expense totals, the dashboard and profit figures${
+        r.projectId ? `, and no longer count toward ${r.projectName ?? 'its project'}'s costs` : ''
+      }. This can't be undone.`,
+      destructive: true,
+    });
+    if (ok) del.mutate(r._id, { onSuccess: () => setViewing(null) });
+  };
+
+  // ── Table ──────────────────────────────────────────────────────────────────────
+
+  const columns: Column<ExpenseRow>[] = [
+    {
+      id: 'date',
+      header: 'Date',
+      sortable: true,
+      cell: (r) => <span className="whitespace-nowrap">{formatDate(r.date)}</span>,
+      csv: (r) => storedYmd(r.date),
+      footer: <span className="text-muted-foreground">{filtered ? 'Total (filtered)' : 'Total'}</span>,
+    },
+    {
+      id: 'title',
+      header: 'Expense',
+      cell: (r) => (
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-medium">{r.title}</span>
+            {isRecurring(r.recurring) && <Badge variant="info">{r.recurring === 'YEARLY' ? 'Yearly' : 'Monthly'}</Badge>}
+            {r.billable && <Badge variant="warning">Billable</Badge>}
+          </div>
+          {r.vendor && <span className="block text-xs text-muted-foreground md:hidden">{r.vendor}</span>}
+        </div>
+      ),
+      csv: (r) => r.title,
+    },
+    {
+      id: 'category',
+      header: 'Category',
+      hideBelow: 'sm',
+      cell: (r) => <span className="text-muted-foreground">{categoryLabel(r.category)}</span>,
+      csv: (r) => categoryLabel(r.category),
+    },
+    {
+      id: 'project',
+      header: 'Project',
+      hideBelow: 'lg',
+      cell: (r) =>
+        r.projectId ? (
+          r.projectDeleted ? (
+            <span className="text-muted-foreground">{r.projectName ? `${r.projectName} (deleted)` : 'Deleted project'}</span>
+          ) : (
+            <Link href={`/projects/${r.projectId}`} className="hover:underline">
+              {r.projectName}
+            </Link>
+          )
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+      csv: (r) => (r.projectId ? (r.projectName ?? 'Deleted project') : ''),
+    },
+    {
+      id: 'vendor',
+      header: 'Vendor',
+      hideBelow: 'md',
+      cell: (r) => <span className="text-muted-foreground">{r.vendor || '—'}</span>,
+      csv: (r) => r.vendor ?? '',
+    },
+    {
+      id: 'receipt',
+      header: <span className="sr-only">Receipt</span>,
+      hideBelow: 'sm',
+      cell: (r) => (r.receiptRef ? <ViewReceiptButton receiptKey={r.receiptRef} compact /> : null),
+    },
+    {
+      id: 'amount',
+      header: 'Amount',
+      align: 'right',
+      sortable: true,
+      cell: (r) => (
+        <div>
+          <span className="font-medium">{formatPaise(r.amountPaise, r.currency)}</span>
+          {r.contributions.length > 0 && (
+            <span className="block text-xs text-muted-foreground">net {formatPaise(r.netPaise ?? r.amountPaise, r.currency)}</span>
+          )}
+        </div>
+      ),
+      csv: (r) => csvMoney(r.amountPaise),
+      csvHeader: 'Amount (₹)',
+      footer: totals ? (
+        <div>
+          <span>{formatPaise(totals.grossPaise)}</span>
+          {totals.netPaise !== totals.grossPaise && (
+            <span className="block text-xs font-normal text-muted-foreground">net {formatPaise(totals.netPaise)}</span>
+          )}
+        </div>
+      ) : null,
+    },
+    {
+      id: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      className: 'w-10',
+      cell: (r) => (
+        // Menu items render in a portal, but their clicks still bubble to the row — stop them here.
+        <div onClick={(ev) => ev.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Actions for ${r.title}`}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openEdit(r)}>
+                <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
+              </DropdownMenuItem>
+              {isRecurring(r.recurring) && (
+                <DropdownMenuItem onClick={() => void askRepeat(r)} disabled={repeat.isPending}>
+                  <Repeat className="mr-2 h-3.5 w-3.5" /> Repeat for {fmtYmd(nextPeriodYmd(storedYmd(r.date), r.recurring))}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void askDelete(r)} className="text-destructive focus:text-destructive">
+                <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ];
+  const csvOnly: Column<ExpenseRow>[] = [
+    { id: 'net', header: 'Net', cell: () => null, csv: (r) => csvMoney(r.netPaise ?? r.amountPaise), csvHeader: 'Net cost (₹)' },
+    {
+      id: 'contributors',
+      header: 'Covered by team',
+      cell: () => null,
+      csv: (r) => r.contributions.map((c) => `${c.userName ?? 'Former member'} ${csvMoney(c.amountPaise)}`).join('; '),
+    },
+    { id: 'billable', header: 'Billable', cell: () => null, csv: (r) => (r.billable ? 'Yes' : 'No') },
+    { id: 'recurring', header: 'Repeats', cell: () => null, csv: (r) => RECURRING_LABEL[r.recurring ?? 'NONE'] },
+    { id: 'notes', header: 'Notes', cell: () => null, csv: (r) => r.description ?? '' },
+  ];
+
+  const [exporting, setExporting] = useState(false);
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const rows: ExpenseRow[] = [];
+      for (let page = 1; ; page++) {
+        const res = await expensesApi.list({ ...filters, sort, page, limit: 500 });
+        rows.push(...res.items);
+        if (page >= res.meta.totalPages) break;
+      }
+      exportColumnsCsv(`expenses-${todayLocal()}`, [...columns, ...csvOnly], rows);
+    } catch (err) {
+      toast.error(`Export failed. ${getErrorMessage(err)}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const recovered = totals ? totals.grossPaise - totals.netPaise : 0;
+  const rangeHint = params.from || params.to ? describeRange(params.from, params.to) : 'All time';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Expenses"
-        description="Track business costs — tools, infrastructure, marketing, and more."
-        action={<Button onClick={() => setOpen(true)}>Add expense</Button>}
+        description="Business costs like tools, hosting and marketing. Team pay lives in Payroll and Payments out."
+        action={
+          <>
+            <ExportButton onClick={() => void exportAll()} disabled={exporting || !totals?.count} />
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add expense
+            </Button>
+          </>
+        }
       />
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add expense</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={onSubmit} className="grid gap-3">
-            <div className="space-y-1">
-              <Label>Title</Label>
-              <Input {...form.register('title', { required: true })} placeholder="e.g. Hetzner VPS" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Amount (paise)</Label>
-                <Input type="number" {...form.register('amountPaise', { required: true, valueAsNumber: true })} placeholder="e.g. 100000 for ₹1,000" />
-              </div>
-              <div className="space-y-1">
-                <Label>Date</Label>
-                <Input type="date" {...form.register('date', { required: true })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Category</Label>
-                <select className="w-full rounded border bg-background px-3 py-2 text-sm" {...form.register('category')}>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label>Vendor</Label>
-                <Input {...form.register('vendor')} placeholder="e.g. AWS" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Input {...form.register('description')} placeholder="Optional description" />
-            </div>
-            <div className="space-y-1">
-              <Label>Receipt</Label>
-              <div className="flex items-center gap-2">
-                <FileUploader
-                  prefix="expenses/receipts"
-                  accept="application/pdf,image/*"
-                  label={form.watch('receiptRef') ? 'Replace receipt' : 'Upload receipt'}
-                  onUploaded={(res) => form.setValue('receiptRef', res.key)}
-                />
-                {form.watch('receiptRef') && (
-                  <span className="text-xs text-muted-foreground">Attached ✓</span>
-                )}
-              </div>
-            </div>
-            <ContributionsEditor control={form.control} register={form.register} teamOptions={team.data ?? []} />
-            <DialogFooter>
-              <Button type="submit" disabled={create.isPending}>
-                {create.isPending ? 'Saving…' : 'Save'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label={filtered ? 'Spent (filtered)' : 'Spent'} loading={expenses.isLoading} value={formatPaise(totals?.grossPaise ?? 0)} hint={rangeHint} />
+        <StatCard label="Net cost" loading={expenses.isLoading} value={formatPaise(totals?.netPaise ?? 0)} hint="After team contributions" />
+        <StatCard label="Covered by team" loading={expenses.isLoading} value={formatPaise(recovered)} hint="Recovered through pay" />
+        <StatCard label="Entries" loading={expenses.isLoading} value={String(totals?.count ?? 0)} />
+      </div>
 
-      {/* Summary cards */}
-      {summary.data && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Total {fromFilter || toFilter ? '(filtered)' : ''}
-              </p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{formatPaise(summary.data.grandTotalPaise, 'INR')}</p>
-            </CardContent>
-          </Card>
+      {summary.data && summary.data.byCategory.length > 1 && (
+        <div className="flex flex-wrap gap-2" aria-label="By category">
           {summary.data.byCategory.map((c) => (
-            <Card key={c._id}>
-              <CardContent className="p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{CATEGORY_LABEL[c._id] ?? c._id}</p>
-                <p className="mt-2 text-xl font-semibold tabular-nums">{formatPaise(c.totalPaise, 'INR')}</p>
-                <p className="text-[11px] text-muted-foreground">{c.count} {c.count === 1 ? 'entry' : 'entries'}</p>
-              </CardContent>
-            </Card>
+            <button
+              key={c._id}
+              type="button"
+              onClick={() => list.set({ category: params.category === c._id ? '' : c._id })}
+              className="rounded-lg border bg-card px-3 py-1.5 text-left text-xs transition-colors hover:border-foreground/25 hover:bg-accent/40"
+            >
+              <span className="text-muted-foreground">{categoryLabel(c._id)}</span>{' '}
+              <span className="font-medium tabular-nums">{formatPaise(c.totalPaise)}</span>
+              {c.netPaise !== c.totalPaise && <span className="text-muted-foreground"> · net {formatPaise(c.netPaise)}</span>}
+            </button>
           ))}
         </div>
       )}
 
-      {/* Filter + table */}
-      <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <TrendingDown className="h-4 w-4" />
-            All expenses
-          </CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              type="date"
-              value={fromFilter}
-              onChange={(e) => setFromFilter(e.target.value)}
-              className="h-8 w-auto text-sm"
-              title="From date"
-            />
-            <span className="text-xs text-muted-foreground">to</span>
-            <Input
-              type="date"
-              value={toFilter}
-              onChange={(e) => setToFilter(e.target.value)}
-              className="h-8 w-auto text-sm"
-              title="To date"
-            />
-            <select
-              value={catFilter}
-              onChange={(e) => setCatFilter(e.target.value)}
-              className="h-8 rounded border bg-background px-2 text-sm"
-            >
-              <option value="">All categories</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-            </select>
-            {(fromFilter || toFilter || catFilter) && (
-              <button
-                type="button"
-                onClick={() => { setFromFilter(''); setToFilter(''); setCatFilter(''); }}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <THead>
-              <TR>
-                <TH>Date</TH>
-                <TH>Title</TH>
-                <TH>Category</TH>
-                <TH>Vendor</TH>
-                <TH>Added by</TH>
-                <TH className="text-right">Amount</TH>
-                <TH />
-              </TR>
-            </THead>
-            <TBody>
-              {(list.data?.items ?? []).map((e) => (
-                <TR key={e._id} className="cursor-pointer hover:bg-muted/30" onClick={() => setViewing(e)}>
-                  <TD className="tabular-nums text-muted-foreground">{formatDate(e.date)}</TD>
-                  <TD className="font-medium">{e.title}</TD>
-                  <TD>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide">
-                      {CATEGORY_LABEL[e.category] ?? e.category}
-                    </span>
-                  </TD>
-                  <TD className="text-muted-foreground">{e.vendor ?? '—'}</TD>
-                  <TD className="text-muted-foreground">{e.addedBy ? nameMap.get(e.addedBy) ?? '—' : '—'}</TD>
-                  <TD className="text-right tabular-nums font-medium">
-                    {formatPaise(e.amountPaise, e.currency)}
-                    {e.contributions.length > 0 && (
-                      <div className="text-[11px] font-normal text-muted-foreground">
-                        net {formatPaise(netExpensePaise(e), e.currency)}
-                      </div>
-                    )}
-                  </TD>
-                  <TD onClick={(ev) => ev.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setEditing(e)}
-                        className="text-[11px] text-muted-foreground hover:text-foreground"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete(e)}
-                        className="text-[11px] text-muted-foreground hover:text-destructive"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </TD>
-                </TR>
-              ))}
-              {!list.isLoading && (list.data?.items ?? []).length === 0 && (
-                <TR>
-                  <TD colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
-                    No expenses match these filters.
-                  </TD>
-                </TR>
-              )}
-            </TBody>
-          </Table>
-          {meta && meta.totalPages > 1 && (
-            <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground">
-              <span>
-                Page {meta.page} of {meta.totalPages} · {meta.total} total
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={meta.page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={meta.page >= meta.totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <FilterBar>
+        <SearchFilter value={params.q} onChange={(q) => list.set({ q })} placeholder="Search title, vendor, notes, project" />
+        <SelectFilter
+          value={params.category}
+          onChange={(category) => list.set({ category })}
+          allLabel="All categories"
+          options={[...EXPENSE_CATEGORIES, ...LEGACY_EXPENSE_CATEGORIES].map((c) => ({ value: c, label: categoryLabel(c) }))}
+        />
+        <div className="w-full sm:w-56">
+          <Combobox
+            options={projectOptions}
+            value={params.projectId || undefined}
+            allowClear
+            loading={projects.isLoading}
+            placeholder="Any project"
+            searchPlaceholder="Search projects…"
+            onChange={(v) => list.set({ projectId: v ?? '' })}
+          />
+        </div>
+        <DateRangeFilter preset={params.range} from={params.from} to={params.to} onChange={(r) => list.set(r)} />
+        <ResetFilters count={list.activeFilterCount} onReset={list.reset} />
+      </FilterBar>
 
-      {/* Edit dialog */}
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit expense</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={onEditSubmit} className="grid gap-3">
-            <div className="space-y-1">
-              <Label>Title</Label>
-              <Input {...editForm.register('title')} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Amount (paise)</Label>
-                <Input type="number" {...editForm.register('amountPaise', { valueAsNumber: true })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Date</Label>
-                <Input type="date" {...editForm.register('date')} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Category</Label>
-                <select className="w-full rounded border bg-background px-3 py-2 text-sm" {...editForm.register('category')}>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label>Vendor</Label>
-                <Input {...editForm.register('vendor')} />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Input {...editForm.register('description')} />
-            </div>
-            <div className="space-y-1">
-              <Label>Receipt</Label>
-              <div className="flex items-center gap-2">
-                <FileUploader
-                  prefix="expenses/receipts"
-                  accept="application/pdf,image/*"
-                  label={editForm.watch('receiptRef') ? 'Replace receipt' : 'Upload receipt'}
-                  onUploaded={(res) => editForm.setValue('receiptRef', res.key)}
-                />
-                {editForm.watch('receiptRef') && (
-                  <span className="text-xs text-muted-foreground">Attached ✓</span>
-                )}
-              </div>
-            </div>
-            <ContributionsEditor control={editForm.control} register={editForm.register} teamOptions={team.data ?? []} />
-            <DialogFooter>
-              <Button type="submit" disabled={update.isPending}>
-                {update.isPending ? 'Saving…' : 'Save changes'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <DataTable
+        columns={columns}
+        rows={expenses.data?.items}
+        rowKey={(r) => r._id}
+        loading={expenses.isLoading}
+        error={expenses.error}
+        onRetry={() => void expenses.refetch()}
+        sort={list.sort && SORT_IDS.has(list.sort.by) ? list.sort : { by: 'date', dir: 'desc' }}
+        onSortChange={(s) => list.set({ sort: s ? `${s.by}:${s.dir}` : 'date:desc' })}
+        onRowClick={(r) => setViewing(r)}
+        showFooter
+        empty={
+          filtered ? (
+            <EmptyState
+              title="No expenses match these filters"
+              action={
+                <Button variant="outline" size="sm" onClick={list.reset}>
+                  Clear filters
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={TrendingDown}
+              title="No expenses yet"
+              description="Log tools, hosting, marketing and other running costs to see your real profit."
+              action={
+                <Button size="sm" onClick={openCreate}>
+                  Add your first expense
+                </Button>
+              }
+            />
+          )
+        }
+      />
+      {expenses.data && (
+        <Pagination
+          page={list.page}
+          totalPages={expenses.data.meta.totalPages}
+          total={expenses.data.meta.total}
+          pageSize={PAGE_SIZE}
+          onPage={list.setPage}
+        />
+      )}
 
-      {/* Detail dialog */}
-      <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{viewing?.title}</DialogTitle>
-          </DialogHeader>
-          {viewing && (
-            <div className="grid gap-3 text-sm">
+      <ExpenseFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        expense={editing}
+        defaultProjectId={params.projectId || undefined}
+      />
+
+      <ExpenseDetailDialog
+        expense={viewing}
+        onClose={() => setViewing(null)}
+        onEdit={openEdit}
+        onRepeat={(r) => void askRepeat(r)}
+        onDelete={(r) => void askDelete(r)}
+      />
+    </div>
+  );
+}
+
+function ExpenseDetailDialog({
+  expense: e,
+  onClose,
+  onEdit,
+  onRepeat,
+  onDelete,
+}: {
+  expense: ExpenseRow | null;
+  onClose: () => void;
+  onEdit: (r: ExpenseRow) => void;
+  onRepeat: (r: ExpenseRow) => void;
+  onDelete: (r: ExpenseRow) => void;
+}) {
+  return (
+    <Dialog open={!!e} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        {e && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex flex-wrap items-center gap-2">
+                {e.title}
+                {isRecurring(e.recurring) && <Badge variant="info">{RECURRING_LABEL[e.recurring!]}</Badge>}
+                {e.billable && <Badge variant="warning">Billable</Badge>}
+              </DialogTitle>
+              <DialogDescription>
+                {categoryLabel(e.category)} · {formatDate(e.date)}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 text-sm">
               <div className="grid grid-cols-2 gap-3">
-                <DetailField
-                  label={viewing.contributions.length > 0 ? 'Gross amount' : 'Amount'}
-                  value={formatPaise(viewing.amountPaise, viewing.currency)}
+                <Detail label={e.contributions.length ? 'Gross amount' : 'Amount'} value={formatPaise(e.amountPaise, e.currency)} />
+                <Detail label="Vendor" value={e.vendor || '—'} />
+                <Detail
+                  label="Project"
+                  value={
+                    e.projectId ? (
+                      e.projectDeleted ? (
+                        e.projectName ? `${e.projectName} (deleted)` : 'Deleted project'
+                      ) : (
+                        <Link href={`/projects/${e.projectId}`} className="hover:underline">
+                          {e.projectName}
+                        </Link>
+                      )
+                    ) : (
+                      '—'
+                    )
+                  }
                 />
-                <DetailField label="Date" value={formatDate(viewing.date)} />
-                <DetailField label="Category" value={CATEGORY_LABEL[viewing.category] ?? viewing.category} />
-                <DetailField label="Vendor" value={viewing.vendor ?? '—'} />
-                <DetailField label="Added by" value={viewing.addedBy ? nameMap.get(viewing.addedBy) ?? '—' : '—'} />
-                <DetailField label="Logged" value={formatDate(viewing.createdAt)} />
+                <Detail label="Repeats" value={RECURRING_LABEL[e.recurring ?? 'NONE']} />
+                <Detail label="Added by" value={e.addedByName ?? '—'} />
+                <Detail label="Logged" value={formatDate(e.createdAt)} />
               </div>
-              {viewing.contributions.length > 0 && (
+
+              {e.contributions.length > 0 && (
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Team contributions</p>
+                  <p className="text-xs text-muted-foreground">Covered by team</p>
                   <div className="mt-1 space-y-1">
-                    {viewing.contributions.map((c, i) => (
-                      <div key={i} className="flex justify-between text-sm">
+                    {e.contributions.map((c, i) => (
+                      <div key={i} className="flex justify-between gap-3">
                         <span>
-                          {nameMap.get(c.userId) ?? c.userId}
+                          {c.userId ? (
+                            <Link href={`/team/${c.userId}`} className="hover:underline">
+                              {c.userName ?? 'Former member'}
+                            </Link>
+                          ) : (
+                            'Former member'
+                          )}
                           {c.note && <span className="text-muted-foreground"> · {c.note}</span>}
                         </span>
-                        <span className="font-medium text-emerald-600">−{formatPaise(c.amountPaise, viewing.currency)}</span>
+                        <span className="tabular-nums text-[hsl(var(--success))]">−{formatPaise(c.amountPaise, e.currency)}</span>
                       </div>
                     ))}
-                    <div className="flex justify-between border-t pt-1 text-sm font-semibold">
-                      <span>Net agency cost</span>
-                      <span>{formatPaise(netExpensePaise(viewing), viewing.currency)}</span>
+                    <div className="flex justify-between border-t pt-1 font-medium">
+                      <span>Net cost to the agency</span>
+                      <span className="tabular-nums">{formatPaise(e.netPaise ?? e.amountPaise, e.currency)}</span>
                     </div>
                   </div>
                 </div>
               )}
-              {viewing.description && <DetailField label="Notes" value={viewing.description} />}
+
+              {e.description && <Detail label="Notes" value={e.description} />}
+
               <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Receipt</p>
-                {viewing.receiptRef ? (
-                  <button
-                    type="button"
-                    className="mt-1 text-sm text-primary underline"
-                    onClick={async () => {
-                      const url = await getDownloadUrl(viewing.receiptRef!);
-                      window.open(url, '_blank', 'noopener');
-                    }}
-                  >
-                    View receipt
-                  </button>
-                ) : (
-                  <p className="mt-1 text-sm text-muted-foreground">No receipt attached.</p>
-                )}
+                <p className="text-xs text-muted-foreground">Receipt</p>
+                <div className="mt-1">
+                  {e.receiptRef ? (
+                    <ViewReceiptButton receiptKey={e.receiptRef} />
+                  ) : (
+                    <span className="text-muted-foreground">No receipt attached.</span>
+                  )}
+                </div>
               </div>
             </div>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setEditing(viewing);
-                setViewing(null);
-              }}
-            >
-              Edit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete confirmation */}
-      <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete expense</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Delete <span className="font-medium text-foreground">{confirmDelete?.title}</span>? This cannot be undone.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={del.isPending}
-              onClick={() =>
-                confirmDelete && del.mutate(confirmDelete._id, { onSuccess: () => setConfirmDelete(null) })
-              }
-            >
-              {del.isPending ? 'Deleting…' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter className="gap-2 sm:justify-between">
+              <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => onDelete(e)}>
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+              </Button>
+              <div className="flex gap-2">
+                {isRecurring(e.recurring) && (
+                  <Button variant="outline" onClick={() => onRepeat(e)}>
+                    <Repeat className="mr-1.5 h-3.5 w-3.5" /> Repeat
+                  </Button>
+                )}
+                <Button onClick={() => onEdit(e)}>
+                  <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+                </Button>
+              </div>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function DetailField({ label, value }: { label: string; value: string }) {
+function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1">{value}</p>
-    </div>
-  );
-}
-
-interface ContributionsFormShape {
-  contributions?: ExpenseContribution[];
-}
-
-function ContributionsEditor<T extends ContributionsFormShape>({
-  control,
-  register,
-  teamOptions,
-}: {
-  control: Control<T>;
-  register: UseFormRegister<T>;
-  teamOptions: { _id: string; name: string }[];
-}) {
-  const { fields, append, remove } = useFieldArray({ control, name: 'contributions' as never });
-
-  return (
-    <div className="space-y-2 rounded-md border p-3">
-      <div className="flex items-center justify-between">
-        <Label>Team contributions</Label>
-        <button
-          type="button"
-          onClick={() => append({ userId: '', amountPaise: 0, note: '' } as never)}
-          className="text-xs text-primary hover:underline"
-        >
-          + Add contributor
-        </button>
-      </div>
-      <p className="text-[11px] text-muted-foreground">
-        Record a team member covering part of this cost via a payroll deduction instead of cash.
-      </p>
-      {fields.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No contributions.</p>
-      ) : (
-        <div className="space-y-2">
-          {fields.map((field, i) => (
-            <div key={field.id} className="grid grid-cols-[1fr_100px_1fr_auto] gap-2">
-              <select
-                className="h-8 rounded border bg-background px-2 text-xs"
-                {...register(`contributions.${i}.userId` as never)}
-              >
-                <option value="">Select member…</option>
-                {teamOptions.map((u) => (
-                  <option key={u._id} value={u._id}>{u.name}</option>
-                ))}
-              </select>
-              <Input
-                type="number"
-                placeholder="Paise"
-                className="h-8 text-xs"
-                {...register(`contributions.${i}.amountPaise` as never, { valueAsNumber: true })}
-              />
-              <Input
-                placeholder="Note (optional)"
-                className="h-8 text-xs"
-                {...register(`contributions.${i}.note` as never)}
-              />
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                className="text-xs text-muted-foreground hover:text-destructive"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-0.5 break-words">{value}</p>
     </div>
   );
 }

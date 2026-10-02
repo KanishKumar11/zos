@@ -13,6 +13,7 @@ import { buildLoggerOptions } from './config/logger.config';
 
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { ClientDenyGuard } from './common/guards/client-deny.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { SerializeInterceptor } from './common/interceptors/serialize.interceptor';
@@ -47,7 +48,10 @@ import { TasksModule } from './modules/tasks/tasks.module';
 import { UsersModule } from './modules/users/users.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { IncomeModule } from './modules/income/income.module';
-import { FreelancerPaymentsModule } from './modules/freelancer-payments/freelancer-payments.module';
+import { CollabModule } from './modules/collab/collab.module';
+import { PortalModule } from './modules/portal/portal.module';
+import { FreelancersModule } from './modules/freelancers/freelancers.module';
+import { PayoutsModule } from './modules/payouts/payouts.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { LettersModule } from './modules/letters/letters.module';
 
@@ -101,7 +105,10 @@ import { LettersModule } from './modules/letters/letters.module';
     TasksModule,
     ExpensesModule,
     IncomeModule,
-    FreelancerPaymentsModule,
+    PayoutsModule,
+    FreelancersModule,
+    CollabModule,
+    PortalModule,
     ContractsModule,
     LettersModule,
   ],
@@ -110,6 +117,7 @@ import { LettersModule } from './modules/letters/letters.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: ClientDenyGuard },
     { provide: APP_INTERCEPTOR, useClass: TimeoutInterceptor },
     // Response-shape order matters: NestJS interceptor response pipelines run innermost
     // (last-registered) first, so SerializeInterceptor must run before ResponseInterceptor

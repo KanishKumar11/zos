@@ -1,5 +1,5 @@
 // Team API client.
-import { api, unwrap } from '@/lib/api-client';
+import { api, unwrap, unwrapPaginated } from '@/lib/api-client';
 
 import type {
   AdminUpdateUserInput,
@@ -18,7 +18,8 @@ export interface UserDocumentRow {
   key: string;
   contentType?: string;
   sizeBytes?: number;
-  uploadedAt: string;
+  uploadedAt?: string;
+  createdAt?: string;
   uploadedBy?: string;
 }
 
@@ -36,21 +37,81 @@ export interface UserRow {
   avatarUrl?: string;
   role: Role;
   status: UserStatus;
-  departmentId?: string;
-  designationId?: string;
-  reportingManagerId?: string;
-  dateOfJoining?: string;
+  departmentId?: string | null;
+  designationId?: string | null;
+  reportingManagerId?: string | null;
+  dateOfJoining?: string | null;
   dateOfBirth?: string;
   lastLoginAt?: string;
+  createdAt?: string;
   documents?: UserDocumentRow[];
   onboardingChecklist?: OnboardingItemRow[];
   bio?: string;
   skills?: string[];
+  /** Only returned to the person themselves and the owner. */
+  bankDetails?: {
+    accountHolderName: string;
+    accountNumberLast4: string;
+    ifsc: string;
+    bankName: string;
+    branch?: string;
+    upiId?: string;
+  };
 }
 
+/** An open (not accepted, not cancelled) team invite. */
+export interface InviteRow {
+  _id: string;
+  email: string;
+  name: string;
+  role: Role;
+  expiresAt: string;
+  expired: boolean;
+  lastSentAt: string;
+  sendCount: number;
+}
+
+export interface InviteInput {
+  email: string;
+  name: string;
+  role: Role;
+  departmentId?: string;
+  designationId?: string;
+}
+
+export interface InviteResult {
+  ok: boolean;
+  expiresAt: string;
+  /** False when the invite was created but the email couldn't be sent. */
+  emailed: boolean;
+  inviteId?: string;
+}
+
+export const DOCUMENT_KIND_LABEL: Record<UserDocumentRow['kind'], string> = {
+  OFFER_LETTER: 'Offer letter',
+  NDA: 'NDA',
+  CONTRACT: 'Contract',
+  ID_PROOF: 'ID proof',
+  OTHER: 'Other',
+};
+
+export const ROLE_LABEL: Record<Role, string> = {
+  OWNER: 'Owner',
+  ADMIN: 'Admin',
+  LEAD: 'Lead',
+  MEMBER: 'Member',
+  INTERN: 'Intern',
+  CLIENT: 'Client',
+};
+
 export const teamApi = {
+  /** First page only (array). Prefer `page` for lists. */
   list: (q: ListUsersQuery) =>
     unwrap<UserRow[]>(api.get('/users', { params: q })),
+  /** Paginated list (keeps total / page count). */
+  page: (q: ListUsersQuery) => unwrapPaginated<UserRow>(api.get('/users', { params: q })),
+  /** Every staff member, for pickers. */
+  directory: () => unwrapPaginated<UserRow>(api.get('/users', { params: { pageSize: 100, sort: 'name:asc' } })),
   byId: (id: string) => unwrap<UserRow>(api.get(`/users/${id}`)),
   me: () => unwrap<UserRow>(api.get('/users/me')),
   updateMe: (body: UpdateProfileInput) => unwrap<UserRow>(api.patch('/users/me', body)),
@@ -60,8 +121,11 @@ export const teamApi = {
   deactivate: (id: string) => unwrap<UserRow>(api.post(`/users/${id}/deactivate`, {})),
   reactivate: (id: string) => unwrap<UserRow>(api.post(`/users/${id}/reactivate`, {})),
   remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/users/${id}`)),
-  invite: (input: { email: string; name: string; role: Role; departmentId?: string; designationId?: string }) =>
-    unwrap<{ inviteId: string; expiresAt: string }>(api.post('/auth/invite', input)),
+  // Invites (OWNER/ADMIN)
+  invite: (input: InviteInput) => unwrap<InviteResult>(api.post('/auth/invite', input)),
+  invites: () => unwrap<InviteRow[]>(api.get('/auth/invites')),
+  resendInvite: (id: string) => unwrap<InviteResult>(api.post(`/auth/invites/${id}/resend`, {})),
+  cancelInvite: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/auth/invites/${id}`)),
   // Member documents
   addDocument: (id: string, body: UserDocumentInput) =>
     unwrap<UserRow>(api.post(`/users/${id}/documents`, body)),

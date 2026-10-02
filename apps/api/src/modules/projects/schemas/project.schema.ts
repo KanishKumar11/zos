@@ -30,10 +30,22 @@ export class ProjectMember {
   @Prop({ type: String, enum: Object.values(ProjectMemberRole), required: true })
   role!: ProjectMemberRole;
   @Prop({ type: Date, default: () => new Date() }) addedAt!: Date;
+  /** Agreed fee for this member on this project (OWNER-only). */
   @Prop({ type: Number, default: 0 }) amountPaise!: number;
+  /** Legacy embedded payments — moved into the payouts ledger by the import. Not written any more. */
   @Prop({ type: [MemberPaymentSchema], default: [] }) payments!: MemberPayment[];
 }
 export const ProjectMemberSchema = SchemaFactory.createForClass(ProjectMember);
+
+/** A freelancer's deal on this project. Payments against it live in the payouts ledger. */
+@Schema({ _id: false })
+export class ProjectFreelancer {
+  @Prop({ type: MS.Types.ObjectId, ref: 'Freelancer', required: true }) freelancerId!: Types.ObjectId;
+  @Prop({ type: Number, default: 0 }) agreedPaise!: number;
+  @Prop({ default: '' }) scope!: string;
+  @Prop({ type: Date, default: () => new Date() }) addedAt!: Date;
+}
+export const ProjectFreelancerSchema = SchemaFactory.createForClass(ProjectFreelancer);
 
 @Schema({ timestamps: true, collection: 'projects' })
 export class Project {
@@ -49,6 +61,10 @@ export class Project {
   @Prop({ type: [ProjectMemberSchema], default: [] }) members!: ProjectMember[];
   @Prop({ type: [ProjectMilestoneSchema], default: [] }) milestones!: ProjectMilestone[];
   @Prop({ default: '' }) brief!: string;
+  /** OWNER-only: freelancers engaged on this project and their agreed fee. */
+  @Prop({ type: [ProjectFreelancerSchema], default: [] }) freelancers!: ProjectFreelancer[];
+  /** Shown in the client portal unless switched off. */
+  @Prop({ default: true }) portalVisible!: boolean;
 
   // ---- OWNER-only financials (stripped by SerializeInterceptor for non-OWNERs) ----
   @Prop({ type: MS.Types.ObjectId, ref: 'Client', index: true }) clientId?: Types.ObjectId;

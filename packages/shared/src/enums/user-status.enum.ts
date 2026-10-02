@@ -7,3 +7,12 @@ export enum UserStatus {
   SUSPENDED = 'SUSPENDED',
   EXITED = 'EXITED',
 }
+
+/** Statuses that may sign in and keep a session. Everyone else is locked out on next refresh. */
+export const SIGN_IN_STATUSES: readonly UserStatus[] = [
+  UserStatus.ACTIVE,
+  UserStatus.PROBATION,
+  UserStatus.ON_LEAVE,
+] as const;
+
+export const canSignIn = (status: UserStatus): boolean => SIGN_IN_STATUSES.includes(status);

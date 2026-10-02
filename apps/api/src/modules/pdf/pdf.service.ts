@@ -1,7 +1,14 @@
 // PdfService — Puppeteer-backed HTML→PDF renderer used by payslips, invoices, SOW.
 // Browser is launched lazily on first render and reused across requests for performance.
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import puppeteer, { type Browser } from 'puppeteer';
+import puppeteer, { type Browser, type Page } from 'puppeteer';
+
+const PX_PER_MM = 96 / 25.4;
+const A4_WIDTH_PX = Math.round(210 * PX_PER_MM);
+const A4_HEIGHT_PX = Math.round(297 * PX_PER_MM);
+const BOTTOM_MARGIN_MM = 10;
+/** Below this, shrinking reads as small print — let the document take a second page. */
+const MIN_FIT_SCALE = 0.82;
 
 @Injectable()
 export class PdfService implements OnModuleDestroy {
@@ -19,7 +26,12 @@ export class PdfService implements OnModuleDestroy {
     return this.browser;
   }
 
-  async renderPdf(html: string): Promise<Buffer> {
+  /**
+   * `fitOnePage` shrinks a document that overflows A4 by only a little (down to
+   * MIN_FIT_SCALE) so it prints on one page instead of stranding its last block
+   * on page 2. Anything longer flows onto further pages at full size.
+   */
+  async renderPdf(html: string, opts: { fitOnePage?: boolean } = {}): Promise<Buffer> {
     const browser = await this.getBrowser();
     const page = await browser.newPage();
     try {
@@ -28,18 +40,32 @@ export class PdfService implements OnModuleDestroy {
       await page.setContent(html, { waitUntil: 'load', timeout: 30_000 });
       // String form: this runs in the page context, and the API tsconfig has no DOM lib.
       await page.evaluate('(async () => { await document.fonts.ready; })()');
+      const scale = opts.fitOnePage ? await this.onePageScale(page) : 1;
       const buf = await page.pdf({
         format: 'A4',
         printBackground: true,
         displayHeaderFooter: true,
         headerTemplate: '<span></span>',
         footerTemplate: '<div style="width:100%;font-size:9px;color:#9ca3af;text-align:center;font-family:\'Plus Jakarta Sans\',sans-serif;padding-bottom:6px">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>',
-        margin: { top: '0', right: '0', bottom: '10mm', left: '0' },
+        margin: { top: '0', right: '0', bottom: `${BOTTOM_MARGIN_MM}mm`, left: '0' },
+        scale,
       });
       return Buffer.from(buf);
     } finally {
       await page.close();
     }
+  }
+
+  private async onePageScale(page: Page): Promise<number> {
+    // A4 at 96 dpi in print media, so the measured height matches the printed page.
+    await page.setViewport({ width: A4_WIDTH_PX, height: A4_HEIGHT_PX });
+    await page.emulateMediaType('print');
+    // String form: this runs in the page context, and the API tsconfig has no DOM lib.
+    const height = (await page.evaluate('document.documentElement.scrollHeight')) as number;
+    const printable = A4_HEIGHT_PX - BOTTOM_MARGIN_MM * PX_PER_MM;
+    if (height <= printable) return 1;
+    const fit = Math.floor((printable / height) * 1000) / 1000 - 0.005;
+    return fit >= MIN_FIT_SCALE ? fit : 1;
   }
 
   async onModuleDestroy(): Promise<void> {

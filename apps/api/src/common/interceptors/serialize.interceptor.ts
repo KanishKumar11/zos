@@ -52,7 +52,13 @@ export class SerializeInterceptor implements NestInterceptor {
       return { ...value, items: value.items.map((v: unknown) => this.strip(v, fields)) };
     }
     if (value && typeof value === 'object') {
-      const out: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+      // Mongoose documents keep their fields under `_doc`; spreading one copies internals and
+      // leaves the "stripped" fields intact. Always strip the plain JSON form.
+      const plain =
+        typeof (value as { toJSON?: unknown }).toJSON === 'function'
+          ? (value as { toJSON: () => unknown }).toJSON()
+          : value;
+      const out: Record<string, unknown> = { ...(plain as Record<string, unknown>) };
       if (fields.includes('*')) return null;
       for (const f of fields) delete out[f];
       return out;

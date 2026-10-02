@@ -6,6 +6,7 @@ import { type FilterQuery, Model, Types } from 'mongoose';
 
 import {
   EVENT_NAMES,
+  NotificationType,
   Role,
   TaskStatus,
   type CreateCommentInput,
@@ -73,6 +74,7 @@ export class TasksService {
       this.events.emit(EVENT_NAMES.task.assigned, {
         taskId: doc.id,
         userId: doc.assigneeId.toString(),
+        actorId: actor.sub,
       });
     }
     return doc;
@@ -107,7 +109,7 @@ export class TasksService {
       input.assigneeId &&
       input.assigneeId !== existing.assigneeId?.toString()
     ) {
-      this.events.emit(EVENT_NAMES.task.assigned, { taskId: doc.id, userId: input.assigneeId });
+      this.events.emit(EVENT_NAMES.task.assigned, { taskId: doc.id, userId: input.assigneeId, actorId: actor.sub });
     }
     return doc;
   }
@@ -136,7 +138,9 @@ export class TasksService {
 
   // -- comments ------------------------------------------------------------
 
-  commentsFor(taskId: string): Promise<TaskCommentDocument[]> {
+  /** Comments are only visible to people who can see the task (checked via byId). */
+  async commentsFor(taskId: string, viewer: { sub: string; role: Role }): Promise<TaskCommentDocument[]> {
+    await this.byId(taskId, viewer);
     return this.comments.find({ taskId }).sort({ createdAt: 1 }).exec();
   }
 
@@ -145,13 +149,29 @@ export class TasksService {
     input: CreateCommentInput,
     actor: { sub: string; role: Role },
   ): Promise<TaskCommentDocument> {
-    await this.byId(taskId, actor);
-    return this.comments.create({
+    const task = await this.byId(taskId, actor);
+    const comment = await this.comments.create({
       taskId: new Types.ObjectId(taskId),
       authorId: new Types.ObjectId(actor.sub),
       body: input.body,
       mentions: (input.mentions ?? []).map((id) => new Types.ObjectId(id)),
     });
+    // Tell people who were @mentioned, plus the assignee (unless they wrote it).
+    const notify = new Set([...(input.mentions ?? [])]);
+    if (task.assigneeId) notify.add(task.assigneeId.toString());
+    notify.delete(actor.sub);
+    for (const userId of notify) {
+      const mentioned = (input.mentions ?? []).includes(userId);
+      this.events.emit(EVENT_NAMES.notification.create, {
+        userId,
+        type: mentioned ? NotificationType.TASK_MENTIONED : NotificationType.TASK_COMMENTED,
+        title: mentioned ? `You were mentioned on “${task.title}”` : `New comment on “${task.title}”`,
+        body: input.body.slice(0, 280),
+        linkPath: `/tasks/${taskId}`,
+        data: { taskId, noEmail: !mentioned },
+      });
+    }
+    return comment;
   }
 
   // -- time entries --------------------------------------------------------

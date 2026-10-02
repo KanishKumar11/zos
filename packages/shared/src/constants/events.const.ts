@@ -28,4 +28,7 @@ export const EVENT_NAMES = {
   audit: {
     write: 'audit.write',
   },
+  user: {
+    accessRevoked: 'user.access_revoked',
+  },
 } as const;

@@ -6,6 +6,7 @@ import { TaskComment, TaskCommentSchema } from './schemas/task-comment.schema';
 import { Task, TaskSchema } from './schemas/task.schema';
 import { TimeEntry, TimeEntrySchema } from './schemas/time-entry.schema';
 import { TasksController } from './tasks.controller';
+import { TaskNotificationsListener } from './task-notifications.listener';
 import { TasksService } from './tasks.service';
 
 @Module({
@@ -17,7 +18,7 @@ import { TasksService } from './tasks.service';
     ]),
   ],
   controllers: [TasksController],
-  providers: [TasksService],
+  providers: [TasksService, TaskNotificationsListener],
   exports: [TasksService],
 })
 export class TasksModule {}

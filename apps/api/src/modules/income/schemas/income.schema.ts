@@ -14,7 +14,7 @@ export enum IncomeCategory {
 export class Income {
   @Prop({ required: true }) title!: string;
   @Prop() description?: string;
-  @Prop({ required: true, type: Number }) amountPaise!: number;
+  @Prop({ required: true, type: Number, min: 1 }) amountPaise!: number;
   @Prop({ required: true, enum: Object.values(IncomeCategory), default: IncomeCategory.OTHER })
   category!: IncomeCategory;
   @Prop({ required: true, type: Date }) date!: Date;

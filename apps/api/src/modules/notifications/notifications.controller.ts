@@ -2,11 +2,13 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { PortalAccess } from '@/common/decorators/portal-access.decorator';
 import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 
 import { NotificationsService } from './notifications.service';
 
 @Controller('notifications')
+@PortalAccess()
 export class NotificationsController {
   constructor(private readonly svc: NotificationsService) {}
 
