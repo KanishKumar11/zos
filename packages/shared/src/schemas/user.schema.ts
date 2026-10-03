@@ -26,6 +26,9 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 /** Employment fields — only OWNER/ADMIN may set these, never the user themselves. `null` clears a field. */
 export const employmentFieldsSchema = z.object({
   dateOfJoining: isoDateSchema.nullable().optional(),
+  /** Last working day — set when someone leaves (internship completed, resigned…). */
+  dateOfExit: isoDateSchema.nullable().optional(),
+  exitReason: z.enum(['INTERNSHIP_COMPLETED', 'RESIGNED', 'CONTRACT_ENDED', 'LET_GO', 'OTHER']).nullable().optional(),
   departmentId: objectIdSchema.nullable().optional(),
   designationId: objectIdSchema.nullable().optional(),
   reportingManagerId: objectIdSchema.nullable().optional(),

@@ -1,4 +1,5 @@
 // DashboardModule — registers required model handles for aggregations.
+import { PayoutsModule } from '../payouts/payouts.module';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
@@ -25,6 +26,7 @@ import { DashboardService } from './dashboard.service';
 
 @Module({
   imports: [
+    PayoutsModule,
     MongooseModule.forFeature([
       { name: Project.name, schema: ProjectSchema },
       { name: Sow.name, schema: SowSchema },

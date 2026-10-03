@@ -84,6 +84,7 @@ export class UsersService {
     const cleaned: Partial<User> = { ...(patch as Partial<User>) };
     if (patch.dateOfBirth) cleaned.dateOfBirth = new Date(patch.dateOfBirth);
     if (patch.dateOfJoining) cleaned.dateOfJoining = new Date(patch.dateOfJoining);
+    if (patch.dateOfExit) cleaned.dateOfExit = new Date(patch.dateOfExit);
     if (patch.departmentId) cleaned.departmentId = new Types.ObjectId(patch.departmentId);
     if (patch.designationId) cleaned.designationId = new Types.ObjectId(patch.designationId);
     if (patch.reportingManagerId)
@@ -152,7 +153,7 @@ export class UsersService {
         after: { status: after.status },
       });
     }
-    const fields = ['name', 'phone', 'dateOfJoining', 'departmentId', 'designationId', 'reportingManagerId'] as const;
+    const fields = ['name', 'phone', 'dateOfJoining', 'dateOfExit', 'exitReason', 'departmentId', 'designationId', 'reportingManagerId'] as const;
     const changed = fields.filter((f) => f in patch && String(before.get(f) ?? '') !== String(after.get(f) ?? ''));
     if (changed.length) {
       emitAudit(this.events, {

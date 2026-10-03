@@ -5,10 +5,12 @@ import { toast } from 'sonner';
 import {
   ProjectMemberRole,
   ProjectStatus,
+  type CloseProjectInput,
   type CreateProjectInput,
   type ListProjectsQuery,
   type ProjectFreelancerInput,
   type ProjectMemberInput,
+  type ReleaseMemberInput,
   type UpdateProjectFreelancerInput,
   type UpdateProjectInput,
 } from '@agency/shared';
@@ -28,8 +30,10 @@ export interface ProjectMemberRow {
   userId: string;
   role: ProjectMemberRole;
   addedAt: string;
-  /** Display name (detail endpoint only). */
+  /** Display name. */
   name?: string;
+  /** Set when they stopped working on the project (they stay listed for history). */
+  leftAt?: string;
   /** OWNER only — the agreed fee. Non-owners get their own deal in myEngagement instead. */
   amountPaise?: number;
 }
@@ -81,6 +85,11 @@ export interface ProjectRow {
   agencyMarginPaise?: number;
   currency?: string;
   portalVisible?: boolean;
+  /** Set once the project has been closed out. */
+  closedAt?: string;
+  // OWNER-only
+  writtenOffAt?: string;
+  closeNote?: string;
 }
 
 export interface ProjectBalance {
@@ -103,6 +112,9 @@ const projectsApi = {
   update: (id: string, body: UpdateProjectInput) => unwrap<ProjectRow>(api.patch(`/projects/${id}`, body)),
   addMember: (id: string, body: ProjectMemberInput) => unwrap<ProjectRow>(api.post(`/projects/${id}/members`, body)),
   removeMember: (id: string, userId: string) => unwrap<ProjectRow>(api.delete(`/projects/${id}/members/${userId}`)),
+  releaseMember: (id: string, userId: string, body: ReleaseMemberInput) =>
+    unwrap<ProjectRow>(api.post(`/projects/${id}/members/${userId}/release`, body)),
+  close: (id: string, body: CloseProjectInput) => unwrap<ProjectRow>(api.post(`/projects/${id}/close`, body)),
   remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/projects/${id}`)),
   setMemberCost: (id: string, userId: string, amountPaise: number) =>
     unwrap<ProjectRow>(api.patch(`/projects/${id}/members/${userId}/cost`, { amountPaise })),
@@ -180,6 +192,29 @@ export function useRemoveProjectMember() {
     onSuccess: () => {
       invalidateMoney(qc);
       toast.success('Removed from project');
+    },
+  });
+}
+/** OWNER: someone stops working on a project; their fee is settled as chosen. */
+export function useReleaseMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; userId: string; body: ReleaseMemberInput }) => projectsApi.releaseMember(vars.id, vars.userId, vars.body),
+    onSuccess: () => {
+      invalidateMoney(qc);
+      toast.success('Marked as off the project');
+    },
+  });
+}
+/** OWNER: close a project out. */
+export function useCloseProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; body: CloseProjectInput }) => projectsApi.close(vars.id, vars.body),
+    onSuccess: () => {
+      invalidateMoney(qc);
+      void qc.invalidateQueries({ queryKey: ['invoices'] });
+      toast.success('Project closed');
     },
   });
 }

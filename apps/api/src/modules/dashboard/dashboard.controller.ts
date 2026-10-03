@@ -7,15 +7,20 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
 import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 
+import { PayoutsService } from '../payouts/payouts.service';
 import { DashboardService } from './dashboard.service';
 
 @Controller('dashboard')
 export class DashboardController {
-  constructor(private readonly svc: DashboardService) {}
+  constructor(
+    private readonly svc: DashboardService,
+    private readonly payouts: PayoutsService,
+  ) {}
 
   @Get('owner')
   @Roles(Role.OWNER)
-  owner() {
+  async owner() {
+    await this.payouts.ensureLegacyImported(); // so the numbers include older payment records
     return this.svc.owner();
   }
 
@@ -28,7 +33,8 @@ export class DashboardController {
   /** Command centre: money flow (month + FY), receivables aging, daily cash, project health. */
   @Get('owner/cockpit')
   @Roles(Role.OWNER)
-  ownerCockpit() {
+  async ownerCockpit() {
+    await this.payouts.ensureLegacyImported();
     return this.svc.ownerCockpit();
   }
 

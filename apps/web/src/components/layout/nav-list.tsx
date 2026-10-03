@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/store/auth.store';
+import { useUnreadCount } from '@/features/notifications/notifications.hooks';
 
 import { Tooltip } from '@/components/ui/tooltip';
 
@@ -25,6 +26,8 @@ export function NavList({
   const pathname = usePathname();
   const role = useAuthStore((s) => s.user?.role);
   const sections = navForRole(role);
+  const unread = useUnreadCount().data?.count ?? 0;
+  const badgeFor = (href: string) => (href === '/notifications' && unread > 0 ? unread : 0);
   // Longest matching href wins, so /payroll/payslips doesn't also light up /payroll.
   const activeHref = sections
     .flatMap((s) => s.items)
@@ -68,8 +71,19 @@ export function NavList({
                             : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                       )}
                     >
-                      <Icon className={cn('h-4 w-4 shrink-0', rail && active && 'text-brand')} />
+                      <span className="relative">
+                        <Icon className={cn('h-4 w-4 shrink-0', rail && active && 'text-brand')} />
+                        {collapsed && badgeFor(item.href) > 0 && (
+                          <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-brand ring-2 ring-rail" aria-hidden />
+                        )}
+                      </span>
                       {!collapsed && <span className="truncate">{item.label}</span>}
+                      {!collapsed && badgeFor(item.href) > 0 && (
+                        <span className="ml-auto rounded-full bg-brand px-1.5 font-figures text-[10px] font-semibold leading-[18px] text-primary-foreground">
+                          {badgeFor(item.href) > 99 ? '99+' : badgeFor(item.href)}
+                          <span className="sr-only"> unread</span>
+                        </span>
+                      )}
                     </Link>
                   </Tooltip>
                 </li>

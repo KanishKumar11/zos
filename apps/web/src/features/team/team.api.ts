@@ -29,6 +29,15 @@ export interface OnboardingItemRow {
   completedAt?: string;
 }
 
+export type ExitReason = 'INTERNSHIP_COMPLETED' | 'RESIGNED' | 'CONTRACT_ENDED' | 'LET_GO' | 'OTHER';
+export const EXIT_REASON_LABEL: Record<ExitReason, string> = {
+  INTERNSHIP_COMPLETED: 'Internship completed',
+  RESIGNED: 'Resigned',
+  CONTRACT_ENDED: 'Contract ended',
+  LET_GO: 'Let go',
+  OTHER: 'Other',
+};
+
 export interface UserRow {
   _id: string;
   email: string;
@@ -41,6 +50,9 @@ export interface UserRow {
   designationId?: string | null;
   reportingManagerId?: string | null;
   dateOfJoining?: string | null;
+  /** Last working day, set when they left. */
+  dateOfExit?: string | null;
+  exitReason?: ExitReason | null;
   dateOfBirth?: string;
   lastLoginAt?: string;
   createdAt?: string;

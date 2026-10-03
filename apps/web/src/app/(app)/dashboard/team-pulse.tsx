@@ -1,9 +1,11 @@
 // Admin / lead home — people and delivery. Contains no project money at all; the only amounts are
 // the viewer's own earnings, rendered through <Price own>.
 //
-// Endpoints used (all allowed for ADMIN and LEAD): GET /users (directory), GET /attendance/team,
-// GET /tasks, GET /projects (LEADs only get projects they're on; milestone amounts are stripped),
-// GET /tasks?mine, GET /me/earnings, and GET /auth/invites for ADMINs only.
+// Endpoints used (all allowed for ADMIN and LEAD): GET /users (directory), GET /projects (LEADs only
+// get projects they're on; milestone amounts are stripped), GET /me/earnings, and GET /auth/invites
+// for ADMINs only. Behind feature flags: GET /attendance/team (FEATURES.attendance) and GET /tasks,
+// GET /tasks?mine (FEATURES.tasks). With a flag off its endpoints are never called and its routes are
+// never linked.
 'use client';
 
 import { ArrowRight, CalendarClock, UserPlus } from 'lucide-react';
@@ -48,14 +50,12 @@ import { useTeamAttendance, type AttendanceEntryRow } from '@/features/attendanc
 import { useMyEarnings } from '@/features/payouts/payouts.hooks';
 import { useAllProjects, type ProjectRow } from '@/features/projects/projects.hooks';
 import { useMyTasks, type TaskRow } from '@/features/tasks/tasks.hooks';
+import { activeProjectsByPerson, deliveryDates, isActiveProject } from '@/features/team/delivery';
 import { dueKey, dueLabel, isCurrentStaff, isOpenTask, onboardingProgress, thisWeekRange, useTeamTasks } from '@/features/team/people';
 import { ROLE_LABEL, type UserRow } from '@/features/team/team.api';
 import { usePendingInvites, useStaffDirectory } from '@/features/team/team.hooks';
 
 import { greeting } from './greeting';
-
-/** Attendance has no feature flag today; this keeps the page honest if one is added later. */
-const ATTENDANCE_ON = (FEATURES as Record<string, boolean>).attendance !== false;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -76,10 +76,15 @@ const STATUS_ORDER = [
   ProjectStatus.COMPLETED,
 ];
 
+const MILESTONE_COLOR = 'hsl(var(--primary))';
+const DEADLINE_COLOR = 'hsl(var(--destructive))';
+
 const isIn = (e?: AttendanceEntryRow) =>
   !!e && (e.status === AttendanceStatus.PRESENT || e.status === AttendanceStatus.HALF_DAY || !!e.checkInAt);
 const isAway = (u: UserRow, e?: AttendanceEntryRow) =>
   (!!e && (e.status === AttendanceStatus.LEAVE || e.status === AttendanceStatus.HOLIDAY)) || (!e && u.status === UserStatus.ON_LEAVE);
+
+type Deadline = { date: string; kind: 'task' | 'milestone' | 'project'; title: string; project?: ProjectRow; href: string; who?: string };
 
 export function TeamPulse() {
   const user = useAuthStore((s) => s.user);
@@ -91,16 +96,17 @@ export function TeamPulse() {
   const [selectedDay, setSelectedDay] = useState(today);
 
   const staff = useStaffDirectory();
-  const attendance = useTeamAttendance(today, undefined, { enabled: ATTENDANCE_ON });
+  const attendance = useTeamAttendance(today, undefined, { enabled: FEATURES.attendance });
   const projects = useAllProjects();
-  const teamTasks = useTeamTasks();
+  const teamTasks = useTeamTasks(FEATURES.tasks);
   const invites = usePendingInvites(isAdmin);
 
   const people = useMemo(() => (staff.data ?? []).filter(isCurrentStaff), [staff.data]);
   const names = useMemo(() => new Map((staff.data ?? []).map((u) => [u._id, u.name])), [staff.data]);
-  const projectMap = useMemo(() => new Map((projects.data?.items ?? []).map((p) => [p._id, p])), [projects.data]);
+  const projectItems = useMemo(() => projects.data?.items ?? [], [projects.data]);
+  const projectMap = useMemo(() => new Map(projectItems.map((p) => [p._id, p])), [projectItems]);
 
-  // Who's in today.
+  // Who's in today (attendance flag only — the query is disabled otherwise, so this stays empty).
   const presence = useMemo(() => {
     const byUser = new Map((attendance.data ?? []).map((e) => [e.userId, e]));
     const inToday: UserRow[] = [];
@@ -117,17 +123,19 @@ export function TeamPulse() {
     return { byUser, inToday, away, absent, notYet };
   }, [attendance.data, people]);
 
-  // Tasks across the team. A LEAD only sees tasks on projects they're on (ADMINs see every project).
+  // Tasks across the team (tasks flag only). A LEAD only sees tasks on projects they're on.
   const tasks = useMemo(() => {
     const all = teamTasks.data ?? [];
     const visible = isAdmin ? all : projects.data ? all.filter((t) => projectMap.has(t.projectId)) : [];
     const open = visible.filter(isOpenTask);
     const byDue = (a: TaskRow, b: TaskRow) => (dueKey(a) ?? '9').localeCompare(dueKey(b) ?? '9');
     const overdue = open.filter((t) => (dueKey(t) ?? '9') < today).sort(byDue);
-    const dueThisWeek = open.filter((t) => {
-      const k = dueKey(t);
-      return !!k && k >= today && k <= week.to;
-    }).sort(byDue);
+    const dueThisWeek = open
+      .filter((t) => {
+        const k = dueKey(t);
+        return !!k && k >= today && k <= week.to;
+      })
+      .sort(byDue);
     const inWeek = open.filter((t) => {
       const k = dueKey(t);
       return !!k && k >= week.from && k <= week.to;
@@ -135,49 +143,53 @@ export function TeamPulse() {
     return { open, overdue, dueThisWeek, inWeek };
   }, [teamTasks.data, isAdmin, projects.data, projectMap, today, week.from, week.to]);
 
-  // Deadlines this week: task due dates, pending milestones and project end dates (no amounts).
+  // Deadlines this week: pending milestones and project end dates (no amounts), plus task due dates
+  // when the tasks feature is on.
   const deadlines = useMemo(() => {
-    const items: { date: string; kind: 'task' | 'milestone' | 'project'; title: string; project?: ProjectRow; href: string; who?: string }[] = [];
-    for (const t of tasks.inWeek) {
-      items.push({
-        date: dueKey(t)!,
-        kind: 'task',
-        title: t.title,
-        project: projectMap.get(t.projectId),
-        href: `/tasks/${t._id}`,
-        who: t.assigneeId ? names.get(t.assigneeId) : undefined,
-      });
-    }
-    for (const p of projects.data?.items ?? []) {
-      for (const m of p.milestones ?? []) {
-        const k = m.dueDate?.slice(0, 10);
-        if (k && m.status === 'PENDING' && k >= week.from && k <= week.to) {
-          items.push({ date: k, kind: 'milestone', title: m.name, project: p, href: `/projects/${p._id}` });
-        }
-      }
-      const end = p.endDate?.slice(0, 10);
-      if (end && p.status !== ProjectStatus.COMPLETED && end >= week.from && end <= week.to) {
-        items.push({ date: end, kind: 'project', title: `${p.name} is due`, project: p, href: `/projects/${p._id}` });
+    const items: Deadline[] = deliveryDates(projectItems, { from: week.from, to: week.to }).map((d) => ({
+      date: d.date,
+      kind: d.kind,
+      title: d.title,
+      project: d.project,
+      href: `/projects/${d.project._id}`,
+    }));
+    if (FEATURES.tasks) {
+      for (const t of tasks.inWeek) {
+        items.push({
+          date: dueKey(t)!,
+          kind: 'task',
+          title: t.title,
+          project: projectMap.get(t.projectId),
+          href: `/tasks/${t._id}`,
+          who: t.assigneeId ? names.get(t.assigneeId) : undefined,
+        });
       }
     }
     return items;
-  }, [tasks.inWeek, projects.data, projectMap, names, week.from, week.to]);
+  }, [projectItems, week.from, week.to, tasks.inWeek, projectMap, names]);
 
-  const dots: WeekDot[] = deadlines.map((d) => ({
-    date: d.date,
-    color: d.kind === 'task' ? identityColor(d.project?._id ?? d.title) : d.kind === 'milestone' ? 'hsl(var(--primary))' : 'hsl(var(--destructive))',
-    title: d.title,
-  }));
+  const dotColor = (d: Deadline) => (d.kind === 'task' ? identityColor(d.project?._id ?? d.title) : d.kind === 'milestone' ? MILESTONE_COLOR : DEADLINE_COLOR);
+  const dots: WeekDot[] = deadlines.map((d) => ({ date: d.date, color: dotColor(d), title: d.title }));
   const dayItems = deadlines.filter((d) => d.date === selectedDay);
 
+  // Delivery figures for the hero.
+  const activeProjects = projectItems.filter(isActiveProject);
+  const deadlinesLeft = deadlines.filter((d) => d.kind !== 'task' && d.date >= today).length;
+  const lateMilestones = deliveryDates(activeProjects, { to: today }).filter((d) => d.kind === 'milestone' && d.date < today);
+  const onboarding = people.filter((u) => {
+    const p = onboardingProgress(u);
+    return !!p && p.done < p.total;
+  }).length;
+
   const pendingInvites = invites.data ?? [];
-  const heroLoading = staff.isLoading || teamTasks.isLoading || (!isAdmin && projects.isLoading) || (ATTENDANCE_ON && attendance.isLoading);
+  const heroLoading =
+    staff.isLoading || projects.isLoading || (FEATURES.tasks && teamTasks.isLoading) || (FEATURES.attendance && attendance.isLoading);
 
   const inCount = presence.inToday.length;
   const dueCount = tasks.dueThisWeek.length;
   const sentence: ReactNode = (
     <>
-      {ATTENDANCE_ON && !attendance.isError && people.length > 0 ? (
+      {FEATURES.attendance && !attendance.isError && people.length > 0 ? (
         inCount > 0 ? (
           <>
             <HeroFigure>
@@ -188,25 +200,52 @@ export function TeamPulse() {
         ) : (
           <>Nobody has checked in yet today</>
         )
+      ) : staff.isError ? (
+        <>Here&rsquo;s the team today</>
       ) : (
         <>
           <HeroFigure>{plural(people.length, 'person', 'people')}</HeroFigure> on the team
         </>
       )}
-      {teamTasks.isError ? '.' : '; '}
-      {teamTasks.isError ? null : dueCount > 0 ? (
-        <>
-          <HeroMark>{plural(dueCount, 'task')}</HeroMark> {dueCount === 1 ? 'is' : 'are'} due across the team this week.
-        </>
+      {projects.isError ? (
+        '.'
       ) : (
-        <>nothing is due across the team this week.</>
+        <>
+          , <HeroFigure>{plural(activeProjects.length, 'active project')}</HeroFigure>
+          {isAdmin ? '' : " you're on"} —{' '}
+          {deadlinesLeft > 0 ? (
+            <>
+              <HeroMark>{plural(deadlinesLeft, 'deadline')}</HeroMark> this week.
+            </>
+          ) : (
+            <>no deadlines left this week.</>
+          )}
+        </>
       )}
     </>
   );
+
+  const nothingLate = lateMilestones.length === 0 && (!FEATURES.tasks || teamTasks.isError || tasks.overdue.length === 0);
   const ledeParts = [
-    teamTasks.isError ? '' : tasks.overdue.length ? `${plural(tasks.overdue.length, 'task')} ${tasks.overdue.length === 1 ? 'is' : 'are'} overdue and could use a nudge.` : 'Nothing is overdue. Nice.',
+    lateMilestones.length > 1
+      ? `${plural(lateMilestones.length, 'milestone')} are past their due dates.`
+      : lateMilestones[0]
+        ? `${lateMilestones[0].title} on ${lateMilestones[0].project.name} is past its due date.`
+        : '',
+    FEATURES.tasks && !teamTasks.isError && dueCount > 0 ? `${plural(dueCount, 'task')} due across the team this week.` : '',
+    FEATURES.tasks && !teamTasks.isError && tasks.overdue.length
+      ? `${plural(tasks.overdue.length, 'task')} ${tasks.overdue.length === 1 ? 'is' : 'are'} overdue and could use a nudge.`
+      : '',
+    nothingLate && !projects.isError ? 'Nothing is overdue. Nice.' : '',
+    onboarding ? `${plural(onboarding, 'person is', 'people are')} still onboarding.` : '',
     isAdmin && pendingInvites.length ? `${plural(pendingInvites.length, 'invite')} still waiting to be accepted.` : '',
+    !isAdmin && !projects.isError ? 'Projects and deadlines here are the ones you’re on.' : '',
   ];
+
+  // Spans so each row fills, whichever flags are on.
+  const flagTiles = Number(FEATURES.attendance) + Number(FEATURES.tasks);
+  const onboardingSpan = isAdmin ? (FEATURES.tasks ? 6 : 4) : FEATURES.tasks ? 12 : 6;
+  const earningsSpan = FEATURES.tasks ? 5 : isAdmin ? 4 : 6;
 
   return (
     <div className="space-y-7">
@@ -215,16 +254,112 @@ export function TeamPulse() {
         eyebrow={`${greeting()}${firstName ? `, ${firstName}` : ''} · ${new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}`}
         aside={<PrivacyChip>Only your own pay is shown here</PrivacyChip>}
         loading={heroLoading}
-        lede={ledeParts.filter(Boolean).join(' ')}
+        lede={ledeParts.filter(Boolean).join(' ') || undefined}
       >
         {sentence}
       </Hero>
 
       <Bento>
-        {/* Who's in today */}
-        {ATTENDANCE_ON ? (
+        {/* This week */}
+        <Tile
+          span={12}
+          title="Deadlines this week"
+          action={
+            <Legend
+              items={[
+                ...(FEATURES.tasks ? [{ color: 'hsl(var(--p2))', label: 'Task (project colour)' }] : []),
+                { color: MILESTONE_COLOR, label: 'Milestone' },
+                { color: DEADLINE_COLOR, label: 'Project deadline' },
+              ]}
+            />
+          }
+        >
+          {projects.isLoading || (FEATURES.tasks && teamTasks.isLoading) ? (
+            <Skeleton className="h-24 w-full" />
+          ) : (
+            <div className="space-y-4">
+              <div className="overflow-x-auto">
+                <div className="min-w-[420px]">
+                  <WeekStrip dots={dots} selected={selectedDay} onSelect={setSelectedDay} />
+                </div>
+              </div>
+              {projects.isError && (
+                <p className="text-xs text-destructive">
+                  Couldn&apos;t load project deadlines.{' '}
+                  <button type="button" className="underline" onClick={() => projects.refetch()}>
+                    Try again
+                  </button>
+                </p>
+              )}
+              <div>
+                <p className="mb-2 text-[13px] font-semibold">
+                  {selectedDay === today ? 'Today' : formatDate(new Date(`${selectedDay}T00:00:00`), { weekday: 'long', day: 'numeric', month: 'short' })}
+                </p>
+                {dayItems.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {deadlines.length === 0 ? 'No milestones or project deadlines this week.' : 'Nothing due on this day — tap a day with a dot.'}
+                  </p>
+                ) : (
+                  <ul className="grid gap-2 sm:grid-cols-2">
+                    {dayItems.map((d, i) => (
+                      <li key={`${d.href}-${i}`} className="flex min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2 text-sm">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: dotColor(d) }} />
+                        <div className="min-w-0 flex-1">
+                          <Link href={d.href} className="block truncate font-medium hover:underline">
+                            {d.title}
+                          </Link>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {d.kind === 'task' ? 'Task' : d.kind === 'milestone' ? 'Milestone' : 'Project deadline'}
+                            {d.project && d.kind !== 'project' ? ` · ${d.project.name}` : ''}
+                            {d.who ? ` · ${d.who}` : d.kind === 'task' ? ' · Unassigned' : ''}
+                          </p>
+                        </div>
+                        {d.project && d.kind === 'project' && (
+                          <AvatarStack
+                            people={(d.project.members ?? []).map((m) => ({ id: m.userId, name: names.get(m.userId) ?? 'Former team member' }))}
+                            max={3}
+                            size="xs"
+                          />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </Tile>
+
+        {/* Who's on what — current people and their active projects, from project memberships */}
+        <Tile
+          span={7}
+          title="Who's on what"
+          action={
+            <Link href="/team" className="text-xs font-medium text-brand-ink hover:underline">
+              Team
+            </Link>
+          }
+        >
+          {staff.isLoading || projects.isLoading ? (
+            <TileSkeleton rows={4} />
+          ) : staff.isError ? (
+            <ErrorState error={staff.error} onRetry={() => staff.refetch()} className="py-4" />
+          ) : projects.isError ? (
+            <ErrorState error={projects.error} onRetry={() => projects.refetch()} className="py-4" />
+          ) : people.length === 0 ? (
+            <EmptyTile kind="people" text="No one on the team yet." />
+          ) : (
+            <WhoIsOnWhat people={people} projects={projectItems} isAdmin={isAdmin} />
+          )}
+        </Tile>
+
+        {/* Project status counts — counts only, never money */}
+        <ProjectStatusTile span={5} projects={projects} isAdmin={isAdmin} />
+
+        {/* Who's in today — attendance feature only */}
+        {FEATURES.attendance && (
           <Tile
-            span={5}
+            span={flagTiles === 2 ? 5 : 12}
             title="Who's in today"
             action={
               <Link href="/attendance" className="text-xs font-medium text-brand-ink hover:underline">
@@ -267,124 +402,50 @@ export function TeamPulse() {
               </div>
             )}
           </Tile>
-        ) : (
-          <Tile span={5} title="The team">
-            {staff.isLoading ? (
-              <TileSkeleton rows={2} />
-            ) : staff.isError ? (
-              <ErrorState error={staff.error} onRetry={() => staff.refetch()} className="py-4" />
+        )}
+
+        {/* Due across the team — tasks feature only */}
+        {FEATURES.tasks && (
+          <Tile
+            span={flagTiles === 2 ? 7 : 12}
+            title="Due across the team"
+            action={
+              tasks.overdue.length > 0 ? (
+                <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">{tasks.overdue.length} overdue</span>
+              ) : undefined
+            }
+          >
+            {teamTasks.isLoading ? (
+              <TileSkeleton rows={5} />
+            ) : teamTasks.isError ? (
+              <ErrorState error={teamTasks.error} onRetry={() => teamTasks.refetch()} className="py-4" />
+            ) : tasks.overdue.length + tasks.dueThisWeek.length === 0 ? (
+              <EmptyTile kind="done" text={tasks.open.length ? 'Nothing is overdue or due this week.' : 'No open tasks across the team.'} />
             ) : (
-              <div className="space-y-3">
-                <BigNumber caption="people who can sign in">
-                  <CountUp value={people.length} />
-                </BigNumber>
-                <AvatarStack people={people.map((u) => ({ id: u._id, name: u.name }))} max={10} />
-              </div>
+              <ul className="-mx-2">
+                {[...tasks.overdue, ...tasks.dueThisWeek].slice(0, 8).map((t) => (
+                  <TaskLine
+                    key={t._id}
+                    task={t}
+                    today={today}
+                    project={projectMap.get(t.projectId)}
+                    assignee={t.assigneeId ? { id: t.assigneeId, name: names.get(t.assigneeId) } : undefined}
+                  />
+                ))}
+                {tasks.overdue.length + tasks.dueThisWeek.length > 8 && (
+                  <li className="px-2 pt-2 text-xs text-muted-foreground">
+                    And {tasks.overdue.length + tasks.dueThisWeek.length - 8} more — open a project board to see them all.
+                  </li>
+                )}
+              </ul>
             )}
           </Tile>
         )}
 
-        {/* Due across the team */}
-        <Tile
-          span={7}
-          title="Due across the team"
-          action={
-            tasks.overdue.length > 0 ? (
-              <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">{tasks.overdue.length} overdue</span>
-            ) : undefined
-          }
-        >
-          {teamTasks.isLoading ? (
-            <TileSkeleton rows={5} />
-          ) : teamTasks.isError ? (
-            <ErrorState error={teamTasks.error} onRetry={() => teamTasks.refetch()} className="py-4" />
-          ) : tasks.overdue.length + tasks.dueThisWeek.length === 0 ? (
-            <EmptyTile kind="done" text={tasks.open.length ? 'Nothing is overdue or due this week.' : 'No open tasks across the team.'} />
-          ) : (
-            <ul className="-mx-2">
-              {[...tasks.overdue, ...tasks.dueThisWeek].slice(0, 8).map((t) => (
-                <TaskLine key={t._id} task={t} today={today} project={projectMap.get(t.projectId)} assignee={t.assigneeId ? { id: t.assigneeId, name: names.get(t.assigneeId) } : undefined} />
-              ))}
-              {tasks.overdue.length + tasks.dueThisWeek.length > 8 && (
-                <li className="px-2 pt-2 text-xs text-muted-foreground">
-                  And {tasks.overdue.length + tasks.dueThisWeek.length - 8} more — open a project board to see them all.
-                </li>
-              )}
-            </ul>
-          )}
-        </Tile>
-
-        {/* This week */}
-        <Tile
-          span={12}
-          title="Deadlines this week"
-          action={
-            <Legend
-              items={[
-                { color: 'hsl(var(--p2))', label: 'Task (project colour)' },
-                { color: 'hsl(var(--primary))', label: 'Milestone' },
-                { color: 'hsl(var(--destructive))', label: 'Project deadline' },
-              ]}
-            />
-          }
-        >
-          {teamTasks.isLoading || projects.isLoading ? (
-            <Skeleton className="h-24 w-full" />
-          ) : (
-            <div className="space-y-4">
-              <div className="overflow-x-auto">
-                <div className="min-w-[420px]">
-                  <WeekStrip dots={dots} selected={selectedDay} onSelect={setSelectedDay} />
-                </div>
-              </div>
-              {projects.isError && (
-                <p className="text-xs text-destructive">
-                  Couldn&apos;t load project deadlines.{' '}
-                  <button type="button" className="underline" onClick={() => projects.refetch()}>
-                    Try again
-                  </button>
-                </p>
-              )}
-              <div>
-                <p className="mb-2 text-[13px] font-semibold">
-                  {selectedDay === today ? 'Today' : formatDate(new Date(`${selectedDay}T00:00:00`), { weekday: 'long', day: 'numeric', month: 'short' })}
-                </p>
-                {dayItems.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nothing due on this day.</p>
-                ) : (
-                  <ul className="grid gap-2 sm:grid-cols-2">
-                    {dayItems.map((d, i) => (
-                      <li key={`${d.href}-${i}`} className="flex min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2 text-sm">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ background: d.kind === 'task' ? identityColor(d.project?._id ?? d.title) : d.kind === 'milestone' ? 'hsl(var(--primary))' : 'hsl(var(--destructive))' }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <Link href={d.href} className="block truncate font-medium hover:underline">
-                            {d.title}
-                          </Link>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {d.kind === 'task' ? 'Task' : d.kind === 'milestone' ? 'Milestone' : 'Project deadline'}
-                            {d.project && d.kind !== 'project' ? ` · ${d.project.name}` : ''}
-                            {d.who ? ` · ${d.who}` : d.kind === 'task' ? ' · Unassigned' : ''}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          )}
-        </Tile>
-
-        {/* Project status counts — counts only, never money */}
-        <ProjectStatusTile span={isAdmin ? 4 : 6} projects={projects} isAdmin={isAdmin} />
-
         {/* Pending invites — ADMIN only (the API allows OWNER/ADMIN) */}
         {isAdmin && (
           <Tile
-            span={4}
+            span={FEATURES.tasks ? 6 : 4}
             title="Pending invites"
             action={
               <Link href="/team?new=1" className="inline-flex items-center gap-1 text-xs font-medium text-brand-ink hover:underline">
@@ -425,7 +486,7 @@ export function TeamPulse() {
         )}
 
         {/* Onboarding in progress */}
-        <Tile span={isAdmin ? 4 : 6} title="Onboarding">
+        <Tile span={onboardingSpan} title="Onboarding">
           {staff.isLoading ? (
             <TileSkeleton rows={3} />
           ) : staff.isError ? (
@@ -435,10 +496,67 @@ export function TeamPulse() {
           )}
         </Tile>
 
-        {/* My own work and pay */}
-        <MyFocusTile today={today} />
-        <MyEarningsTile />
+        {/* My own work (tasks feature only) and pay */}
+        {FEATURES.tasks && <MyFocusTile today={today} />}
+        <MyEarningsTile span={earningsSpan} />
       </Bento>
+    </div>
+  );
+}
+
+/** Current people with how many active projects each is on — avatars, project colours, counts. */
+function WhoIsOnWhat({ people, projects, isAdmin }: { people: UserRow[]; projects: ProjectRow[]; isAdmin: boolean }) {
+  const byPerson = activeProjectsByPerson(projects);
+  const rows = people
+    .map((u) => ({ u, list: byPerson.get(u._id) ?? [] }))
+    .sort((a, b) => b.list.length - a.list.length || a.u.name.localeCompare(b.u.name));
+  const busy = rows.filter((r) => r.list.length > 0);
+  const free = rows.filter((r) => r.list.length === 0);
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        {busy.length} of {plural(people.length, 'person', 'people')} on an active project
+        {isAdmin ? '' : ' (counting projects you’re on)'}.
+      </p>
+      {busy.length === 0 ? (
+        <EmptyTile kind="projects" text={isAdmin ? 'No one is on an active project right now.' : 'No one is on an active project with you right now.'} />
+      ) : (
+        <ul className="-mx-2">
+          {busy.slice(0, 7).map(({ u, list }) => (
+            <li key={u._id}>
+              <Link href={`/team/${u._id}`} className="flex min-w-0 items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-muted/40">
+                <Avatar id={u._id} name={u.name} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{u.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {ROLE_LABEL[u.role] ?? u.role} · {list.map((p) => p.name).join(', ')}
+                  </p>
+                </div>
+                <span className="hidden shrink-0 items-center gap-1 sm:flex" aria-hidden>
+                  {list.slice(0, 5).map((p) => (
+                    <span key={p._id} className="h-2.5 w-2.5 rounded-full" style={{ background: identityColor(p._id) }} title={p.name} />
+                  ))}
+                </span>
+                <span
+                  className="w-6 shrink-0 text-right font-figures text-sm font-semibold"
+                  aria-label={`${plural(list.length, 'active project')}`}
+                >
+                  {list.length}
+                </span>
+              </Link>
+            </li>
+          ))}
+          {busy.length > 7 && <li className="px-2 pt-1 text-xs text-muted-foreground">And {busy.length - 7} more on the team page.</li>}
+        </ul>
+      )}
+      {free.length > 0 && busy.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+          <span className="text-xs text-muted-foreground">Not on an active project</span>
+          <span className="opacity-60">
+            <AvatarStack people={free.map((r) => ({ id: r.u._id, name: r.u.name }))} max={8} />
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -547,7 +665,7 @@ function TaskLine({
   );
 }
 
-function ProjectStatusTile({ span, projects, isAdmin }: { span: 4 | 6; projects: ReturnType<typeof useAllProjects>; isAdmin: boolean }) {
+function ProjectStatusTile({ span, projects, isAdmin }: { span: 4 | 5 | 6; projects: ReturnType<typeof useAllProjects>; isAdmin: boolean }) {
   const router = useRouter();
   const items = projects.data?.items ?? [];
   const counts = STATUS_ORDER.map((s) => ({ status: s, n: items.filter((p) => p.status === s).length }));
@@ -657,13 +775,13 @@ function MyFocusTile({ today }: { today: string }) {
 }
 
 /** The viewer's own earnings — the only amounts on this page, all through <Price own>. */
-function MyEarningsTile() {
+function MyEarningsTile({ span }: { span: 4 | 5 | 6 }) {
   const earnings = useMyEarnings();
   const e = earnings.data;
   const projects = (e?.projects ?? []).filter((p) => p.projectId && p.agreedPaise > 0).slice(0, 3);
   return (
     <Tile
-      span={5}
+      span={span}
       tone="ink"
       title="My earnings"
       action={

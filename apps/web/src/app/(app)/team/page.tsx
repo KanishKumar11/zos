@@ -38,7 +38,8 @@ const SORTABLE = ['name', 'lastLoginAt', 'dateOfJoining'] as const;
 export default function TeamPage() {
   const role = useAuthStore((s) => s.user?.role);
   const canInvite = isOwnerOrAdmin(role);
-  const list = useListState('team', { q: '', role: '', status: '', departmentId: '', sort: 'name:asc', view: 'grid' });
+  // Active people by default; "All statuses" is stored as ALL because an empty value means "use the default".
+  const list = useListState('team', { q: '', role: '', status: 'ACTIVE', departmentId: '', sort: 'name:asc', view: 'grid' });
   const { params } = list;
   const view = params.view === 'table' ? 'table' : 'grid';
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -52,7 +53,7 @@ export default function TeamPage() {
     pageSize: PAGE_SIZE,
     q: params.q || undefined,
     role: (params.role || undefined) as Role | undefined,
-    status: (params.status || undefined) as UserStatus | undefined,
+    status: (params.status && params.status !== 'ALL' ? params.status : undefined) as UserStatus | undefined,
     departmentId: params.departmentId || undefined,
     sort: `${sortBy}:${list.sort?.dir ?? 'asc'}` as ListUsersQuery['sort'],
   };
@@ -130,7 +131,7 @@ export default function TeamPage() {
   // `view` lives in the list state so it's remembered, but it isn't a filter.
   const filterCount = list.activeFilterCount - (view === 'table' ? 1 : 0);
   const filtered = filterCount > 0;
-  const resetFilters = () => list.set({ q: '', role: '', status: '', departmentId: '', sort: 'name:asc', view: params.view });
+  const resetFilters = () => list.set({ q: '', role: '', status: 'ACTIVE', departmentId: '', sort: 'name:asc', view: params.view });
 
   const empty = filtered ? (
     <EmptyState
@@ -189,8 +190,8 @@ export default function TeamPage() {
           options={STAFF_ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
         />
         <SelectFilter
-          value={params.status}
-          onChange={(status) => list.set({ status })}
+          value={params.status === 'ALL' ? '' : params.status}
+          onChange={(status) => list.set({ status: status || 'ALL' })}
           allLabel="All statuses"
           options={Object.values(UserStatus).map((s) => ({ value: s, label: statusLabel(s) }))}
         />

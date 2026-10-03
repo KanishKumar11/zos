@@ -3,7 +3,7 @@
 // else sees the work view plus their own earnings on the project. Same tabs and actions as before.
 'use client';
 
-import { Eye, MoreHorizontal, Pencil, Send, Trash2 } from 'lucide-react';
+import { Archive, Eye, MoreHorizontal, Pencil, Send, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { use, useState } from 'react';
@@ -34,7 +34,10 @@ import { ProjectMilestones, ProjectMoneySummary } from '@/features/projects/comp
 import { OwnerProjectHero, OwnerProjectOverview, StaffProjectHero, StaffProjectOverview } from '@/features/projects/components/project-overview';
 import { ProjectTeam } from '@/features/projects/components/project-team';
 import { useDeleteProject, useProject, type ProjectRow } from '@/features/projects/projects.hooks';
+import { CloseProjectSheet } from '@/features/projects/components/close-project-sheet';
 import { ProjectTasks } from '@/features/tasks/project-tasks';
+import { FEATURES } from '@/lib/features';
+import { formatDate } from '@/lib/formatters';
 
 const CRUMBS = [{ label: 'Projects', href: '/projects' }];
 
@@ -47,7 +50,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
-  const tab = search.get('tab') ?? 'overview';
+  const rawTab = search.get('tab') ?? 'overview';
+  const tab = rawTab === 'tasks' && !FEATURES.tasks ? 'overview' : rawTab;
   const setTab = (t: string) => router.replace(`${pathname}${t === 'overview' ? '' : `?tab=${t}`}`, { scroll: false });
 
   if (project.isLoading) return <PageSkeleton />;
@@ -69,7 +73,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <TabsTrigger value="overview">Overview</TabsTrigger>
           {isOwner ? <TabsTrigger value="people">People &amp; payments</TabsTrigger> : <TabsTrigger value="team">Team</TabsTrigger>}
           {isOwner && <TabsTrigger value="billing">Billing</TabsTrigger>}
-          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          {FEATURES.tasks && <TabsTrigger value="tasks">Tasks</TabsTrigger>}
           <TabsTrigger value="updates">Updates</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
         </TabsList>
@@ -99,9 +103,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </TabsContent>
         )}
 
-        <TabsContent value="tasks">
-          <ProjectTasks project={p} />
-        </TabsContent>
+        {FEATURES.tasks && (
+          <TabsContent value="tasks">
+            <ProjectTasks project={p} />
+          </TabsContent>
+        )}
         <TabsContent value="updates">
           <ProjectUpdates projectId={p._id} hasClient={!!p.clientId || !isOwner} />
         </TabsContent>
@@ -121,6 +127,7 @@ function ProjectHeader({ project: p, isOwner, canEdit }: { project: ProjectRow; 
   const clients = useClients(undefined, { enabled: isOwner && !!p.clientId });
   const clientName = p.clientId ? (clients.data?.find((c) => c._id === p.clientId)?.name ?? (clients.isLoading ? undefined : 'Deleted client')) : undefined;
   const [editOpen, setEditOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
 
   const eyebrow = (
     <span className="inline-flex flex-wrap items-center gap-2">
@@ -164,6 +171,11 @@ function ProjectHeader({ project: p, isOwner, canEdit }: { project: ProjectRow; 
             <DropdownMenuItem asChild>
               <Link href={`/payments?projectId=${p._id}`}>All payments on this project</Link>
             </DropdownMenuItem>
+            {!p.closedAt && (
+              <DropdownMenuItem onClick={() => setCloseOpen(true)}>
+                <Archive className="mr-2 h-3.5 w-3.5" /> Close project…
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
@@ -195,7 +207,18 @@ function ProjectHeader({ project: p, isOwner, canEdit }: { project: ProjectRow; 
       ) : (
         <StaffProjectHero project={p} crumbs={CRUMBS} eyebrow={eyebrow} aside={aside} />
       )}
+      {p.closedAt && (
+        <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius)] border bg-muted/40 px-4 py-2.5 text-sm">
+          <Archive className="h-4 w-4 text-muted-foreground" />
+          <span>
+            Closed on {formatDate(p.closedAt)}
+            {isOwner && p.writtenOffAt && ' · the unbilled part of the budget was written off'}
+            {isOwner && p.closeNote && ` · ${p.closeNote}`}
+          </span>
+        </div>
+      )}
       {canEdit && <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} project={p} />}
+      {isOwner && closeOpen && <CloseProjectSheet project={p} open={closeOpen} onOpenChange={setCloseOpen} />}
     </>
   );
 }

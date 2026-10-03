@@ -63,7 +63,7 @@ const ALLOWED_OPEN: Record<string, string[]> = {
 
 /** Money routes inside mixed controllers. */
 const MONEY_HANDLERS: [Ctor, string[]][] = [
-  [ProjectsController, ['setMemberCost', 'addFreelancer', 'updateFreelancer', 'removeFreelancer', 'projectBalance', 'projectBalances', 'addMilestone', 'updateMilestone', 'removeMilestone']],
+  [ProjectsController, ['setMemberCost', 'addFreelancer', 'updateFreelancer', 'removeFreelancer', 'projectBalance', 'projectBalances', 'releaseMember', 'close', 'addMilestone', 'updateMilestone', 'removeMilestone']],
   [DashboardController, ['owner', 'ownerCharts', 'ownerCockpit', 'teamEarnings', 'memberStats']],
 ];
 

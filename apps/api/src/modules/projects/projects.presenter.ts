@@ -44,7 +44,8 @@ export function presentProject(doc: ProjectDocument | Plain, viewer: ProjectView
     brief: p.brief,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
-    members: members.map((m) => ({ userId: m.userId, role: m.role, addedAt: m.addedAt })),
+    members: members.map((m) => ({ userId: m.userId, role: m.role, addedAt: m.addedAt, leftAt: m.leftAt })),
+    closedAt: p.closedAt,
     milestones: (p.milestones ?? []).map((ms: Plain) => ({
       _id: ms._id,
       name: ms.name,

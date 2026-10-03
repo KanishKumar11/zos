@@ -5,20 +5,24 @@ import { Types } from 'mongoose';
 
 import {
   Role,
+  closeProjectSchema,
   createMilestoneSchema,
   createProjectSchema,
   listProjectsQuerySchema,
   projectFreelancerInputSchema,
   projectMemberInputSchema,
+  releaseMemberSchema,
   setMemberCostSchema,
   updateMilestoneSchema,
   updateProjectFreelancerSchema,
   updateProjectSchema,
+  type CloseProjectInput,
   type CreateMilestoneInput,
   type CreateProjectInput,
   type ListProjectsQuery,
   type ProjectFreelancerInput,
   type ProjectMemberInput,
+  type ReleaseMemberInput,
   type SetMemberCostInput,
   type UpdateMilestoneInput,
   type UpdateProjectFreelancerInput,
@@ -136,6 +140,29 @@ export class ProjectsController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.present(await this.svc.removeMember(id, userId), user);
+  }
+
+  /** Someone stops working on the project; their fee is settled as chosen. */
+  @Roles(Role.OWNER)
+  @Post(':id/members/:userId/release')
+  async releaseMember(
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('userId', ObjectIdPipe) userId: string,
+    @Body(new ZodValidationPipe(releaseMemberSchema)) body: ReleaseMemberInput,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.present(await this.svc.releaseMember(id, userId, body, user), user);
+  }
+
+  /** Close out: mark done, optionally write off the rest of the budget, settle everyone's fees. */
+  @Roles(Role.OWNER)
+  @Post(':id/close')
+  async close(
+    @Param('id', ObjectIdPipe) id: string,
+    @Body(new ZodValidationPipe(closeProjectSchema)) body: CloseProjectInput,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.present(await this.svc.closeProject(id, body, user), user);
   }
 
   @Roles(Role.OWNER)

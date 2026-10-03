@@ -2,7 +2,7 @@
 //
 // Agreed fees live on the project (members[].amountPaise, freelancers[].agreedPaise); every
 // payment against them is a Payout. Balances = agreed − sum(payouts) per person per project.
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, type OnApplicationBootstrap } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { type FilterQuery, Model, Types } from 'mongoose';
@@ -17,6 +17,7 @@ import {
   type CreatePayoutParsed,
   type ListPayoutsQuery,
   type UpdatePayoutInput,
+  Role,
 } from '@agency/shared';
 
 import { ErrorCodes } from '@/common/constants/error-codes';
@@ -75,7 +76,11 @@ interface Actor {
 }
 
 @Injectable()
-export class PayoutsService {
+export class PayoutsService implements OnApplicationBootstrap {
+  private readonly log = new Logger(PayoutsService.name);
+  private importRun: Promise<void> | null = null;
+  private importCheckedAt = 0;
+
   constructor(
     @InjectModel(Payout.name) private readonly model: Model<PayoutDocument>,
     @InjectModel(Project.name) private readonly projects: Model<ProjectDocument>,
@@ -302,6 +307,7 @@ export class PayoutsService {
 
   /** One person's deals across projects (team member or freelancer), plus general payments. */
   async payeeBalances(payeeType: PayeeType, payeeId: string): Promise<BalanceRow[]> {
+    await this.ensureLegacyImported();
     const oid = new Types.ObjectId(payeeId);
     const projectFilter =
       payeeType === PayeeType.MEMBER ? { 'members.userId': oid } : { 'freelancers.freelancerId': oid };
@@ -376,7 +382,23 @@ export class PayoutsService {
   }
 
   /** Money out for a project (team + freelancers) — used for project profit. */
+  /** What each person has been paid on one project, keyed by user / freelancer id. */
+  async paidOnProject(projectId: Types.ObjectId): Promise<{ members: Map<string, number>; freelancers: Map<string, number> }> {
+    const rows = await this.model.aggregate<{ _id: { t: PayeeType; u?: Types.ObjectId; f?: Types.ObjectId }; amountPaise: number }>([
+      { $match: { projectId, deletedAt: { $exists: false } } },
+      { $group: { _id: { t: '$payeeType', u: '$userId', f: '$freelancerId' }, amountPaise: { $sum: '$amountPaise' } } },
+    ]);
+    const members = new Map<string, number>();
+    const freelancers = new Map<string, number>();
+    for (const r of rows) {
+      if (r._id.t === PayeeType.MEMBER && r._id.u) members.set(String(r._id.u), r.amountPaise);
+      if (r._id.t === PayeeType.FREELANCER && r._id.f) freelancers.set(String(r._id.f), r.amountPaise);
+    }
+    return { members, freelancers };
+  }
+
   async projectCost(projectId: Types.ObjectId): Promise<{ teamPaise: number; freelancerPaise: number }> {
+    await this.ensureLegacyImported();
     const sums = await this.model.aggregate<{ _id: PayeeType; amountPaise: number }>([
       { $match: { projectId, deletedAt: { $exists: false } } },
       { $group: { _id: '$payeeType', amountPaise: { $sum: '$amountPaise' } } },
@@ -388,7 +410,43 @@ export class PayoutsService {
   }
 
   /** Everyone we still owe, summed per person across projects (team + freelancers). */
+  // ── Older payment records ───────────────────────────────────────────────────────
+
+  /** Moves any older payment records into the ledger as soon as the API starts. */
+  onApplicationBootstrap(): void {
+    void this.ensureLegacyImported(true);
+  }
+
+  /**
+   * Money views only read the ledger, so older payment records still stored on projects would make
+   * everyone look unpaid. This imports them (idempotent) whenever any are found — on start-up, and
+   * again from money views, at most every 30s, so data written by a seed or an old app version is
+   * picked up without anyone having to press a button. Never throws: a failed import is logged and
+   * retried next time.
+   */
+  async ensureLegacyImported(force = false): Promise<void> {
+    if (this.importRun) return this.importRun;
+    if (!force && Date.now() - this.importCheckedAt < 30_000) return;
+    this.importCheckedAt = Date.now();
+    this.importRun = (async () => {
+      try {
+        const status = await this.importStatus();
+        if (!status.pending) return;
+        const owner = await this.users.findOne({ role: Role.OWNER, deletedAt: { $exists: false } }).select('_id').exec();
+        if (!owner) return;
+        const res = await this.importLegacy({ sub: String(owner._id) });
+        this.log.log(`Imported older payment records into the ledger: ${JSON.stringify(res)}`);
+      } catch (err) {
+        this.log.error(`Couldn't import older payment records: ${(err as Error).message}`);
+      } finally {
+        this.importRun = null;
+      }
+    })();
+    return this.importRun;
+  }
+
   async owed() {
+    await this.ensureLegacyImported();
     const projects = await this.projects
       .find({ deletedAt: { $exists: false } })
       .select('name members.userId members.amountPaise freelancers.freelancerId freelancers.agreedPaise')

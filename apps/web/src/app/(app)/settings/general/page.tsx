@@ -190,6 +190,9 @@ export default function GeneralSettingsPage() {
                   })}
                 </div>
               </FormField>
+              {/* With attendance switched off, "missing attendance = absent" would dock everyone's pay, so the
+                  option only shows when attendance is on, or while it's still ticked so it can be turned off. */}
+              {(FEATURES.attendance || v.treatMissingAttendanceAsAbsent) && (
               <label className="flex items-start gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -203,8 +206,14 @@ export default function GeneralSettingsPage() {
                     Off: only days marked absent are unpaid. On: past working days with no check-in or attendance record are also unpaid.
                     Future days are never counted.
                   </span>
+                  {!FEATURES.attendance && (
+                    <span className="mt-1 block text-xs font-medium text-destructive">
+                      Attendance isn&apos;t in use right now, so with this on every working day counts as unpaid. Untick it and save.
+                    </span>
+                  )}
                 </span>
               </label>
+              )}
             </CardContent>
           </Card>
 

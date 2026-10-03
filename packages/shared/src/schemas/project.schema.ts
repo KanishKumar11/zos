@@ -1,7 +1,7 @@
 // Project Zod schemas.
 import { z } from 'zod';
 
-import { ProjectMemberRole, ProjectStatus } from '../enums';
+import { PayoutMethod, ProjectMemberRole, ProjectStatus } from '../enums';
 import { isoDateSchema, objectIdSchema, optionalObjectIdSchema } from './common.schema';
 
 export const projectMemberInputSchema = z.object({
@@ -75,3 +75,38 @@ export const updateMilestoneSchema = z.object({
   invoiceId: objectIdSchema.optional(),
 }).refine((v) => Object.keys(v).length > 0, { message: 'no fields to update' });
 export type UpdateMilestoneInput = z.infer<typeof updateMilestoneSchema>;
+
+/** What happens to someone's agreed fee when they stop working on a project or it closes. */
+export const SETTLE_ACTIONS = ['PAY_REST', 'SETTLE_AT_PAID', 'KEEP_OWED'] as const;
+export type SettleAction = (typeof SETTLE_ACTIONS)[number];
+
+const settleFields = {
+  /** Date to record on a PAY_REST payment (yyyy-mm-dd). */
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
+  method: z.nativeEnum(PayoutMethod).optional(),
+  note: z.string().max(500).optional(),
+};
+
+/** OWNER: someone stops working on a project. Their history stays; their fee is settled one way. */
+export const releaseMemberSchema = z.object({
+  action: z.enum(SETTLE_ACTIONS),
+  ...settleFields,
+});
+export type ReleaseMemberInput = z.infer<typeof releaseMemberSchema>;
+
+/** OWNER: close a project — mark it done, optionally write off what the client won't pay, settle people. */
+export const closeProjectSchema = z.object({
+  writeOff: z.boolean().default(false),
+  people: z
+    .array(
+      z.object({
+        payeeType: z.enum(['MEMBER', 'FREELANCER']),
+        id: objectIdSchema,
+        action: z.enum(SETTLE_ACTIONS),
+      }),
+    )
+    .max(100)
+    .default([]),
+  ...settleFields,
+});
+export type CloseProjectInput = z.input<typeof closeProjectSchema>;

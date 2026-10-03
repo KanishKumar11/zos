@@ -8,6 +8,9 @@ export interface LogPaymentPrefill {
   freelancerId?: string;
   projectId?: string;
   amountPaise?: number;
+  /** A PayoutCategory value, e.g. 'STIPEND'. */
+  category?: string;
+  note?: string;
 }
 
 interface QuickActionsState {

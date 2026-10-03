@@ -3,6 +3,8 @@
 export const FEATURES = {
   leaves: false,
   time: false,
+  attendance: false,
+  tasks: false,
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;
@@ -11,6 +13,8 @@ export type FeatureKey = keyof typeof FEATURES;
 export const FEATURE_ROUTES: Record<FeatureKey, readonly string[]> = {
   leaves: ['/leaves'],
   time: ['/time'],
+  attendance: ['/attendance'],
+  tasks: ['/tasks'],
 };
 
 export const isFeatureRouteDisabled = (pathname: string): boolean =>

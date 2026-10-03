@@ -17,6 +17,8 @@ export enum PayoutCategory {
   ADVANCE = 'ADVANCE',
   BONUS = 'BONUS',
   REIMBURSEMENT = 'REIMBURSEMENT',
+  /** Intern stipend. */
+  STIPEND = 'STIPEND',
   OTHER = 'OTHER',
 }
 
@@ -33,5 +35,6 @@ export const PAYOUT_CATEGORY_LABEL: Record<PayoutCategory, string> = {
   ADVANCE: 'Advance',
   BONUS: 'Bonus',
   REIMBURSEMENT: 'Reimbursement',
+  STIPEND: 'Stipend',
   OTHER: 'Other',
 };

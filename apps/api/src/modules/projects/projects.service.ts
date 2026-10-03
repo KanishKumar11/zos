@@ -7,8 +7,15 @@ import { type FilterQuery, Model, Types } from 'mongoose';
 
 import {
   AuditAction,
+  PayeeType,
+  PayoutCategory,
+  PayoutMethod,
   ProjectMemberRole,
+  ProjectStatus,
   Role,
+  type CloseProjectInput,
+  type ReleaseMemberInput,
+  type SettleAction,
   type CreateProjectInput,
   type ListProjectsQuery,
   type ProjectFreelancerInput,
@@ -25,6 +32,7 @@ import { Freelancer, type FreelancerDocument } from '../freelancers/schemas/free
 import { Invoice, type InvoiceDocument } from '../invoices/schemas/invoice.schema';
 import { PayoutsService } from '../payouts/payouts.service';
 import { User, type UserDocument } from '../users/schemas/user.schema';
+import { settleOutcome } from './project-settle';
 import { Project, type ProjectDocument } from './schemas/project.schema';
 
 const OWNER_ONLY_FIELDS = ['clientId', 'clientBudgetPaise', 'agencyMarginPaise', 'currency', 'portalVisible'] as const;
@@ -33,6 +41,15 @@ interface Actor {
   sub: string;
   role: Role;
 }
+
+const SETTLE_WORDS: Record<SettleAction, string> = {
+  PAY_REST: 'paid what was still owed',
+  SETTLE_AT_PAID: 'settled at what was already paid',
+  KEEP_OWED: 'balance still owed',
+};
+
+/** Today's date in India as yyyy-mm-dd. */
+const istToday = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
 
 @Injectable()
 export class ProjectsService {
@@ -237,6 +254,120 @@ export class ProjectsService {
     return doc;
   }
 
+  // ── Leaving & closing (OWNER) ────────────────────────────────────────────────────
+
+  /**
+   * Someone stops working on a project. They stay on the list (marked as left) so their payments
+   * and fee still add up, and their fee is settled one of three ways:
+   *  PAY_REST — log a payment for whatever is still owed; SETTLE_AT_PAID — lower the agreed fee to
+   *  what they've been paid, so nothing is owed; KEEP_OWED — leave the balance outstanding.
+   */
+  async releaseMember(projectId: string, userId: string, input: ReleaseMemberInput, actor: Actor): Promise<ProjectDocument> {
+    const doc = await this.findOrThrow(projectId);
+    const member = doc.members.find((m) => m.userId.toString() === userId);
+    if (!member) throw new NotFoundException({ code: ErrorCodes.MEMBER_NOT_FOUND, message: 'Member not found on project' });
+    if (member.leftAt) throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'They are already off this project' });
+    const paid = await this.payouts.paidOnProject(doc._id as Types.ObjectId);
+    const settled = await this.settle(doc, PayeeType.MEMBER, userId, input.action, paid.members.get(userId) ?? 0, input, actor);
+    const fresh = await this.findOrThrow(projectId);
+    const m = fresh.members.find((x) => x.userId.toString() === userId);
+    if (m) {
+      m.leftAt = new Date();
+      if (settled.newAgreed !== undefined) m.amountPaise = settled.newAgreed;
+    }
+    fresh.markModified('members');
+    await fresh.save();
+    const user = await this.users.findById(userId).select('name').exec();
+    emitAudit(this.events, {
+      actorId: actor.sub,
+      action: AuditAction.MEMBER_RELEASED,
+      entity: 'project',
+      entityId: projectId,
+      summary: `${user?.name ?? 'A member'} stopped working on ${fresh.name} (${SETTLE_WORDS[input.action]})`,
+    });
+    return fresh;
+  }
+
+  /** Close a project: done, optionally write off what the client won't pay, and settle people's fees. */
+  async closeProject(projectId: string, input: CloseProjectInput, actor: Actor): Promise<ProjectDocument> {
+    const doc = await this.findOrThrow(projectId);
+    if (doc.closedAt) throw new ConflictException({ code: ErrorCodes.CONFLICT, message: 'This project is already closed' });
+    const paid = await this.payouts.paidOnProject(doc._id as Types.ObjectId);
+    const changes: { type: 'MEMBER' | 'FREELANCER'; id: string; newAgreed?: number }[] = [];
+    for (const p of input.people ?? []) {
+      const onProject =
+        p.payeeType === 'MEMBER'
+          ? doc.members.some((m) => m.userId.toString() === p.id)
+          : doc.freelancers.some((f) => f.freelancerId.toString() === p.id);
+      if (!onProject) continue; // removed meanwhile, nothing to settle
+      const already = p.payeeType === 'MEMBER' ? paid.members.get(p.id) : paid.freelancers.get(p.id);
+      const r = await this.settle(doc, p.payeeType as PayeeType, p.id, p.action, already ?? 0, input, actor);
+      changes.push({ type: p.payeeType, id: p.id, newAgreed: r.newAgreed });
+    }
+    const fresh = await this.findOrThrow(projectId);
+    for (const c of changes) {
+      if (c.newAgreed === undefined) continue;
+      if (c.type === 'MEMBER') {
+        const m = fresh.members.find((x) => x.userId.toString() === c.id);
+        if (m) m.amountPaise = c.newAgreed;
+      } else {
+        const f = fresh.freelancers.find((x) => x.freelancerId.toString() === c.id);
+        if (f) f.agreedPaise = c.newAgreed;
+      }
+    }
+    const now = new Date();
+    fresh.status = ProjectStatus.COMPLETED;
+    fresh.closedAt = now;
+    if (input.writeOff) fresh.writtenOffAt = now;
+    fresh.closeNote = input.note?.trim() ?? '';
+    fresh.markModified('members');
+    fresh.markModified('freelancers');
+    await fresh.save();
+    emitAudit(this.events, {
+      actorId: actor.sub,
+      action: AuditAction.PROJECT_CLOSED,
+      entity: 'project',
+      entityId: projectId,
+      summary: `Closed ${fresh.name}${input.writeOff ? ' and wrote off the rest of the budget' : ''}; settled ${changes.length} ${changes.length === 1 ? 'person' : 'people'}`,
+    });
+    return fresh;
+  }
+
+  /** Applies one settle action. Returns the new agreed fee when it changes (SETTLE_AT_PAID). */
+  private async settle(
+    doc: ProjectDocument,
+    type: PayeeType,
+    id: string,
+    action: SettleAction,
+    paidPaise: number,
+    opts: { paidAt?: string; method?: PayoutMethod; note?: string },
+    actor: Actor,
+  ): Promise<{ newAgreed?: number }> {
+    const agreed =
+      type === PayeeType.MEMBER
+        ? (doc.members.find((m) => m.userId.toString() === id)?.amountPaise ?? 0)
+        : (doc.freelancers.find((f) => f.freelancerId.toString() === id)?.agreedPaise ?? 0);
+    const outcome = settleOutcome(agreed, paidPaise, action);
+    if (outcome.payPaise > 0) {
+      await this.payouts.create(
+        {
+          payeeType: type,
+          userId: type === PayeeType.MEMBER ? id : undefined,
+          freelancerId: type === PayeeType.FREELANCER ? id : undefined,
+          projectId: String(doc._id),
+          amountPaise: outcome.payPaise,
+          currency: doc.currency || 'INR',
+          paidAt: opts.paidAt ?? istToday(),
+          method: opts.method ?? PayoutMethod.BANK,
+          category: PayoutCategory.PROJECT_FEE,
+          note: opts.note?.trim() || 'Settled in full',
+        },
+        actor,
+      );
+    }
+    return { newAgreed: outcome.newAgreed };
+  }
+
   // ── Freelancer deals ─────────────────────────────────────────────────────────────
 
   async addFreelancer(projectId: string, input: ProjectFreelancerInput, actor: Actor): Promise<ProjectDocument> {
@@ -433,7 +564,6 @@ export class ProjectsService {
     };
   }
 
-  /** Display names for a project's people (colleagues may always see each other's names). */
   /** Names of every member across a page of projects, in one query (no money). */
   async memberNames(docs: ProjectDocument[]): Promise<Map<string, string>> {
     const ids = [...new Set(docs.flatMap((d) => d.members.map((m) => String(m.userId))))];
@@ -456,6 +586,7 @@ export class ProjectsService {
     return Object.fromEntries(rows.filter((r): r is NonNullable<typeof r> => r !== null));
   }
 
+  /** Display names for a project's people (colleagues may always see each other's names). */
   async peopleNames(doc: ProjectDocument): Promise<{ users: Map<string, string>; freelancers: Map<string, string> }> {
     const [users, fls] = await Promise.all([
       this.users.find({ _id: { $in: doc.members.map((m) => m.userId) } }).select('name').exec(),

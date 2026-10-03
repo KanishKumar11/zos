@@ -80,8 +80,8 @@ const blank = (prefill: LogPaymentPrefill = {}, keep?: Partial<FormState>): Form
   paidAt: keep?.paidAt ?? todayLocal(),
   method: keep?.method ?? PayoutMethod.BANK,
   reference: '',
-  category: PayoutCategory.PROJECT_FEE,
-  note: '',
+  category: (prefill.category as PayoutCategory | undefined) ?? PayoutCategory.PROJECT_FEE,
+  note: prefill.note ?? '',
 });
 
 const splitPayee = (v: string): { type?: PayeeType; id?: string } => {

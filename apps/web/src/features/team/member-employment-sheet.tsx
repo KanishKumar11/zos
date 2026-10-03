@@ -24,6 +24,7 @@ interface Values {
   name: string;
   phone: string;
   dateOfJoining: string;
+  dateOfExit: string;
   departmentId: string;
   designationId: string;
   reportingManagerId: string;
@@ -33,6 +34,7 @@ const fromUser = (u: UserRow): Values => ({
   name: u.name,
   phone: u.phone ?? '',
   dateOfJoining: u.dateOfJoining ? toLocalDateInput(u.dateOfJoining) : '',
+  dateOfExit: u.dateOfExit ? toLocalDateInput(u.dateOfExit) : '',
   departmentId: u.departmentId ?? '',
   designationId: u.designationId ?? '',
   reportingManagerId: u.reportingManagerId ?? '',
@@ -99,6 +101,7 @@ export function MemberEmploymentSheet({
     if (v.name.trim() !== initial.name) body.name = v.name.trim();
     if (v.phone.trim() !== initial.phone && v.phone.trim()) body.phone = v.phone.trim();
     if (v.dateOfJoining !== initial.dateOfJoining) body.dateOfJoining = (v.dateOfJoining ? v.dateOfJoining : null) as never;
+    if (v.dateOfExit !== initial.dateOfExit) body.dateOfExit = (v.dateOfExit ? v.dateOfExit : null) as never;
     if (v.departmentId !== initial.departmentId) body.departmentId = v.departmentId || null;
     if (v.designationId !== initial.designationId) body.designationId = v.designationId || null;
     if (v.reportingManagerId !== initial.reportingManagerId) body.reportingManagerId = v.reportingManagerId || null;
@@ -146,6 +149,11 @@ export function MemberEmploymentSheet({
             <FormField label="Joining date" error={errors.dateOfJoining} hint="Payroll treats working days before this as unpaid.">
               <Input type="date" value={v.dateOfJoining} onChange={(e) => set('dateOfJoining', e.target.value)} />
             </FormField>
+            {(user.status === 'EXITED' || user.dateOfExit) && (
+              <FormField label="Last working day">
+                <Input type="date" value={v.dateOfExit} onChange={(e) => set('dateOfExit', e.target.value)} />
+              </FormField>
+            )}
             <FormField label="Department" error={errors.departmentId}>
               <Select value={v.departmentId} onChange={(e) => set('departmentId', e.target.value)}>
                 <option value="">Not set</option>

@@ -213,6 +213,15 @@ Rule: only the owner, and each client for their own company, ever see real price
 - [x] Search across invoices and freelancers (owner only) in the ⌘K palette.
 - [x] "Since your last visit" markers on payments, invoices and project updates.
 
+**E. Feedback round (2026-10-03)**
+- [x] Attendance and Tasks switched off (feature flags, like Leaves and Time); staff homes reworked to work without them; payroll's "missing attendance = absent" option hidden while attendance is off.
+- [x] Team list defaults to Active people ("All statuses" still available).
+- [x] Member page redesigned: profile sidebar + projects (with per-project pay for the owner), owed/earnings summary, payments, payslips.
+- [x] Offboarding: "Complete internship" / "Offboard" records last working day and reason, marks them exited, and can log a final payment (new Stipend category). "Rejoined" undoes it.
+- [x] "Stopped working on it" for a project member: they stay listed as left; their fee is paid in full, settled at what was paid, or kept owed.
+- [x] Close project: write off open invoices / unbilled budget, settle everyone's fee in one go, mark completed. New owner-only `POST /projects/:id/close` and `POST /projects/:id/members/:userId/release`.
+- [x] Sidebar: distinct dark-mode rail, owner "Log payment" button, unread count on Notifications, account card.
+
 ## Blockers
 - **pnpm can't install packages.** Windows Defender flags pnpm 9.7.0's own `pnpm.exe` shim (the version pinned in `package.json`) as potentially unwanted software. Until that's resolved on the machine, no new dependencies can be added (`sanitize-html` now, `cmdk` in Phase 1).
 - **Lint doesn't run.** ESLint 9 is installed but the repo still uses `.eslintrc.cjs`, so `pnpm lint` fails. This predates the current work. Fix it by migrating to `eslint.config.js` or pinning ESLint 8.

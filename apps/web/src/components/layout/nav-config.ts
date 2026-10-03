@@ -73,7 +73,7 @@ export const NAV: readonly NavSection[] = [
     label: 'Workspace',
     items: [
       { label: 'Dashboard', href: '/dashboard', icon: Home, allow: EVERYONE },
-      { label: 'My tasks', href: '/tasks', icon: ClipboardList, allow: EVERYONE },
+      { label: 'My tasks', href: '/tasks', icon: ClipboardList, allow: EVERYONE, feature: 'tasks' },
       { label: 'Projects', href: '/projects', icon: GanttChart, allow: EVERYONE },
       { label: 'Time', href: '/time', icon: Timer, allow: EVERYONE, feature: 'time' },
       { label: 'Announcements', href: '/announcements', icon: Megaphone, allow: EVERYONE },
@@ -88,7 +88,7 @@ export const NAV: readonly NavSection[] = [
     label: 'People',
     items: [
       { label: 'Team', href: '/team', icon: Users, allow: [Role.OWNER, Role.ADMIN, Role.LEAD] },
-      { label: 'Attendance', href: '/attendance', icon: CalendarCheck2, allow: EVERYONE },
+      { label: 'Attendance', href: '/attendance', icon: CalendarCheck2, allow: EVERYONE, feature: 'attendance' },
       { label: 'Leaves', href: '/leaves', icon: FileText, allow: EVERYONE, feature: 'leaves' },
       { label: 'Payroll', href: '/payroll', icon: Landmark, allow: [Role.OWNER] },
     ],

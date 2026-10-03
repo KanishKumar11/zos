@@ -3,7 +3,7 @@
 // still owed. Expand a row for the payments behind the number. `compact` is the overview snapshot.
 'use client';
 
-import { ChevronDown, ChevronRight, MoreHorizontal, Pencil, Plus, Send, UserMinus } from 'lucide-react';
+import { ChevronDown, ChevronRight, LogOut, MoreHorizontal, Pencil, Plus, Send, UserMinus } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
@@ -42,6 +42,7 @@ import {
   useUpdateProjectFreelancer,
   type ProjectRow,
 } from '../projects.hooks';
+import { ReleaseMemberDialog } from './release-member-dialog';
 
 export function PeoplePayments({ project, compact = false, onManage }: { project: ProjectRow; compact?: boolean; onManage?: () => void }) {
   const balances = useProjectPayoutBalances(project._id);
@@ -59,6 +60,7 @@ export function PeoplePayments({ project, compact = false, onManage }: { project
     { agreed: 0, paid: 0, pending: 0 },
   );
   const roleOf = useMemo(() => new Map(project.members.map((m) => [m.userId, m.role])), [project.members]);
+  const leftAtOf = useMemo(() => new Map(project.members.filter((m) => m.leftAt).map((m) => [m.userId, m.leftAt!])), [project.members]);
   const historyFor = (r: BalanceRow) =>
     (ledger.data?.items ?? []).filter((p) =>
       r.payeeType === PayeeType.MEMBER ? p.userId === r.payeeId : p.freelancerId === r.payeeId,
@@ -153,10 +155,11 @@ export function PeoplePayments({ project, compact = false, onManage }: { project
               r.payeeType === PayeeType.MEMBER
                 ? !roleOf.has(r.payeeId)
                 : !(project.freelancers ?? []).some((f) => f.freelancerId === r.payeeId);
+            const leftAt = r.payeeType === PayeeType.MEMBER ? leftAtOf.get(r.payeeId) : undefined;
             const over = r.agreedPaise > 0 && r.paidPaise > r.agreedPaise;
             const settled = r.agreedPaise > 0 && !over && r.pendingPaise === 0;
             return (
-              <li key={key} className={cn('rounded-xl border px-3 py-2.5', removed && 'opacity-70')}>
+              <li key={key} className={cn('rounded-xl border px-3 py-2.5', (removed || leftAt) && 'opacity-70')}>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                   {!compact && (
                     <button
@@ -185,6 +188,7 @@ export function PeoplePayments({ project, compact = false, onManage }: { project
                         roleOf.get(r.payeeId) && <span className="text-xs text-muted-foreground">· {roleLabel(roleOf.get(r.payeeId)!)}</span>
                       )}
                       {removed && <Badge variant="outline">Removed from project</Badge>}
+                      {leftAt && <Badge variant="muted">Left {formatDate(leftAt)}</Badge>}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
                       {removed ? (
@@ -245,7 +249,7 @@ export function PeoplePayments({ project, compact = false, onManage }: { project
                         {r.pendingPaise > 0 && <Price paise={r.pendingPaise} currency={cur} compact className="ml-1" />}
                       </Button>
                     )}
-                    {!compact && !removed && <RowMenu project={project} row={r} />}
+                    {!compact && !removed && <RowMenu project={project} row={r} left={!!leftAt} />}
                   </div>
                 </div>
                 {isOpen && (
@@ -360,8 +364,9 @@ function AgreedFeeCell({ project, row }: { project: ProjectRow; row: BalanceRow 
   );
 }
 
-function RowMenu({ project, row }: { project: ProjectRow; row: BalanceRow }) {
+function RowMenu({ project, row, left }: { project: ProjectRow; row: BalanceRow; left: boolean }) {
   const confirm = useConfirm();
+  const [releasing, setReleasing] = useState(false);
   const removeMember = useRemoveProjectMember();
   const removeFreelancer = useRemoveProjectFreelancer();
   const canSee = useCanSeePrices();
@@ -384,6 +389,8 @@ function RowMenu({ project, row }: { project: ProjectRow; row: BalanceRow }) {
   };
 
   return (
+    <>
+    {releasing && <ReleaseMemberDialog project={project} row={row} open={releasing} onOpenChange={setReleasing} />}
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" aria-label="More" className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
@@ -404,11 +411,17 @@ function RowMenu({ project, row }: { project: ProjectRow; row: BalanceRow }) {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        {row.payeeType === PayeeType.MEMBER && !left && (
+          <DropdownMenuItem onClick={() => setReleasing(true)}>
+            <LogOut className="mr-2 h-3.5 w-3.5" /> Stopped working on it…
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => void remove()}>
           <UserMinus className="mr-2 h-3.5 w-3.5" /> Remove from project
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   );
 }
 

@@ -34,6 +34,8 @@ export class ProjectMember {
   @Prop({ type: Number, default: 0 }) amountPaise!: number;
   /** Legacy embedded payments — moved into the payouts ledger by the import. Not written any more. */
   @Prop({ type: [MemberPaymentSchema], default: [] }) payments!: MemberPayment[];
+  /** Set when they stop working on the project. They stay listed so their history and pay add up. */
+  @Prop({ type: Date }) leftAt?: Date;
 }
 export const ProjectMemberSchema = SchemaFactory.createForClass(ProjectMember);
 
@@ -65,6 +67,11 @@ export class Project {
   @Prop({ type: [ProjectFreelancerSchema], default: [] }) freelancers!: ProjectFreelancer[];
   /** Shown in the client portal unless switched off. */
   @Prop({ default: true }) portalVisible!: boolean;
+  /** When the project was closed out (OWNER flow). */
+  @Prop({ type: Date }) closedAt?: Date;
+  /** OWNER-only: set when the rest of the client budget was written off at close-out. */
+  @Prop({ type: Date }) writtenOffAt?: Date;
+  @Prop({ default: '' }) closeNote!: string;
 
   // ---- OWNER-only financials (stripped by SerializeInterceptor for non-OWNERs) ----
   @Prop({ type: MS.Types.ObjectId, ref: 'Client', index: true }) clientId?: Types.ObjectId;

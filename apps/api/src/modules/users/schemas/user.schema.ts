@@ -61,6 +61,9 @@ export class User {
   @Prop({ type: MS.Types.ObjectId, ref: 'User' }) reportingManagerId?: Types.ObjectId;
 
   @Prop() dateOfJoining?: Date;
+  /** Last working day, set when someone leaves. */
+  @Prop() dateOfExit?: Date;
+  @Prop({ type: String }) exitReason?: string;
   @Prop() dateOfBirth?: Date;
 
   @Prop({ type: BankDetailsSchema }) bankDetails?: BankDetails;
