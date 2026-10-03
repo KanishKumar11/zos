@@ -34,6 +34,7 @@ interface Values {
   billingEmail: string;
   phone: string;
   website: string;
+  referredBy: string;
   paymentTermsDays: string;
   notes: string;
   contacts: ClientContactRow[];
@@ -48,6 +49,7 @@ const fromClient = (c?: ClientRow): Values => ({
   billingEmail: c?.billingEmail ?? '',
   phone: c?.phone ?? '',
   website: c?.website ?? '',
+  referredBy: c?.referredBy ?? '',
   paymentTermsDays: String(c?.paymentTermsDays ?? 15),
   notes: c?.notes ?? '',
   contacts: c?.contacts?.length ? c.contacts : [],
@@ -139,6 +141,7 @@ export function ClientFormDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             {f('name', 'Company name *', { autoFocus: true })}
             {f('website', 'Website', { placeholder: 'example.com' })}
+            {f('referredBy', 'Referred by', { placeholder: 'e.g. Kinjal Jain (Mending Mind)' })}
           </div>
 
           <div>

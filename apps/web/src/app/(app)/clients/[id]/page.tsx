@@ -829,6 +829,7 @@ function DetailsCard({ client: c, onEdit }: { client: ClientRow; onEdit: () => v
     ['Billing email', c.billingEmail],
     ['Phone', c.phone],
     ['Website', c.website],
+    ['Referred by', c.referredBy],
     ['Payment terms', c.paymentTermsDays === undefined ? undefined : c.paymentTermsDays === 0 ? 'Due on receipt' : `Net ${c.paymentTermsDays}`],
     ['CIN', c.cin],
   ];

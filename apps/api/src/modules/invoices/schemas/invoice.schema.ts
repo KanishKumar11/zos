@@ -50,6 +50,9 @@ export class Invoice {
   @Prop({ type: String }) pdfKey?: string;
   /** When it was first marked as sent — amounts are locked from then on. */
   @Prop({ type: Date }) sentAt?: Date;
+  /** When the invoice email last went to the client, and to whom. */
+  @Prop({ type: Date }) emailedAt?: Date;
+  @Prop({ type: [String], default: undefined }) emailedTo?: string[];
   /** Set once the overdue notification has gone out, so it fires once per invoice. Cleared when the due date moves. */
   @Prop({ type: Date }) overdueNotifiedAt?: Date;
   @Prop({ type: Date }) writtenOffAt?: Date;

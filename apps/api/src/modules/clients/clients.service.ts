@@ -44,7 +44,7 @@ export class ClientsService {
     const filter: Record<string, unknown> = { deletedAt: { $exists: false } };
     if (search?.trim()) {
       const re = new RegExp(escapeRe(search.trim()), 'i');
-      filter.$or = [{ name: re }, { gstin: re }, { 'contacts.name': re }, { 'contacts.email': re }, { billingEmail: re }];
+      filter.$or = [{ name: re }, { gstin: re }, { 'contacts.name': re }, { 'contacts.email': re }, { billingEmail: re }, { referredBy: re }];
     }
     return this.model.find(filter).sort({ name: 1 }).limit(1000).exec();
   }

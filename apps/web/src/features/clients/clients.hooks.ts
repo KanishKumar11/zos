@@ -42,6 +42,7 @@ export interface ClientRow {
   billingEmail?: string;
   phone?: string;
   website?: string;
+  referredBy?: string;
   paymentTermsDays?: number;
   contacts: ClientContactRow[];
   notes: string;

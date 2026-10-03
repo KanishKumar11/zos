@@ -23,6 +23,8 @@ export class Client {
   @Prop({ default: '' }) billingEmail!: string;
   @Prop({ default: '' }) phone!: string;
   @Prop({ default: '' }) website!: string;
+  /** Who referred this client — free text, shown as a column on the clients list. */
+  @Prop({ default: '', index: true }) referredBy!: string;
   /** Default due-date offset for new invoices (days after issue). */
   @Prop({ type: Number, default: 15 }) paymentTermsDays!: number;
   @Prop({ type: [ClientContactSchema], default: [] }) contacts!: ClientContact[];

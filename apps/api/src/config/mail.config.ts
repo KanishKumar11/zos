@@ -7,6 +7,8 @@ export interface MailConfig {
   user?: string;
   pass?: string;
   from: string;
+  invoiceAutoEmail: boolean;
+  invoiceCc?: string;
 }
 
 export default registerAs<MailConfig>('mail', () => ({
@@ -15,4 +17,6 @@ export default registerAs<MailConfig>('mail', () => ({
   user: process.env.SMTP_USER || undefined,
   pass: process.env.SMTP_PASS || undefined,
   from: process.env.SMTP_FROM ?? 'Agency Panel <noreply@agency.local>',
+  invoiceAutoEmail: process.env.INVOICE_AUTO_EMAIL === 'true',
+  invoiceCc: process.env.INVOICE_CC || process.env.SMTP_USER || undefined,
 }));
