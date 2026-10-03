@@ -27,6 +27,8 @@ export const createClientSchema = z.object({
   billingEmail: blank(z.string().trim().email('Enter a valid email')),
   phone: blank(z.string().max(40)),
   website: blank(z.string().max(200)),
+  /** Who referred this client (free text, e.g. "Kinjal Jain (Mending Mind)"). */
+  referredBy: blank(z.string().trim().max(200)),
   paymentTermsDays: z.preprocess((v) => (v === '' || v === null ? undefined : v), z.coerce.number().int().min(0).max(180).optional()),
   contacts: z.array(clientContactSchema).optional(),
   notes: blank(z.string().max(20_000)),

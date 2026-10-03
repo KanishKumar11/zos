@@ -34,7 +34,7 @@ const ID = {
   cSellercircle: oid(), cSWBuild: oid(), cShivAiTelerad: oid(),
   cEldeco: oid(), cArowai: oid(), cBroBuzz: oid(),
   cBitaminNaturals: oid(), cOnebox: oid(), cHostinger: oid(), cShivanand: oid(),
-  cPoonam: oid(), cOmniMedia: oid(),
+  cPoonam: oid(), cOmniMedia: oid(), cKrupali: oid(),
   // Invoices (explicit IDs for those referenced in milestones) — one invoice per milestone
   iFirstrank: oid(), iFirstrankM2: oid(), iFirstrankM3: oid(), iFirstrank2: oid(), iFirstrankM5: oid(), iFirstrankM6: oid(), iFirstrankM7: oid(),
   iHRBook: oid(), iHRBookM2: oid(), iHRBook2: oid(), iHRBookM4: oid(),
@@ -51,7 +51,7 @@ const ID = {
   iMendingMindPlatform: oid(), iMendingMindP2: oid(), iMendingMindP3: oid(),
   iMendingMindBalance: oid(), iBroBuzz: oid(),
   iOnebox: oid(), iOnebox2: oid(),
-  iSmishingM1: oid(), iSmishingM2: oid(),
+  iSmishingM1: oid(), iSmishingM2: oid(), iKrupaliKickoff: oid(),
   // Contracts
   cFoodyContract: oid(), cGessureContract: oid(), cMendingMindContract: oid(),
   cVelotraContract: oid(), cMrmvrContract: oid(), cMrmCleaningContract: oid(),
@@ -73,7 +73,7 @@ const ID = {
   pArowai: oid(), pBitaminNaturals: oid(), pDhawadaNGO: oid(),
   pHiristan: oid(), pSoulSurf: oid(), pResto: oid(),
   pMrVeg: oid(), pGPower: oid(), pSPNov25: oid(),
-  pGreenloop: oid(), pBlogyouneed: oid(), pSmishing: oid(), pMrmvr: oid(), pMendingMindMaint: oid(),
+  pGreenloop: oid(), pBlogyouneed: oid(), pSmishing: oid(), pMrmvr: oid(), pMendingMindMaint: oid(), pKrupali: oid(),
   // Milestones referenced by multi-project invoice line items
   msRealEstateM2Short: oid(), msRealEstateM3: oid(), msInnoWebsiteBalance: oid(),
 };
@@ -364,6 +364,7 @@ async function main() {
     mkClient(ID.cShivanand,      'Shivanand Kumar',         'Individual client — Blogyouneed website redesign'),
     mkClient(ID.cPoonam,         'Poonam Manna',            'Individual client — Smishing Analyzer. MSA ZLK-PM-MSA-001 dated 17 Aug 2026, signed 23 Aug 2026; no GST charged',
       [{ name: 'Poonam Manna', role: 'Client' }]),
+    { ...mkClient(ID.cKrupali,   'Krupali Bhanushali',      'Individual client — portfolio website (WordPress).'), referredBy: 'Kinjal Jain (Mending Mind)' },
     mkClient(ID.cOmniMedia,      'Omni Media Consulting (OPC) Pvt. Ltd.', 'Registered company — Mrmvr service page design work; monthly website maintenance for Mrmvr and MRM Cleaning Solutions from Sep 2026. GST-registered, but Zlaark bills without GST.', [],
       { gstin: '07AAECO3270F1ZM', cin: 'U63122DL2024OPC427857', address: 'E-2/11, 2nd Floor, Malviya Nagar, New Delhi - 110017' }),
   ]);
@@ -704,6 +705,11 @@ async function main() {
         { name: 'Acceptance (40%)', amountINR: 12000, status: 'PENDING', note: 'Payable on acceptance — final testing, deployment to the client domain and source handover' },
       ]),
     project(ID.pMrmvr, 'Mrmvr Service Page Design', 'MRMVR', ID.cOmniMedia, 'ACTIVE', '2026-09-10', null, [{ uid: ID.uKanish, role: L }, { uid: ID.uShivam, role: C, amountINR: 1500, paidINR: 0 }], 4500, 3000, 'Service page design changes for Mrmvr — ₹4,500, no GST charged. ₹1,500 to Shivam (not paid yet). Client invoice ZLK-2026-0061 collected Sep 16.'),
+    project(ID.pKrupali, 'Krupali Bhanushali Portfolio Website', 'KRUPALI-PORTFOLIO', ID.cKrupali, 'ACTIVE', '2026-10-03', null, [{ uid: ID.uKanish, role: L }, { uid: ID.uShivam, role: C }], 6000, 6000, 'Portfolio website in WordPress — ₹6,000 budget. Referred by Kinjal Jain of Mending Mind.',
+      [
+        { name: 'Kickoff',  amountINR: 2000, dueDate: '2026-10-10', status: 'INVOICED', invoiceId: ID.iKrupaliKickoff, note: 'Kickoff — invoiced Oct 3' },
+        { name: 'Balance',  amountINR: 4000, status: 'PENDING', note: 'Remaining ₹4,000 on delivery' },
+      ]),
   ]);
 
   // ── INVOICES (client → agency) ───────────────────────────────────────────────
@@ -1176,6 +1182,12 @@ async function main() {
   // free 2026 number without renumbering the invoices above.
   inv(ID.cHorizon, ID.pHRBook, 'HR Book HRMS Development — Milestone 4', 57500,
     [payment('2026-07-27', 57500, 'NEFT', 'Milestone 4')], '2026-07-27', 'PAID', undefined, ID.iHRBookM4);
+
+  // Krupali Bhanushali — portfolio website kickoff (₹2k of the ₹6k budget). Appended last so it
+  // takes the next free 2026 number without renumbering the invoices above.
+  inv(ID.cKrupali, ID.pKrupali, 'Portfolio Website (WordPress) — Kickoff', 2000,
+    [], '2026-10-03', 'SENT', undefined, ID.iKrupaliKickoff, '2026-10-10',
+    'Kickoff payment for the WordPress portfolio website (₹6,000 total). No GST charged on this invoice.');
 
   await db.collection('invoices').insertMany(invoices);
   console.log(`[full-seed] Inserted ${invoices.length} invoices`);

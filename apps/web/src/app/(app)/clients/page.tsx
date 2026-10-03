@@ -92,6 +92,15 @@ function OwnerClients() {
     },
     { id: 'gstin', header: 'GSTIN', cell: () => null, className: 'hidden', csv: (c) => c.gstin },
     {
+      id: 'referredBy',
+      header: 'Referred by',
+      sortable: true,
+      hideBelow: 'md',
+      sortValue: (c) => (c.referredBy ?? '').toLowerCase(),
+      cell: (c) => c.referredBy || <span className="text-muted-foreground">—</span>,
+      csv: (c) => c.referredBy ?? '',
+    },
+    {
       id: 'projects',
       header: 'Projects',
       align: 'right',
@@ -242,7 +251,7 @@ function OwnerClients() {
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <FilterBar className="flex-1">
-          <SearchFilter value={list.params.q} onChange={(q) => list.set({ q })} placeholder="Search name, GSTIN, contact" />
+          <SearchFilter value={list.params.q} onChange={(q) => list.set({ q })} placeholder="Search name, GSTIN, contact, referrer" />
           <SelectFilter
             value={list.params.show}
             onChange={(show) => list.set({ show })}
@@ -370,6 +379,7 @@ function ClientCard({ client: c, series }: { client: ClientRow; series: number[]
           <Users className="h-3.5 w-3.5" />
           {s?.portalUsers ? `${s.portalUsers} on portal` : 'No portal access'}
         </span>
+        {c.referredBy && <span>Referred by <span className="text-foreground">{c.referredBy}</span></span>}
         {s?.lastPaymentAt && <span>Paid {formatDate(s.lastPaymentAt, { day: 'numeric', month: 'short' })}</span>}
       </div>
     </Link>

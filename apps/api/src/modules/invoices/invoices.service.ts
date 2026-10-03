@@ -4,10 +4,12 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { type FilterQuery, Model, Types } from 'mongoose';
 
@@ -28,6 +30,7 @@ import { emitAudit, snapshot } from '@/common/utils/audit.util';
 
 import { Client, type ClientDocument } from '../clients/schemas/client.schema';
 import { Contract, type ContractDocument } from '../contracts/schemas/contract.schema';
+import { MailService } from '../mail/mail.service';
 import { PdfService } from '../pdf/pdf.service';
 import { Project, type ProjectDocument } from '../projects/schemas/project.schema';
 import { SettingsService } from '../settings/settings.service';
@@ -133,6 +136,8 @@ const idStr = (v: unknown): string | undefined => (v ? String(v) : undefined);
 
 @Injectable()
 export class InvoicesService {
+  private readonly logger = new Logger(InvoicesService.name);
+
   constructor(
     @InjectModel(Invoice.name) private readonly model: Model<InvoiceDocument>,
     @InjectModel(Client.name) private readonly clients: Model<ClientDocument>,
@@ -142,7 +147,10 @@ export class InvoicesService {
     private readonly pdf: PdfService,
     private readonly storage: StorageService,
     private readonly settings: SettingsService,
+    private readonly mail: MailService,
+    private readonly config: ConfigService,
   ) {}
+
 
   // ── Numbering ─────────────────────────────────────────────────────────────────
 
@@ -672,6 +680,7 @@ export class InvoicesService {
 
     this.audit(actor, AuditAction.INVOICE_UPDATED, doc, `${doc.number} edited`, before, snapshot(doc));
     this.statusAudit(actor, doc, fromStatus);
+    if (wantedStatus === InvoiceStatus.SENT && fromStatus === InvoiceStatus.DRAFT) void this.emailToClient(doc.id);
     return doc;
   }
 
@@ -700,7 +709,51 @@ export class InvoicesService {
     this.applyDerivedStatus(doc);
     await doc.save();
     this.statusAudit(actor, doc, from, 'marked as sent');
+    void this.emailToClient(doc.id);
     return doc;
+  }
+
+  /**
+   * Emails the invoice (PDF attached) to the client's billing email and every contact with an
+   * address, copying the owner. Runs only when INVOICE_AUTO_EMAIL=true, never blocks or fails the
+   * send, and skips invoices with nothing left to pay. Failures are logged and leave emailedAt unset.
+   */
+  async emailToClient(id: string): Promise<void> {
+    if (!this.config.get<boolean>('mail.invoiceAutoEmail')) return;
+    try {
+      const inv = await this.byId(id);
+      if (balanceOf(inv) <= 0) return;
+      const client = await this.clients.findById(inv.clientId).exec();
+      const seen = new Set<string>();
+      const to = [client?.billingEmail, ...(client?.contacts ?? []).map((c) => c.email)]
+        .map((e) => e?.trim())
+        .filter((e): e is string => !!e)
+        .filter((e) => (seen.has(e.toLowerCase()) ? false : (seen.add(e.toLowerCase()), true)));
+      if (!to.length) {
+        this.logger.warn(`${inv.number}: not emailed — ${client?.name ?? 'client'} has no billing email or contact email`);
+        return;
+      }
+      const settings = await this.settings.get();
+      const pdf = await this.invoicePdf(id);
+      const money = (paise: number) =>
+        new Intl.NumberFormat('en-IN', { style: 'currency', currency: inv.currency || 'INR' }).format(paise / 100);
+      await this.mail.sendInvoice({
+        to,
+        cc: this.config.get<string>('mail.invoiceCc'),
+        agencyName: settings.workspaceName,
+        clientName: client?.name ?? 'there',
+        number: inv.number,
+        totalLabel: money(inv.totalPaise),
+        balanceLabel: money(balanceOf(inv)),
+        dueLabel: inv.dueDate ? inv.dueDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' }) : undefined,
+        notes: inv.notes,
+        pdf: { filename: pdf.filename, content: pdf.buffer },
+      });
+      await this.model.updateOne({ _id: inv._id }, { $set: { emailedAt: new Date(), emailedTo: to } }).exec();
+      this.logger.log(`${inv.number} emailed to ${to.join(', ')}`);
+    } catch (err) {
+      this.logger.error(`Couldn't email invoice ${id}: ${(err as Error).message}`);
+    }
   }
 
   /** Close an issued invoice that won't be paid. Terminal until reopened. */
