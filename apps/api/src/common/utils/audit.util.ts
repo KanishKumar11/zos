@@ -26,3 +26,21 @@ export function emitAudit(events: EventEmitter2, e: AuditEvent): void {
 /** Plain JSON of a mongoose doc (or passthrough) for before/after snapshots. */
 export const snapshot = (doc: unknown): unknown =>
   doc && typeof (doc as { toJSON?: unknown }).toJSON === 'function' ? (doc as { toJSON: () => unknown }).toJSON() : doc;
+
+/**
+ * Only the top-level fields that changed between two snapshots — keeps audit entries small and
+ * stops whole documents (with every price on them) being copied into the log.
+ */
+export function diffSnapshot(before: unknown, after: unknown): { before: Record<string, unknown>; after: Record<string, unknown> } {
+  const b = (snapshot(before) ?? {}) as Record<string, unknown>;
+  const a = (snapshot(after) ?? {}) as Record<string, unknown>;
+  const out = { before: {} as Record<string, unknown>, after: {} as Record<string, unknown> };
+  for (const key of new Set([...Object.keys(b), ...Object.keys(a)])) {
+    if (key === 'updatedAt' || key === '__v') continue;
+    if (JSON.stringify(b[key]) !== JSON.stringify(a[key])) {
+      out.before[key] = b[key];
+      out.after[key] = a[key];
+    }
+  }
+  return out;
+}

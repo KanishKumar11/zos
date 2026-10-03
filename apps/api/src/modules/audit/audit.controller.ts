@@ -1,9 +1,11 @@
-// Audit controller — OWNER + ADMIN read-only.
+// Audit controller — OWNER + ADMIN read-only. Admins get a money-free view (see audit.presenter.ts).
 import { Controller, Get, Query } from '@nestjs/common';
 
 import { AuditAction, Role, paginationQuerySchema, type PaginationQuery } from '@agency/shared';
 
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
+import type { JwtPayload } from '@/common/interfaces/jwt-payload.interface';
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe';
 
 import { AuditService } from './audit.service';
@@ -15,6 +17,7 @@ export class AuditController {
 
   @Get()
   list(
+    @CurrentUser() viewer: JwtPayload,
     @Query(new ZodValidationPipe(paginationQuerySchema)) pagination: PaginationQuery,
     @Query('entity') entity?: string,
     @Query('entityId') entityId?: string,
@@ -31,11 +34,11 @@ export class AuditController {
       action: validAction,
       from: from || undefined,
       to: to || undefined,
-    });
+    }, viewer.role);
   }
 
   @Get('entities')
-  entities() {
-    return this.svc.entities();
+  entities(@CurrentUser() viewer: JwtPayload) {
+    return this.svc.entities(viewer.role);
   }
 }

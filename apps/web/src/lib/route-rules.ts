@@ -8,8 +8,9 @@ interface RouteRule {
 
 // Most specific prefix first — ruleForPath returns the first match.
 export const ROUTE_RULES: readonly RouteRule[] = [
+  // Pay is owner-only (plus each person's own, under /earnings).
   { prefix: '/payroll/payslips', allow: [Role.LEAD, Role.MEMBER, Role.INTERN, Role.OWNER, Role.ADMIN] },
-  { prefix: '/payroll', allow: [Role.OWNER, Role.ADMIN] },
+  { prefix: '/payroll', allow: [Role.OWNER] },
   { prefix: '/clients', allow: [Role.OWNER] },
   { prefix: '/crm', allow: [Role.OWNER] },
   { prefix: '/invoices', allow: [Role.OWNER] },
@@ -37,6 +38,13 @@ export const homeForRole = (role: Role | string | null | undefined): string =>
 export const isPortalPath = (pathname: string): boolean =>
   pathname === '/portal' || pathname.startsWith('/portal/');
 
+/** Paths matched by pattern rather than prefix (checked first). */
+const PATTERN_RULES: readonly { test: RegExp; allow: readonly Role[] }[] = [
+  { test: /^\/team\/[^/]+\/compensation(\/|$)/, allow: [Role.OWNER] },
+];
+
 export function ruleForPath(pathname: string): RouteRule | undefined {
+  const pattern = PATTERN_RULES.find((r) => r.test.test(pathname));
+  if (pattern) return { prefix: pathname, allow: pattern.allow };
   return ROUTE_RULES.find((r) => pathname === r.prefix || pathname.startsWith(`${r.prefix}/`));
 }

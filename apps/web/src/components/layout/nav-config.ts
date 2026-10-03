@@ -90,7 +90,7 @@ export const NAV: readonly NavSection[] = [
       { label: 'Team', href: '/team', icon: Users, allow: [Role.OWNER, Role.ADMIN, Role.LEAD] },
       { label: 'Attendance', href: '/attendance', icon: CalendarCheck2, allow: EVERYONE },
       { label: 'Leaves', href: '/leaves', icon: FileText, allow: EVERYONE, feature: 'leaves' },
-      { label: 'Payroll', href: '/payroll', icon: Landmark, allow: [Role.OWNER, Role.ADMIN] },
+      { label: 'Payroll', href: '/payroll', icon: Landmark, allow: [Role.OWNER] },
     ],
   },
   {

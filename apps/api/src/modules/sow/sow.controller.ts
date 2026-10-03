@@ -41,8 +41,8 @@ export class SowController {
 
   /** Read-only brief, available to any authenticated user (typically project members). */
   @Get(':id/brief')
-  brief(@Param('id', ObjectIdPipe) id: string) {
-    return this.svc.getBrief(id);
+  brief(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.getBrief(id, user);
   }
 
   @Roles(Role.OWNER)

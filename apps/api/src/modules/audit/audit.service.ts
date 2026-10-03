@@ -4,12 +4,13 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { type FilterQuery, Model, Types } from 'mongoose';
 
-import { AuditAction, EVENT_NAMES } from '@agency/shared';
+import { AuditAction, EVENT_NAMES, Role } from '@agency/shared';
 
 import type { PaginationDto } from '@/common/dto/pagination.dto';
 import { paginate, type Paginated } from '@/common/utils/pagination.util';
 
 import { User, type UserDocument } from '../users/schemas/user.schema';
+import { MONEY_ENTITIES, nonOwnerExclusion, presentAuditEntry } from './audit.presenter';
 import { AuditLog, type AuditLogDocument } from './schemas/audit-log.schema';
 
 export interface AuditWriteInput {
@@ -63,8 +64,13 @@ export class AuditService {
   }
 
   /** Paginated entries, newest first, with actor names (and person names for user entities) resolved. */
-  async list(pagination: PaginationDto, filter: AuditListFilter = {}): Promise<Paginated<Record<string, unknown>>> {
-    const query: FilterQuery<AuditLogDocument> = {};
+  async list(
+    pagination: PaginationDto,
+    filter: AuditListFilter = {},
+    viewerRole: Role = Role.OWNER,
+  ): Promise<Paginated<Record<string, unknown>>> {
+    // Non-owners never get money entries; the rest are redacted by presentAuditEntry below.
+    const query: FilterQuery<AuditLogDocument> = viewerRole === Role.OWNER ? {} : nonOwnerExclusion();
     // Entity names were written in mixed case over time ("Invoice" vs "invoice") — match either.
     if (filter.entity) query.entity = new RegExp(`^${escapeRe(filter.entity)}$`, 'i');
     if (filter.entityId) query.entityId = filter.entityId;
@@ -103,20 +109,21 @@ export class AuditService {
 
     const items = docs.map((d) => {
       const actorId = d.actorId ? String(d.actorId) : undefined;
-      return {
+      return presentAuditEntry({
         ...d,
         actorId,
         actorName: actorId ? (nameOf.get(actorId) ?? 'Deleted user') : undefined,
         entityName:
           d.entity?.toLowerCase() === 'user' && d.entityId ? (nameOf.get(d.entityId) ?? 'Deleted user') : undefined,
-      };
+      } as Record<string, unknown>, viewerRole);
     });
     return paginate(items, total, pagination);
   }
 
   /** Distinct entity names, for the filter dropdown. */
-  async entities(): Promise<string[]> {
+  async entities(viewerRole: Role = Role.OWNER): Promise<string[]> {
     const raw = (await this.model.distinct('entity').exec()) as string[];
-    return [...new Set(raw.map((e) => e.toLowerCase()))].sort();
+    const names = [...new Set(raw.map((e) => e.toLowerCase()))].sort();
+    return viewerRole === Role.OWNER ? names : names.filter((n) => !(MONEY_ENTITIES as readonly string[]).includes(n));
   }
 }

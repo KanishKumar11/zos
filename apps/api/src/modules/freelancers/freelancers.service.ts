@@ -7,7 +7,7 @@ import { Model, Types } from 'mongoose';
 import { AuditAction, PayeeType, type FreelancerInput, type UpdateFreelancerInput } from '@agency/shared';
 
 import { ErrorCodes } from '@/common/constants/error-codes';
-import { emitAudit, snapshot } from '@/common/utils/audit.util';
+import { diffSnapshot, emitAudit, snapshot } from '@/common/utils/audit.util';
 
 import { PayoutsService } from '../payouts/payouts.service';
 import { Payout, type PayoutDocument } from '../payouts/schemas/payout.schema';
@@ -101,8 +101,7 @@ export class FreelancersService {
       action: AuditAction.FREELANCER_UPDATED,
       entity: 'freelancer',
       entityId: id,
-      before,
-      after: snapshot(doc),
+      ...diffSnapshot(before, doc),
     });
     return doc;
   }

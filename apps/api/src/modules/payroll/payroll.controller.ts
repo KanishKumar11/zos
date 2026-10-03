@@ -1,4 +1,4 @@
-// Payroll controller — OWNER+ADMIN can manage runs; employees can view own payslips.
+// Payroll controller — OWNER only (pay is owner-and-self only); employees can view their own released payslips.
 import { Body, Controller, Delete, ForbiddenException, Get, Param, ParseIntPipe, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 
@@ -26,25 +26,25 @@ import { PayrollService } from './payroll.service';
 export class PayrollController {
   constructor(private readonly svc: PayrollService) {}
 
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @Get('runs')
   list() {
     return this.svc.list();
   }
 
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @Get('runs/:id')
   byId(@Param('id', ObjectIdPipe) id: string) {
     return this.svc.byId(id);
   }
 
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @Get('runs/:id/payslips')
   payslips(@Param('id', ObjectIdPipe) id: string) {
     return this.svc.payslipsFor(id);
   }
 
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @Post('runs')
   create(
     @CurrentUser() user: JwtPayload,
@@ -53,13 +53,13 @@ export class PayrollController {
     return this.svc.create(body, user.sub);
   }
 
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @Post('runs/:id/recompute')
   recompute(@Param('id', ObjectIdPipe) id: string) {
     return this.svc.recompute(id);
   }
 
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @Post('runs/:id/finalize')
   finalize(
     @Param('id', ObjectIdPipe) id: string,
@@ -69,7 +69,7 @@ export class PayrollController {
     return this.svc.finalize(id, user.sub, body);
   }
 
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @Post('runs/:id/mark-paid')
   markPaid(
     @Param('id', ObjectIdPipe) id: string,
@@ -98,15 +98,15 @@ export class PayrollController {
     return this.svc.myPayslips(user.sub, { releasedOnly: true });
   }
 
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @Get('users/:userId/payslips')
   forUser(@Param('userId', ObjectIdPipe) userId: string) {
     return this.svc.myPayslips(userId);
   }
 
-  // -- Adjustments (OWNER/ADMIN, only when run is DRAFT) ---------------------
+  // -- Adjustments (OWNER, only when run is DRAFT) ---------------------------
 
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @Post('payslips/:id/adjustments')
   addAdjustment(
     @Param('id', ObjectIdPipe) id: string,
@@ -115,7 +115,7 @@ export class PayrollController {
     return this.svc.addAdjustment(id, body);
   }
 
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @Delete('payslips/:id/adjustments/:idx')
   removeAdjustment(
     @Param('id', ObjectIdPipe) id: string,
@@ -124,7 +124,7 @@ export class PayrollController {
     return this.svc.removeAdjustment(id, idx);
   }
 
-  // -- PDF download (OWNER+ADMIN, or self) -----------------------------------
+  // -- PDF download (OWNER, or the person themselves once released) ----------
 
   @Get('payslips/:id/pdf')
   async pdf(
@@ -138,10 +138,10 @@ export class PayrollController {
       res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Payslip not found' } });
       return;
     }
-    const allowed = user.role === Role.OWNER || user.role === Role.ADMIN || slip.userId.toString() === user.sub;
+    const allowed = user.role === Role.OWNER || slip.userId.toString() === user.sub;
     if (!allowed) throw new ForbiddenException();
     // People only get their own payslip once the run is finalized (drafts can still change).
-    if (user.role !== Role.OWNER && user.role !== Role.ADMIN && !(await this.svc.isReleased(slip.runId.toString()))) {
+    if (user.role !== Role.OWNER && !(await this.svc.isReleased(slip.runId.toString()))) {
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'This payslip is not final yet' });
     }
     const { buffer, filename } = await this.svc.payslipPdf(id);

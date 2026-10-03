@@ -244,7 +244,7 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
         </>
       )}
 
-      {canManage && <MemberPayslips userId={id} />}
+      {me?.role === Role.OWNER && <MemberPayslips userId={id} />}
 
       {me?.role === Role.OWNER && (
         <Card>

@@ -243,7 +243,14 @@ export class DashboardService {
         userId: new Types.ObjectId(userId),
         status: LeaveStatus.PENDING,
       }),
-      this.payslips.findOne({ userId: new Types.ObjectId(userId) }).sort({ createdAt: -1 }).exec(),
+      // Only released pay (finalized/paid runs) — drafts can still change.
+      this.runs
+        .find({ status: { $in: ['FINALIZED', 'PAID'] } })
+        .distinct('_id')
+        .exec()
+        .then((runIds) =>
+          this.payslips.findOne({ userId: new Types.ObjectId(userId), runId: { $in: runIds } }).sort({ createdAt: -1 }).exec(),
+        ),
     ]);
     return {
       openTasks,

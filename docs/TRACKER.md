@@ -181,6 +181,34 @@ Frontend
 - Dashboard rebuilt (owner and team versions); profit now counts team + freelancer payouts and gross payroll, revenue excludes GST.
 - Notifications inbox: unread filter, click-through, per-item mark read; shared with the portal.
 
+## Phase 6: Bold redesign & strict price privacy
+
+Rule: only the owner, and each client for their own company, ever see real prices. Team members see only their own pay.
+
+**A. Privacy lockdown**
+- [x] Payroll is owner-only (API and web). Staff see only their own released payslips under My earnings.
+- [x] Audit log: admins get a money-free view. Money entities and actions are hidden, amount keys are stripped, and currency figures in summaries become "an amount". Project and freelancer entries store only the fields that changed.
+- [x] Offer letters and contracts (which mention pay): owner and the person themselves only. Every admin user endpoint goes through `presentUser`, so no bank details leak.
+- [x] Dashboard "last payslip" shows released pay only. The SOW team brief is limited to project members.
+- [x] Role-matrix test: every money endpoint must be owner-only. Plus audit-redaction tests. 75 API tests passing.
+- [x] Web: Payroll and compensation routes are owner-only. New `<Price>` component renders amounts only for the owner, a client, or the viewer's own pay.
+
+**B. Design language** (Zlaark brand: orange `#f85f00`, the real logo and mark from `zlaark-brand-kit`)
+- [x] Brand files in `apps/web/public/brand/`, and the favicon from the brand icon.
+- [x] Design preview of 4 screens published for sign-off: https://claude.ai/artifact/M4edvaFHiXz1wYutyxiBRJ
+- [ ] Tokens, fonts and the `components/viz/*` building blocks (after sign-off).
+
+**C. Per-person redesign**
+- [ ] Owner pages.
+- [ ] Project & client pages.
+- [ ] Team & admin pages.
+- [ ] Client portal & team-member home.
+
+**D. Extras**
+- [ ] Keyboard shortcuts.
+- [ ] Search across invoices and freelancers.
+- [ ] "Since your last visit" markers.
+
 ## Blockers
 - **pnpm can't install packages.** Windows Defender flags pnpm 9.7.0's own `pnpm.exe` shim (the version pinned in `package.json`) as potentially unwanted software. Until that's resolved on the machine, no new dependencies can be added (`sanitize-html` now, `cmdk` in Phase 1).
 - **Lint doesn't run.** ESLint 9 is installed but the repo still uses `.eslintrc.cjs`, so `pnpm lint` fails. This predates the current work. Fix it by migrating to `eslint.config.js` or pinning ESLint 8.
@@ -201,6 +229,7 @@ Frontend
 - Click through each phase in the running app (`pnpm dev`) as Owner, Member and Client, with screenshots at desktop and phone width.
 
 ## Changelog
+- **2026-10-03**: Removed malware hidden in `apps/web/postcss.config.mjs` (present in git history since May; see chat). Phase 6 started: price-privacy lockdown done, design preview published.
 - **2026-10-02**: Phase 5 done. All five phases complete. `tsc --noEmit` clean for web and api; 54 API unit tests pass (presenters, client-deny guard, storage access, portal scoping, invoice rules, payroll LOP/adjustments, expense repeat dates). Not yet run against a live database.
 - **2026-10-02**: Phases 1–4 built: UI kit + refined look, payments ledger + freelancer directory, team earnings view, client portal. Both apps typecheck. Phase 5 page rollout in progress.
 - **2026-10-02**: Combined retainer invoices. Invoice lines can link a contract (`lineItems.contractId`), and the dashboard's "Action required" groups due contracts by client into one invoice (`POST /contracts/generate-client-invoice`). Contract pages count only their own lines of a combined invoice. Contract invoices now use the same max+1 numbering as manual ones and UTC month bounds. Invoice PDFs that run slightly over A4 shrink to fit one page (`PdfService.renderPdf(html, { fitOnePage })`, never below 82%).

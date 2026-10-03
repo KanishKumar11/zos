@@ -18,7 +18,7 @@ import {
 } from '@agency/shared';
 
 import { ErrorCodes } from '@/common/constants/error-codes';
-import { emitAudit, snapshot } from '@/common/utils/audit.util';
+import { diffSnapshot, emitAudit, snapshot } from '@/common/utils/audit.util';
 import { Paginated, paginate } from '@/common/utils/pagination.util';
 
 import { Freelancer, type FreelancerDocument } from '../freelancers/schemas/freelancer.schema';
@@ -128,8 +128,7 @@ export class ProjectsService {
       action: AuditAction.PROJECT_UPDATED,
       entity: 'project',
       entityId: id,
-      before,
-      after: snapshot(doc),
+      ...diffSnapshot(before, doc),
     });
     return doc;
   }

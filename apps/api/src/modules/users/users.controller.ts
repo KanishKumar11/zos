@@ -28,6 +28,9 @@ import { encrypt, maskAccount } from '@/common/utils/crypto.util';
 import { presentUser, presentUsers } from './users.presenter';
 import { UsersService } from './users.service';
 
+/** Document kinds that state someone's pay — owner and the person themselves only. */
+const PAY_DOCUMENT_KINDS = ['OFFER_LETTER', 'CONTRACT'];
+
 @Controller('users')
 export class UsersController {
   constructor(private readonly svc: UsersService) {}
@@ -122,7 +125,7 @@ export class UsersController {
     @CurrentUser() actor: JwtPayload,
     @Body(new ZodValidationPipe(userDocumentInputSchema)) body: UserDocumentInput,
   ) {
-    return this.svc.addDocument(id, body, actor.sub);
+    return this.svc.addDocument(id, body, actor.sub).then((u) => presentUser(u, actor));
   }
 
   @Roles(Role.OWNER, Role.ADMIN)
@@ -130,19 +133,31 @@ export class UsersController {
   removeDocument(
     @Param('id', ObjectIdPipe) id: string,
     @Param('docId') docId: string,
+    @CurrentUser() actor: JwtPayload,
   ) {
-    return this.svc.removeDocument(id, docId);
+    return this.svc.removeDocument(id, docId).then((u) => presentUser(u, actor));
   }
 
-  /** Self or OWNER/ADMIN can fetch a presigned URL for a doc. */
+  /**
+   * Self or OWNER/ADMIN can fetch a presigned URL for a doc — except offer letters and contracts,
+   * which state pay, so only the owner and the person themselves may open those.
+   */
   @Get(':id/documents/:docId/url')
-  docUrl(
+  async docUrl(
     @Param('id', ObjectIdPipe) id: string,
     @Param('docId') docId: string,
     @CurrentUser() actor: JwtPayload,
   ) {
-    if (id !== actor.sub && actor.role !== Role.OWNER && actor.role !== Role.ADMIN) {
+    const isSelf = id === actor.sub;
+    if (!isSelf && actor.role !== Role.OWNER && actor.role !== Role.ADMIN) {
       throw new ForbiddenException();
+    }
+    if (!isSelf && actor.role === Role.ADMIN) {
+      const user = await this.svc.findByIdOrThrow(id);
+      const doc = user.documents.find((d) => String((d as unknown as { _id: unknown })._id) === docId);
+      if (doc && PAY_DOCUMENT_KINDS.includes(doc.kind)) {
+        throw new ForbiddenException({ code: 'OWNER_ONLY', message: 'Offer letters and contracts mention pay — only the owner can open them' });
+      }
     }
     return this.svc.signedDocumentUrl(id, docId);
   }
@@ -153,9 +168,10 @@ export class UsersController {
   @Patch(':id/onboarding')
   setOnboarding(
     @Param('id', ObjectIdPipe) id: string,
+    @CurrentUser() actor: JwtPayload,
     @Body(new ZodValidationPipe(onboardingPatchSchema)) body: OnboardingPatchInput,
   ) {
-    return this.svc.setOnboarding(id, body);
+    return this.svc.setOnboarding(id, body).then((u) => presentUser(u, actor));
   }
 
   /** Self may toggle their own onboarding items. */
@@ -168,6 +184,6 @@ export class UsersController {
     if (id !== actor.sub && actor.role !== Role.OWNER && actor.role !== Role.ADMIN) {
       throw new ForbiddenException();
     }
-    return this.svc.toggleOnboardingItem(id, idx);
+    return this.svc.toggleOnboardingItem(id, idx).then((u) => presentUser(u, actor));
   }
 }

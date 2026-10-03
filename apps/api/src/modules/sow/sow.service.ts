@@ -1,5 +1,5 @@
 // SowService — OWNER-only resource.
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -137,8 +137,16 @@ export class SowService {
     return doc;
   }
 
-  async getBrief(id: string): Promise<SowDocument['brief']> {
+  /** The team brief — owner/admin, or people on the SOW's project. Never exposes the SOW's money. */
+  async getBrief(id: string, viewer: { sub: string; role: string }): Promise<SowDocument['brief']> {
     const doc = await this.byId(id);
+    if (viewer.role !== 'OWNER' && viewer.role !== 'ADMIN') {
+      const project = doc.projectId
+        ? await this.projects.findOne({ _id: doc.projectId, deletedAt: { $exists: false } }).select('members.userId').lean().exec()
+        : null;
+      const onProject = project?.members?.some((m) => String(m.userId) === viewer.sub);
+      if (!onProject) throw new ForbiddenException({ code: ErrorCodes.FORBIDDEN, message: "You're not on this project" });
+    }
     if (!doc.brief) {
       throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Brief not published yet' });
     }
