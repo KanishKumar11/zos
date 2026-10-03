@@ -32,6 +32,10 @@ export const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().min(1),
+  /** 'true' → email the client (PDF attached) whenever an invoice is marked Sent. Off unless set. */
+  INVOICE_AUTO_EMAIL: z.enum(['true', 'false']).optional(),
+  /** Copied on every invoice email. Defaults to SMTP_USER. */
+  INVOICE_CC: z.string().optional(),
 
   S3_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().min(1).default('us-east-1'),
