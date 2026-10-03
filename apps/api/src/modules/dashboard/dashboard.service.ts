@@ -5,6 +5,7 @@ import { Model, Types } from 'mongoose';
 
 import { InvoiceStatus, LeaveStatus, TaskStatus } from '@agency/shared';
 
+import { Client, type ClientDocument } from '../clients/schemas/client.schema';
 import { Expense, type ExpenseDocument } from '../expenses/schemas/expense.schema';
 import { Income, type IncomeDocument } from '../income/schemas/income.schema';
 import { Invoice, type InvoiceDocument } from '../invoices/schemas/invoice.schema';
@@ -23,6 +24,7 @@ import { Project, type ProjectDocument } from '../projects/schemas/project.schem
 import { Sow, type SowDocument } from '../sow/schemas/sow.schema';
 import { Task, type TaskDocument } from '../tasks/schemas/task.schema';
 import { User, type UserDocument } from '../users/schemas/user.schema';
+import { agingSummary, buildInflows, projectShare, type FlowSource } from './dashboard.cockpit';
 
 /** Per-document net expense (gross amountPaise less any team-member contributions recovered via payroll). */
 const NET_EXPENSE_EXPR = { $subtract: ['$amountPaise', { $sum: '$contributions.amountPaise' }] };
@@ -72,6 +74,7 @@ export class DashboardService {
     @InjectModel(Income.name) private readonly income: Model<IncomeDocument>,
     @InjectModel(Payout.name) private readonly payouts: Model<PayoutDocument>,
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
+    @InjectModel(Client.name) private readonly clients: Model<ClientDocument>,
   ) {}
 
   private monthKey(d: Date): string {
@@ -373,6 +376,199 @@ export class DashboardService {
     const payrollReminder = !currentRun ? { month: currentMonthStr } : null;
 
     return { birthdays, payrollReminder };
+  }
+
+  // ── Command centre (OWNER) ───────────────────────────────────────────────────────
+
+  /** Collected per client in [from, to), net of GST — the same revenue definition as owner(). */
+  private async revenueByClient(from: Date, to?: Date): Promise<FlowSource[]> {
+    const rows = await this.invoices
+      .aggregate<{ _id: Types.ObjectId | null; v: number }>([
+        { $match: { deletedAt: { $exists: false } } },
+        { $unwind: '$payments' },
+        { $match: { 'payments.paidAt': { $gte: from, ...(to ? { $lt: to } : {}) } } },
+        { $group: { _id: '$clientId', v: { $sum: NET_OF_TAX_EXPR } } },
+      ])
+      .exec();
+    const ids = rows.map((r) => r._id).filter((id): id is Types.ObjectId => !!id);
+    const names = new Map(
+      (await this.clients.find({ _id: { $in: ids } }).select('name').lean().exec()).map((c) => [c._id.toString(), c.name as string]),
+    );
+    return rows.map((r) => {
+      const key = r._id ? r._id.toString() : 'unknown';
+      return { key, label: names.get(key) ?? 'Deleted client', paise: Math.round(r.v) };
+    });
+  }
+
+  private async flowFor(from: Date, to: Date | undefined, payrollMonth: Record<string, unknown>, label: string) {
+    const [byClient, otherIncome, team, freelancers, payroll, expenses] = await Promise.all([
+      this.revenueByClient(from, to),
+      this.incomeTotal(from, to),
+      this.payoutTotal(from, to, 'MEMBER'),
+      this.payoutTotal(from, to, 'FREELANCER'),
+      this.payrollCost(payrollMonth),
+      this.expenseTotal(from, to),
+    ]);
+    const outPaise = team + freelancers + payroll + expenses;
+    const revenue = byClient.reduce((s, c) => s + c.paise, 0);
+    const inPaise = revenue + otherIncome;
+    return {
+      label,
+      inflows: buildInflows(byClient, otherIncome, outPaise),
+      outflows: { teamPaise: team, freelancerPaise: freelancers, payrollPaise: payroll, expensesPaise: expenses },
+      revenuePaise: revenue,
+      otherIncomePaise: otherIncome,
+      inPaise,
+      outPaise,
+      keptPaise: inPaise - outPaise,
+      clientCount: byClient.filter((c) => c.paise > 0).length,
+    };
+  }
+
+  /** Cash in (client payments incl. GST + other income) vs cash out per India calendar day. */
+  private async cashDaily(days: number) {
+    const from = new Date(Date.now() - days * 86_400_000);
+    const byDay = (field: string) => ({ $dateToString: { format: '%Y-%m-%d', date: field, timezone: TZ } });
+    const [invoiceIn, incomeIn, payoutOut, expenseOut, payrollOut] = await Promise.all([
+      this.invoices
+        .aggregate<{ _id: string; v: number }>([
+          { $match: { deletedAt: { $exists: false } } },
+          { $unwind: '$payments' },
+          { $match: { 'payments.paidAt': { $gte: from } } },
+          { $group: { _id: byDay('$payments.paidAt'), v: { $sum: '$payments.amountPaise' } } },
+        ])
+        .exec(),
+      this.income
+        .aggregate<{ _id: string; v: number }>([
+          { $match: { deletedAt: { $exists: false }, date: { $gte: from } } },
+          { $group: { _id: byDay('$date'), v: { $sum: '$amountPaise' } } },
+        ])
+        .exec(),
+      this.payouts
+        .aggregate<{ _id: string; v: number }>([
+          { $match: { deletedAt: { $exists: false }, paidAt: { $gte: from } } },
+          { $group: { _id: byDay('$paidAt'), v: { $sum: '$amountPaise' } } },
+        ])
+        .exec(),
+      this.expenses
+        .aggregate<{ _id: string; v: number }>([
+          { $match: { deletedAt: { $exists: false }, date: { $gte: from } } },
+          { $group: { _id: byDay('$date'), v: { $sum: NET_EXPENSE_EXPR } } },
+        ])
+        .exec(),
+      this.runs
+        .aggregate<{ _id: string; v: number }>([
+          { $match: { status: 'PAID', paidAt: { $gte: from } } },
+          { $group: { _id: byDay('$paidAt'), v: { $sum: '$totalNetPaise' } } },
+        ])
+        .exec(),
+    ]);
+    const out = new Map<string, { date: string; inPaise: number; outPaise: number }>();
+    const add = (rows: { _id: string; v: number }[], side: 'inPaise' | 'outPaise') => {
+      for (const r of rows) {
+        if (!r._id) continue;
+        const row = out.get(r._id) ?? { date: r._id, inPaise: 0, outPaise: 0 };
+        row[side] += Math.round(r.v);
+        out.set(r._id, row);
+      }
+    };
+    add(invoiceIn, 'inPaise');
+    add(incomeIn, 'inPaise');
+    add(payoutOut, 'outPaise');
+    add(expenseOut, 'outPaise');
+    add(payrollOut, 'outPaise');
+    return [...out.values()].sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  /** Live projects with the numbers behind their health rings (billed, collected, paid out). */
+  private async projectHealth() {
+    const live = ['PLANNING', 'ACTIVE', 'IN_PROGRESS', 'REVIEW', 'ON_HOLD'];
+    const projects = await this.projects
+      .find({ deletedAt: { $exists: false }, status: { $in: live } })
+      .select('name code status startDate endDate clientId clientBudgetPaise currency members.amountPaise freelancers.agreedPaise')
+      .lean()
+      .exec();
+    if (projects.length === 0) return [];
+    const ids = projects.map((p) => p._id);
+    const [invoices, paid, clients] = await Promise.all([
+      this.invoices
+        .find({ deletedAt: { $exists: false }, $or: [{ projectId: { $in: ids } }, { 'lineItems.projectId': { $in: ids } }] })
+        .select('status projectId subTotalPaise lineItems.qty lineItems.unitPaise lineItems.projectId payments.amountPaise')
+        .lean()
+        .exec(),
+      this.payouts
+        .aggregate<{ _id: Types.ObjectId; v: number }>([
+          { $match: { deletedAt: { $exists: false }, projectId: { $in: ids } } },
+          { $group: { _id: '$projectId', v: { $sum: '$amountPaise' } } },
+        ])
+        .exec(),
+      this.clients
+        .find({ _id: { $in: projects.map((p) => p.clientId).filter(Boolean) } })
+        .select('name')
+        .lean()
+        .exec(),
+    ]);
+    const paidMap = new Map(paid.map((r) => [r._id.toString(), r.v]));
+    const clientMap = new Map(clients.map((c) => [c._id.toString(), c.name as string]));
+    return projects.map((p) => {
+      const pid = p._id.toString();
+      let invoicedPaise = 0;
+      let collectedPaise = 0;
+      for (const inv of invoices) {
+        const share = projectShare(inv as never, pid);
+        if (!share) continue;
+        const received = ((inv.payments ?? []) as { amountPaise: number }[]).reduce((s, x) => s + x.amountPaise, 0);
+        collectedPaise += Math.round(received * share);
+        if (inv.status !== InvoiceStatus.DRAFT && inv.status !== InvoiceStatus.WRITTEN_OFF) {
+          invoicedPaise += Math.round((inv.subTotalPaise ?? 0) * share);
+        }
+      }
+      const agreedPaise =
+        (p.members ?? []).reduce((s, m) => s + (m.amountPaise ?? 0), 0) +
+        (p.freelancers ?? []).reduce((s, f) => s + (f.agreedPaise ?? 0), 0);
+      return {
+        projectId: pid,
+        name: p.name as string,
+        code: p.code as string,
+        status: p.status as string,
+        clientId: p.clientId ? p.clientId.toString() : null,
+        clientName: p.clientId ? (clientMap.get(p.clientId.toString()) ?? null) : null,
+        startDate: p.startDate ?? null,
+        endDate: p.endDate ?? null,
+        currency: (p.currency as string) || 'INR',
+        budgetPaise: p.clientBudgetPaise ?? 0,
+        invoicedPaise,
+        collectedPaise,
+        agreedPaise,
+        paidOutPaise: paidMap.get(pid) ?? 0,
+      };
+    });
+  }
+
+  async ownerCockpit() {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const fyStart = now.getMonth() >= 3 ? new Date(now.getFullYear(), 3, 1) : new Date(now.getFullYear() - 1, 3, 1);
+    const fyLabel = `FY ${fyStart.getFullYear()}–${String(fyStart.getFullYear() + 1).slice(-2)}`;
+    const monthLabel = now.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+
+    const [month, fy, openInvoices, cash, projects] = await Promise.all([
+      this.flowFor(monthStart, monthEnd, { $eq: this.monthKey(now) }, monthLabel),
+      this.flowFor(fyStart, undefined, { $gte: this.monthKey(fyStart) }, fyLabel),
+      this.invoices
+        .find({
+          deletedAt: { $exists: false },
+          status: { $in: [InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.OVERDUE] },
+        })
+        .select('status totalPaise paidPaise dueDate clientId')
+        .lean()
+        .exec(),
+      this.cashDaily(26 * 7 + 7),
+      this.projectHealth(),
+    ]);
+
+    return { month, fy, aging: agingSummary(openInvoices, now), cash, projects };
   }
 
   async memberStats(userId: string) {

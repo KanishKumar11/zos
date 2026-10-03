@@ -1,158 +1,127 @@
+// Who owes whom — clients who owe the agency on the left, team and freelancers the agency owes on the
+// right, drawn to one scale around a centre axis. OWNER only (open invoices + /payouts/owed).
 'use client';
 
 import Link from 'next/link';
 
-import { InvoiceStatus } from '@agency/shared';
-
-import { formatPaise } from '@/lib/formatters';
-
-import { useClients } from '@/features/clients/clients.hooks';
+import { Skeleton } from '@/components/ui/skeleton';
+import { DivergingBars, formatCompact, Price, SpotIllustration, Tile, useCanSeePrices, type DivergingRow } from '@/components/viz';
 import { useInvoices } from '@/features/invoices/invoices.hooks';
 import { useOwed } from '@/features/payouts/payouts.hooks';
 
-const OPEN_STATUSES = new Set([
-  InvoiceStatus.SENT,
-  InvoiceStatus.PARTIAL,
-  InvoiceStatus.PARTIALLY_PAID,
-  InvoiceStatus.OVERDUE,
-]);
+const PER_SIDE = 5;
 
-export function MoneyOverview() {
-  const clients = useClients();
-  const invoices = useInvoices();
+export function MoneyOverview({ span = 7 }: { span?: 5 | 6 | 7 | 8 | 12 }) {
+  const invoices = useInvoices({ status: 'open' });
   const owed = useOwed();
+  const canSee = useCanSeePrices();
+  const show = (paise: number) => (canSee ? formatCompact(paise) : '');
 
-  const clientNameMap = new Map((clients.data ?? []).map((c) => [c._id, c.name]));
-
-  // Receivable — outstanding per client, from any not-yet-fully-collected invoice.
-  const receivableByClient = new Map<string, number>();
+  // Clients — outstanding per client across open invoices (the API already nets out write-offs).
+  const byClient = new Map<string, { name: string; paise: number }>();
   for (const inv of invoices.data ?? []) {
-    if (!OPEN_STATUSES.has(inv.status)) continue;
-    const due = inv.totalPaise - inv.paidPaise;
+    const due = inv.balancePaise ?? Math.max(0, inv.totalPaise - inv.paidPaise);
     if (due <= 0) continue;
-    receivableByClient.set(inv.clientId, (receivableByClient.get(inv.clientId) ?? 0) + due);
+    const row = byClient.get(inv.clientId) ?? { name: inv.clientName ?? 'Deleted client', paise: 0 };
+    row.paise += due;
+    byClient.set(inv.clientId, row);
   }
-  const receivableRows = [...receivableByClient.entries()]
-    .map(([clientId, amountPaise]) => ({ clientId, amountPaise, name: clientNameMap.get(clientId) ?? 'Deleted client' }))
-    .sort((a, b) => b.amountPaise - a.amountPaise);
-  const totalReceivable = receivableRows.reduce((s, r) => s + r.amountPaise, 0);
+  const clients = [...byClient.entries()].map(([id, r]) => ({ id, ...r })).sort((a, b) => b.paise - a.paise);
+  const people = [
+    ...(owed.data?.team ?? []).map((r) => ({ id: r.payeeId, name: r.name, paise: r.pendingPaise, href: `/team/${r.payeeId}` })),
+    ...(owed.data?.freelancers ?? []).map((r) => ({
+      id: r.payeeId,
+      name: `${r.name} (freelance)`,
+      paise: r.pendingPaise,
+      href: `/freelancers/${r.payeeId}`,
+    })),
+  ]
+    .filter((r) => r.paise > 0)
+    .sort((a, b) => b.paise - a.paise);
 
-  // What we still owe, per person across projects (agreed fee − payouts logged).
-  const teamRows = (owed.data?.team ?? []).map((r) => ({ userId: r.payeeId, name: r.name, amountPaise: r.pendingPaise }));
-  const totalTeamPayable = teamRows.reduce((s, r) => s + r.amountPaise, 0);
-  const freelancerRows = (owed.data?.freelancers ?? []).map((r) => ({ id: r.payeeId, name: r.name, amountPaise: r.pendingPaise }));
-  const totalFreelancerPayable = freelancerRows.reduce((s, r) => s + r.amountPaise, 0);
+  const receivable = clients.reduce((s, r) => s + r.paise, 0);
+  const payable = people.reduce((s, r) => s + r.paise, 0);
+  const net = receivable - payable;
 
-  const totalPayable = totalTeamPayable + totalFreelancerPayable;
-  const netPosition = totalReceivable - totalPayable;
-  const isLoading = clients.isLoading || invoices.isLoading || owed.isLoading;
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-border">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="p-5 h-48 animate-pulse bg-muted/20" />
-        ))}
-      </div>
-    );
-  }
+  const rows: DivergingRow[] = [
+    ...clients.slice(0, PER_SIDE).map((c) => ({
+      key: c.id,
+      label: c.name,
+      value: c.paise,
+      display: show(c.paise),
+      side: 'left' as const,
+      href: c.name === 'Deleted client' ? undefined : `/clients/${c.id}`,
+    })),
+    ...people.slice(0, PER_SIDE).map((p) => ({ key: p.id, label: p.name, value: p.paise, display: show(p.paise), side: 'right' as const, href: p.href })),
+  ];
+  const moreClients = clients.length - PER_SIDE;
+  const morePeople = people.length - PER_SIDE;
+  const loading = invoices.isLoading || owed.isLoading;
 
   return (
-    <div>
-      <div className="flex items-center justify-between px-5 pt-4">
-        <p className="text-sm font-semibold">Who owes whom</p>
-        <p className={`text-sm font-semibold tracking-tight ${netPosition >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
-          Net {netPosition >= 0 ? '+' : '−'}{formatPaise(Math.abs(netPosition), 'INR')}
+    <Tile
+      span={span}
+      title="Who owes whom"
+      action={<span className="text-xs text-muted-foreground">They owe you ← · → you owe them</span>}
+    >
+      {loading ? (
+        <Skeleton className="h-40 w-full" />
+      ) : invoices.isError || owed.isError ? (
+        <p className="py-6 text-sm text-muted-foreground">
+          Couldn&apos;t load balances.{' '}
+          <button
+            type="button"
+            className="font-medium text-foreground underline"
+            onClick={() => {
+              void invoices.refetch();
+              void owed.refetch();
+            }}
+          >
+            Try again
+          </button>
         </p>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-border mt-4">
-        <MoneyColumn
-          title="Clients owe us"
-          total={totalReceivable}
-          accent="text-emerald-600"
-          emptyLabel="Nothing outstanding — all invoices collected."
-          rows={receivableRows.map((r) => ({
-            key: r.clientId,
-            label: r.name,
-            amountPaise: r.amountPaise,
-            href: `/clients/${r.clientId}`,
-          }))}
-        />
-        <MoneyColumn
-          title="We owe the team"
-          total={totalTeamPayable}
-          accent="text-amber-600"
-          emptyLabel="No pending team payouts."
-          rows={teamRows.map((r) => ({
-            key: r.userId,
-            label: r.name,
-            amountPaise: r.amountPaise,
-            href: `/team/${r.userId}`,
-          }))}
-        />
-        <MoneyColumn
-          title="We owe freelancers"
-          total={totalFreelancerPayable}
-          accent="text-amber-600"
-          emptyLabel="No pending freelancer payouts."
-          rows={freelancerRows.map((r) => ({
-            key: r.id,
-            label: r.name,
-            amountPaise: r.amountPaise,
-            href: `/freelancers/${r.id}`,
-          }))}
-        />
-      </div>
-    </div>
-  );
-}
-
-function MoneyColumn({
-  title,
-  total,
-  accent,
-  rows,
-  emptyLabel,
-}: {
-  title: string;
-  total: number;
-  accent: string;
-  rows: { key: string; label: string; amountPaise: number; href?: string }[];
-  emptyLabel: string;
-}) {
-  const shown = rows.slice(0, 6);
-  const remainder = rows.length - shown.length;
-
-  return (
-    <div className="p-5">
-      <div className="flex items-baseline justify-between mb-4">
-        <p className="text-xs font-medium text-muted-foreground">{title}</p>
-        <p className={`text-lg font-semibold tracking-tight ${accent}`}>{formatPaise(total, 'INR')}</p>
-      </div>
-      {shown.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+      ) : rows.length === 0 ? (
+        <div className="flex items-center gap-3 py-3">
+          <SpotIllustration kind="done" className="h-16 w-20" />
+          <p className="text-sm text-muted-foreground">All square. No client owes you and you don&apos;t owe anyone.</p>
+        </div>
       ) : (
-        <div className="space-y-2.5">
-          {shown.map((r) => {
-            const content = (
-              <div className="flex items-center justify-between text-sm">
-                <span className="truncate text-foreground">{r.label}</span>
-                <span className="tabular-nums font-medium shrink-0 ml-3">{formatPaise(r.amountPaise, 'INR')}</span>
-              </div>
-            );
-            return r.href ? (
-              <Link key={r.key} href={r.href} className="block hover:opacity-70 transition-opacity">
-                {content}
-              </Link>
-            ) : (
-              <div key={r.key}>{content}</div>
-            );
-          })}
-          {remainder > 0 && (
-            <p className="text-[11px] text-muted-foreground pt-1">+{remainder} more</p>
-          )}
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+            <div className="text-right">
+              Clients owe you <Price paise={receivable} compact className="font-semibold text-success" />
+            </div>
+            <div>
+              You owe <Price paise={payable} compact className="font-semibold text-brand" />
+            </div>
+          </div>
+          <DivergingBars rows={rows} leftColor="hsl(var(--success))" rightColor="hsl(var(--primary))" />
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
+            <span>
+              {moreClients > 0 && (
+                <Link href="/invoices?status=open" className="hover:underline">
+                  +{moreClients} more client{moreClients === 1 ? '' : 's'}
+                </Link>
+              )}
+              {moreClients > 0 && morePeople > 0 && ' · '}
+              {morePeople > 0 && (
+                <Link href="/payments" className="hover:underline">
+                  +{morePeople} more {morePeople === 1 ? 'person' : 'people'}
+                </Link>
+              )}
+            </span>
+            <span>
+              Net{' '}
+              <Price
+                paise={Math.abs(net)}
+                compact
+                className={net >= 0 ? 'font-semibold text-success' : 'font-semibold text-destructive'}
+              />{' '}
+              {net >= 0 ? 'in your favour' : 'more owed than owing'}
+            </span>
+          </div>
         </div>
       )}
-    </div>
+    </Tile>
   );
 }

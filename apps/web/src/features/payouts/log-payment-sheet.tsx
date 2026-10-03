@@ -38,6 +38,7 @@ import { MoneyInput } from '@/components/ui/money-input';
 import { Select } from '@/components/ui/select';
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
+import { Price, useCanSeePrices } from '@/components/viz';
 import { useCreateFreelancer, useFreelancers } from '@/features/freelancers/freelancers.hooks';
 import {
   useAddProjectFreelancer,
@@ -95,6 +96,7 @@ export function LogPaymentSheet() {
   const { open, prefill, editId } = useQuickActions((s) => s.logPayment);
   const close = useQuickActions((s) => s.closeLogPayment);
   const confirm = useConfirm();
+  const canSee = useCanSeePrices();
   const enabled = open && role === Role.OWNER;
 
   const [form, setForm] = useState<FormState>(() => blank());
@@ -166,12 +168,12 @@ export function LogPaymentSheet() {
     const fls = (freelancers.data ?? []).map((f) => ({
       value: `${PayeeType.FREELANCER}:${f._id}`,
       label: f.name,
-      description: [f.skill, f.pendingPaise ? `${formatPaise(f.pendingPaise)} pending` : ''].filter(Boolean).join(' · ') || 'Freelancer',
+      description: [f.skill, canSee && f.pendingPaise ? `${formatPaise(f.pendingPaise)} pending` : ''].filter(Boolean).join(' · ') || 'Freelancer',
       group: 'Freelancers',
       keywords: f.email,
     }));
     return [...team, ...fls];
-  }, [staff.data, freelancers.data]);
+  }, [staff.data, freelancers.data, canSee]);
 
   const balanceByProject = useMemo(
     () => new Map((balances.data ?? []).map((b) => [b.projectId ?? NO_PROJECT, b])),
@@ -192,7 +194,9 @@ export function LogPaymentSheet() {
         label: p.name,
         keywords: p.code,
         description: onProject && b
-          ? `Agreed ${formatPaise(b.agreedPaise)} · paid ${formatPaise(b.paidPaise)} · ${b.pendingPaise > 0 ? `${formatPaise(b.pendingPaise)} pending` : 'nothing pending'}`
+          ? canSee
+            ? `Agreed ${formatPaise(b.agreedPaise)} · paid ${formatPaise(b.paidPaise)} · ${b.pendingPaise > 0 ? `${formatPaise(b.pendingPaise)} pending` : 'nothing pending'}`
+            : p.code
           : payeeId
             ? `${p.code} · not on this project yet`
             : p.code,
@@ -207,7 +211,7 @@ export function LogPaymentSheet() {
       ...theirs,
       ...others,
     ];
-  }, [projects.data, balanceByProject, payeeType, payeeId]);
+  }, [projects.data, balanceByProject, payeeType, payeeId, canSee]);
 
   // ── Derived state ───────────────────────────────────────────────────────────────
   const project = (projects.data?.items ?? []).find((p) => p._id === form.projectId);
@@ -325,12 +329,16 @@ export function LogPaymentSheet() {
     if (!editId) return;
     const ok = await confirm({
       title: 'Delete this payment?',
-      description: `${formatPaise(form.amountPaise ?? 0)} to ${payeeName}. Balances will update straight away. This is recorded in the audit log.`,
+      description: `${canSee ? `${formatPaise(form.amountPaise ?? 0)} to ` : 'The payment to '}${payeeName}. Balances will update straight away. This is recorded in the audit log.`,
       destructive: true,
     });
     if (!ok) return;
-    await remove.mutateAsync(editId);
-    close();
+    try {
+      await remove.mutateAsync(editId);
+      close();
+    } catch (err) {
+      setServerError(getErrorMessage(err));
+    }
   };
 
   const addToProject = async () => {
@@ -475,9 +483,9 @@ export function LogPaymentSheet() {
             </FormField>
 
             {project && payeeId && !onProject && (
-              <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+              <div className="space-y-2 rounded-md border border-warning/40 bg-warning/5 p-3">
                 <p className="flex items-center gap-2 text-sm font-medium">
-                  <UserPlus className="h-4 w-4 text-amber-600" />
+                  <UserPlus className="h-4 w-4 text-warning" />
                   {payeeName} isn&apos;t on {project.name} yet
                 </p>
                 <p className="text-xs text-muted-foreground">Add them to the project first. You can set their agreed fee now or later.</p>
@@ -508,10 +516,10 @@ export function LogPaymentSheet() {
               {balance && onProject && (
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {pendingNow > 0 && (
-                    <Chip onClick={() => set('amountPaise', pendingNow)}>Pay pending {formatPaise(pendingNow)}</Chip>
+                    <Chip onClick={() => set('amountPaise', pendingNow)}>Pay pending <Price paise={pendingNow} /></Chip>
                   )}
                   {agreed > 0 && pendingNow > 0 && pendingNow !== agreed && (
-                    <Chip onClick={() => set('amountPaise', Math.round(pendingNow / 2))}>Half {formatPaise(Math.round(pendingNow / 2))}</Chip>
+                    <Chip onClick={() => set('amountPaise', Math.round(pendingNow / 2))}>Half <Price paise={Math.round(pendingNow / 2)} /></Chip>
                   )}
                 </div>
               )}
@@ -521,40 +529,40 @@ export function LogPaymentSheet() {
               <div
                 className={cn(
                   'rounded-md border px-3 py-2 text-xs',
-                  overAgreed ? 'border-amber-500/40 bg-amber-500/5' : 'bg-muted/40',
+                  overAgreed ? 'border-warning/40 bg-warning/5' : 'bg-muted/40',
                 )}
               >
                 {agreed > 0 ? (
                   <>
                     <div className="mb-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
                       <div
-                        className={cn('h-full rounded-full', overAgreed ? 'bg-amber-500' : 'bg-primary')}
+                        className={cn('h-full rounded-full', overAgreed ? 'bg-warning' : 'bg-primary')}
                         style={{ width: `${Math.min(100, (paidAfter / agreed) * 100)}%` }}
                       />
                     </div>
                     <p>
-                      After this: <strong>{formatPaise(paidAfter)}</strong> paid of {formatPaise(agreed)} agreed
+                      After this: <strong><Price paise={paidAfter} /></strong> paid of <Price paise={agreed} /> agreed
                       {overAgreed ? (
-                        <span className="text-amber-700 dark:text-amber-500"> — {formatPaise(paidAfter - agreed)} over the agreed fee</span>
+                        <span className="text-warning"> — <Price paise={paidAfter - agreed} /> over the agreed fee</span>
                       ) : (
-                        <> · {formatPaise(Math.max(0, agreed - paidAfter))} still pending</>
+                        <> · <Price paise={Math.max(0, agreed - paidAfter)} /> still pending</>
                       )}
                     </p>
                   </>
                 ) : (
                   <p className="flex items-center gap-1.5 text-muted-foreground">
                     <Info className="h-3.5 w-3.5" />
-                    No agreed fee set for {payeeName} on this project. Paid so far: {formatPaise(balance.paidPaise - alreadyCounted)}.
+                    No agreed fee set for {payeeName} on this project. Paid so far: <Price paise={balance.paidPaise - alreadyCounted} />.
                   </p>
                 )}
               </div>
             )}
 
             {duplicate && (
-              <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+              <div className="flex gap-2 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
                 <span>
-                  Possible duplicate: {formatPaise(duplicate.amountPaise)} to {payeeName} is already logged for {formatDate(duplicate.paidAt)}
+                  Possible duplicate: <Price paise={duplicate.amountPaise} /> to {payeeName} is already logged for {formatDate(duplicate.paidAt)}
                   {duplicate.reference ? ` (ref ${duplicate.reference})` : ''}. Save anyway only if this is a second payment.
                 </span>
               </div>

@@ -1,4 +1,4 @@
-// Tailwind config — shadcn/ui design tokens via CSS variables; brand colors mapped via :root.
+// Tailwind config — ZOS Studio tokens (Zlaark brand) via CSS variables in globals.css.
 import type { Config } from 'tailwindcss';
 import animate from 'tailwindcss-animate';
 
@@ -23,6 +23,9 @@ const config: Config = {
         card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
         success: 'hsl(var(--success))',
         warning: 'hsl(var(--warning))',
+        info: 'hsl(var(--info))',
+        rail: { DEFAULT: 'hsl(var(--rail))', foreground: 'hsl(var(--rail-foreground))' },
+        brand: { DEFAULT: 'hsl(var(--primary))', wash: 'hsl(var(--brand-wash))', ink: 'hsl(var(--brand-ink))' },
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -31,12 +34,15 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
       keyframes: {
+        rise: { from: { transform: 'translateY(6px)', opacity: '0.6' }, to: { transform: 'none', opacity: '1' } },
         'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },
         'accordion-up': { from: { height: 'var(--radix-accordion-content-height)' }, to: { height: '0' } },
       },
       animation: {
+        rise: 'rise .45s cubic-bezier(.2,.7,.2,1) both',
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
       },

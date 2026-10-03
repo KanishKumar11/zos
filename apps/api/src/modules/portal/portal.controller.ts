@@ -87,6 +87,9 @@ export class PortalController {
   async preview(@Param('id', ObjectIdPipe) id: string, @CurrentUser() user: JwtPayload) {
     const project = await this.collab.projectForStaff(id, user);
     if (!project.clientId) return { noClient: true };
-    return { ...(await this.svc.project(project.clientId.toString(), id)), portalVisible: project.portalVisible !== false };
+    return {
+      ...(await this.svc.project(project.clientId.toString(), id, { includeHidden: true })),
+      portalVisible: project.portalVisible !== false,
+    };
   }
 }

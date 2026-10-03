@@ -1,11 +1,12 @@
-// Invoice detail (OWNER-only) — balance, line items, payments and the actions that move an
+// Invoice detail (OWNER-only) — balance jar, payment story, line items and the actions that move an
 // invoice through its life: mark as sent (locks amounts), record / remove payments, write off,
-// reopen, duplicate, delete (drafts only).
+// reopen, duplicate, delete (drafts only), PDF.
 'use client';
 
 import {
   AlertTriangle,
   Ban,
+  Check,
   Copy,
   Download,
   Lock,
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { use, useState } from 'react';
+import { use, useState, type ReactNode } from 'react';
 
 import { InvoiceStatus, Role } from '@agency/shared';
 
@@ -26,7 +27,6 @@ import { RoleGate } from '@/components/auth/role-gate';
 import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   DropdownMenu,
@@ -39,11 +39,27 @@ import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Tooltip } from '@/components/ui/tooltip';
+import {
+  ActivityTimeline,
+  Avatar,
+  Bento,
+  FillJar,
+  Legend,
+  Price,
+  ProjectChip,
+  SegmentBar,
+  Tile,
+  formatCompact,
+  useCanSeePrices,
+  type TimelineItem,
+} from '@/components/viz';
 import { ApiRequestError } from '@/lib/api-client';
+import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { formatDate, formatPaise } from '@/lib/formatters';
+import { identityColor } from '@/lib/identity';
 
-import { InvoiceFormDialog } from '@/features/invoices/invoice-form-dialog';
+import { InvoiceFormDialog, termsLabel } from '@/features/invoices/invoice-form-dialog';
 import {
   useDeleteInvoice,
   useDuplicateInvoice,
@@ -53,6 +69,7 @@ import {
   useSendInvoice,
   type InvoiceRow,
 } from '@/features/invoices/invoices.hooks';
+import { PaidStamp } from '@/features/invoices/paid-stamp';
 import { RecordPaymentSheet } from '@/features/invoices/record-payment-sheet';
 import { WriteOffDialog } from '@/features/invoices/write-off-dialog';
 
@@ -65,11 +82,13 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   );
 }
 
-const OPEN = new Set<InvoiceStatus>([InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]);
+const OPEN = new Set<InvoiceStatus>([InvoiceStatus.SENT, InvoiceStatus.PARTIAL, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.OVERDUE]);
+const time = (d: string | undefined) => (d ? Date.parse(d) || 0 : 0);
 
 function Inner({ id }: { id: string }) {
   const router = useRouter();
   const confirm = useConfirm();
+  const canSeePrices = useCanSeePrices();
   const inv = useInvoice(id);
   const send = useSendInvoice();
   const remove = useDeleteInvoice();
@@ -85,6 +104,7 @@ function Inner({ id }: { id: string }) {
   if (inv.error instanceof ApiRequestError && inv.error.status === 404) {
     return (
       <EmptyState
+        illustration="files"
         title="Invoice not found"
         description="It may have been a draft that was deleted."
         action={
@@ -104,8 +124,13 @@ function Inner({ id }: { id: string }) {
   const writtenOff = i.status === InvoiceStatus.WRITTEN_OFF;
   const isOpen = OPEN.has(i.status);
   const balance = i.balancePaise ?? Math.max(0, i.totalPaise - i.paidPaise);
-  const money = (p: number) => formatPaise(p, i.currency);
+  const unpaid = Math.max(0, i.totalPaise - i.paidPaise);
+  const paidInFull = !isDraft && !writtenOff && i.totalPaise > 0 && balance === 0;
   const pdfHref = `${env.apiBaseUrl}/invoices/${id}/pdf`;
+  const payments = [...i.payments].sort((a, b) => time(a.paidAt) - time(b.paidAt));
+  const lastPayment = payments.at(-1);
+  // Confirm dialogs take plain strings — only build amounts for viewers allowed to see them.
+  const moneyText = (p: number) => (canSeePrices ? formatPaise(p, i.currency) : '');
 
   const markSent = async () => {
     const ok = await confirm({
@@ -128,9 +153,10 @@ function Inner({ id }: { id: string }) {
   };
 
   const doReopen = async () => {
+    const amount = moneyText(unpaid);
     const ok = await confirm({
       title: `Reopen ${i.number}?`,
-      description: `The ${money(Math.max(0, i.totalPaise - i.paidPaise))} balance counts as outstanding again and payments can be recorded.`,
+      description: `The ${amount ? `${amount} ` : 'unpaid '}balance counts as outstanding again and payments can be recorded.`,
       confirmText: 'Reopen',
     });
     if (ok) reopen.mutate(id);
@@ -146,8 +172,9 @@ function Inner({ id }: { id: string }) {
   };
 
   const removeOne = async (p: InvoiceRow['payments'][number]) => {
+    const amount = moneyText(p.amountPaise);
     const ok = await confirm({
-      title: `Remove the ${money(p.amountPaise)} payment?`,
+      title: amount ? `Remove the ${amount} payment?` : 'Remove this payment?',
       description: `Received ${formatDate(p.paidAt)}${p.reference ? ` (ref ${p.reference})` : ''}. The balance due goes back up and the invoice status is recalculated.`,
       confirmText: 'Remove payment',
       destructive: true,
@@ -162,12 +189,107 @@ function Inner({ id }: { id: string }) {
     const key = li.projectId ?? '';
     projectTotals.set(key, (projectTotals.get(key) ?? 0) + Math.round(li.qty * li.unitPaise));
   });
+  const splitName = (pid: string) => (pid ? (projectName.get(pid) ?? 'Deleted project') : 'Not linked to a project');
+
+  const dueText = i.dueDate
+    ? i.issueDate && i.dueDate.slice(0, 10) === i.issueDate.slice(0, 10)
+      ? 'Due on receipt'
+      : `Due ${formatDate(i.dueDate)}`
+    : null;
+
+  // The payment story: issued → sent → each payment → written off.
+  const story: (TimelineItem & { at: number; order: number })[] = [];
+  if (i.issueDate)
+    story.push({
+      key: 'issued',
+      at: time(i.issueDate),
+      order: 0,
+      date: i.issueDate,
+      title: isDraft ? 'Drafted' : 'Issued',
+      meta: formatDate(i.issueDate),
+      color: 'hsl(var(--muted-foreground))',
+    });
+  if (i.sentAt)
+    story.push({
+      key: 'sent',
+      at: time(i.sentAt),
+      order: 1,
+      date: i.sentAt,
+      title: 'Marked as sent',
+      meta: `${formatDate(i.sentAt)}${dueText ? ` · ${dueText.toLowerCase()}` : ''}`,
+      color: 'hsl(var(--info))',
+      icon: <Send className="h-2 w-2" />,
+    });
+  payments.forEach((p, idx) => {
+    const settles = paidInFull && idx === payments.length - 1;
+    story.push({
+      key: p._id,
+      at: time(p.paidAt),
+      order: 2,
+      date: p.paidAt,
+      color: 'hsl(var(--success))',
+      icon: <Check className="h-2.5 w-2.5" strokeWidth={3} />,
+      title: (
+        <span className="flex items-start justify-between gap-2">
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <Price paise={p.amountPaise} currency={i.currency} className="font-semibold" /> received
+            {settles && <Badge variant="success">Paid in full</Badge>}
+          </span>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="-mt-1 h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+            aria-label={`Remove payment received ${formatDate(p.paidAt)}`}
+            disabled={removePayment.isPending}
+            onClick={() => void removeOne(p)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </span>
+      ),
+      meta: [formatDate(p.paidAt), p.methodLabel || p.method || 'Method not recorded', p.reference ? `Ref ${p.reference}` : null]
+        .filter(Boolean)
+        .join(' · '),
+    });
+  });
+  if (writtenOff)
+    story.push({
+      key: 'written-off',
+      at: i.writtenOffAt ? time(i.writtenOffAt) : Number.MAX_SAFE_INTEGER,
+      order: 3,
+      date: i.writtenOffAt ?? '',
+      title: 'Written off',
+      meta: [i.writtenOffAt ? formatDate(i.writtenOffAt) : null, i.writeOffReason ? `“${i.writeOffReason}”` : null].filter(Boolean).join(' · '),
+      color: 'hsl(var(--muted-foreground))',
+      icon: <Ban className="h-2 w-2" />,
+    });
+  story.sort((a, b) => a.at - b.at || a.order - b.order);
+
+  const balanceColor = writtenOff
+    ? 'hsl(var(--muted-foreground))'
+    : i.isOverdue
+      ? 'hsl(var(--destructive))'
+      : 'hsl(var(--warning))';
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
         title={i.number}
         crumbs={[{ label: 'Invoices', href: '/invoices' }]}
+        eyebrow={
+          i.clientName ? (
+            <Link href={`/clients/${i.clientId}`} className="inline-flex items-center gap-2 font-medium text-foreground hover:underline">
+              <Avatar id={i.clientId} name={i.clientName} size="xs" />
+              {i.clientName}
+              {i.clientDeleted && <span className="font-normal text-muted-foreground">(deleted)</span>}
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-2">
+              <span className="h-5 w-5 rounded-full border border-dashed" aria-hidden />
+              Deleted client
+            </span>
+          )
+        }
         meta={
           <>
             <StatusBadge status={i.status} />
@@ -176,18 +298,12 @@ function Inner({ id }: { id: string }) {
         }
         description={
           <>
-            {i.clientName ? (
-              <Link href={`/clients/${i.clientId}`} className="font-medium text-foreground hover:underline">
-                {i.clientName}
-              </Link>
-            ) : (
-              <span>Deleted client</span>
-            )}
-            {i.issueDate && <> · Issued {formatDate(i.issueDate)}</>}
-            {i.dueDate && (
-              <span className={i.isOverdue ? 'text-destructive' : undefined}>
+            {i.issueDate ? <>Issued {formatDate(i.issueDate)}</> : 'Not dated yet'}
+            {dueText && (
+              <span className={i.isOverdue ? 'font-medium text-destructive' : undefined}>
                 {' '}
-                · {i.issueDate && i.dueDate.slice(0, 10) === i.issueDate.slice(0, 10) ? 'Due on receipt' : `Due ${formatDate(i.dueDate)}`}
+                · {dueText}
+                {i.isOverdue && !!i.daysOverdue && ` · ${i.daysOverdue} day${i.daysOverdue === 1 ? '' : 's'} late`}
               </span>
             )}
           </>
@@ -200,12 +316,12 @@ function Inner({ id }: { id: string }) {
               </a>
             </Button>
             {isDraft && (
-              <Button size="sm" onClick={() => void markSent()} disabled={send.isPending}>
+              <Button size="sm" variant="brand" onClick={() => void markSent()} disabled={send.isPending}>
                 <Send className="mr-1.5 h-3.5 w-3.5" /> {send.isPending ? 'Marking…' : 'Mark as sent'}
               </Button>
             )}
             {isOpen && balance > 0 && (
-              <Button size="sm" onClick={() => setPayOpen(true)}>
+              <Button size="sm" variant="brand" onClick={() => setPayOpen(true)}>
                 <Wallet className="mr-1.5 h-3.5 w-3.5" /> Record payment
               </Button>
             )}
@@ -262,81 +378,167 @@ function Inner({ id }: { id: string }) {
       {writtenOff && (
         <Banner icon={Ban}>
           Written off{i.writtenOffAt ? ` on ${formatDate(i.writtenOffAt)}` : ''}
-          {i.writeOffReason ? <> — “{i.writeOffReason}”</> : null}. The unpaid{' '}
-          {money(Math.max(0, i.totalPaise - i.paidPaise))} no longer counts as outstanding.
+          {i.writeOffReason ? <> — “{i.writeOffReason}”</> : null}. The unpaid <Price paise={unpaid} currency={i.currency} /> no longer counts
+          as outstanding.
         </Banner>
       )}
       {i.isOverdue && (
         <Banner icon={AlertTriangle} tone="danger">
-          {money(balance)} is {i.daysOverdue ? `${i.daysOverdue} day${i.daysOverdue === 1 ? '' : 's'} ` : ''}overdue
+          <Price paise={balance} currency={i.currency} /> is {i.daysOverdue ? `${i.daysOverdue} day${i.daysOverdue === 1 ? '' : 's'} ` : ''}overdue
           {i.dueDate ? ` (was due ${formatDate(i.dueDate)})` : ''}.
         </Banner>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border bg-card px-4 py-3 sm:col-span-1">
-          <p className="text-xs font-medium text-muted-foreground">Balance due</p>
-          <p
-            className={
-              'mt-1 text-3xl font-semibold tabular-nums tracking-tight ' +
-              (writtenOff ? 'text-muted-foreground line-through' : i.isOverdue ? 'text-destructive' : balance === 0 ? 'text-[hsl(var(--success))]' : '')
-            }
-          >
-            {money(writtenOff ? Math.max(0, i.totalPaise - i.paidPaise) : balance)}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {writtenOff ? 'Written off' : balance === 0 && i.totalPaise > 0 ? 'Paid in full' : isDraft ? 'Not sent yet' : `of ${money(i.totalPaise)}`}
-          </p>
-        </div>
-        <div className="rounded-lg border bg-card px-4 py-3">
-          <p className="text-xs font-medium text-muted-foreground">Total</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{money(i.totalPaise)}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {money(i.subTotalPaise)} + {i.gstPercent ? `${i.gstPercent}% GST` : 'no GST'}
-          </p>
-        </div>
-        <div className="rounded-lg border bg-card px-4 py-3">
-          <p className="text-xs font-medium text-muted-foreground">Received</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums text-[hsl(var(--success))]">{money(i.paidPaise)}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {i.payments.length === 0 ? 'No payments yet' : `${i.payments.length} payment${i.payments.length === 1 ? '' : 's'}`}
-          </p>
-        </div>
-      </div>
+      <Bento>
+        {/* Balance: jar + paid/due bar + the three figures. */}
+        <Tile span={5} title={writtenOff ? 'Written off' : 'Balance due'} className={cn('relative overflow-hidden', writtenOff && 'bg-muted/40')}>
+          <div className="flex items-center gap-5">
+            <FillJar
+              size="lg"
+              value={i.paidPaise}
+              max={i.totalPaise}
+              className={cn(writtenOff && 'opacity-50 grayscale')}
+              label={i.totalPaise > 0 ? `${Math.round(Math.min(1, i.paidPaise / i.totalPaise) * 100)}% paid` : 'Nothing billed'}
+            />
+            <div className="min-w-0">
+              <Price
+                paise={writtenOff ? unpaid : balance}
+                currency={i.currency}
+                className={cn(
+                  'font-display block text-[2.1rem] font-bold leading-none',
+                  writtenOff ? 'text-muted-foreground line-through' : i.isOverdue ? 'text-destructive' : paidInFull && 'text-success',
+                )}
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {writtenOff ? (
+                  'No longer counted as outstanding'
+                ) : paidInFull ? (
+                  'Nothing left to collect'
+                ) : isDraft ? (
+                  'Not sent yet'
+                ) : (
+                  <>
+                    still due of <Price paise={i.totalPaise} currency={i.currency} />
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+          {paidInFull && <PaidStamp date={lastPayment?.paidAt} className="absolute right-4 top-3 sm:right-6 sm:top-5" />}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-          <CardTitle className="text-base">Line items</CardTitle>
-          {!isDraft && (
-            <Tooltip content="Sent invoices can't change amounts. Write it off and duplicate it to reissue.">
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Lock className="h-3.5 w-3.5" /> Locked{i.sentAt ? ` since ${formatDate(i.sentAt)}` : ''}
-              </span>
-            </Tooltip>
+          {i.totalPaise > 0 && (
+            <div className="mt-5">
+              <SegmentBar
+                height="h-3"
+                showLabels={false}
+                segments={[
+                  {
+                    value: i.paidPaise,
+                    color: writtenOff ? 'hsl(var(--muted-foreground) / 0.5)' : 'hsl(var(--success))',
+                    label: 'Received',
+                    display: canSeePrices ? formatPaise(i.paidPaise, i.currency) : '',
+                  },
+                  {
+                    value: writtenOff ? unpaid : balance,
+                    color: balanceColor,
+                    label: writtenOff ? 'Written off' : 'Still due',
+                    display: canSeePrices ? formatPaise(writtenOff ? unpaid : balance, i.currency) : '',
+                  },
+                ]}
+              />
+              <Legend
+                className="mt-2"
+                items={[
+                  { color: writtenOff ? 'hsl(var(--muted-foreground) / 0.5)' : 'hsl(var(--success))', label: 'Received' },
+                  { color: balanceColor, label: writtenOff ? 'Written off' : 'Still due' },
+                ]}
+              />
+            </div>
           )}
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
+
+          <dl className="mt-5 grid grid-cols-3 gap-2 border-t pt-4 text-sm">
+            <Figure label="Total">
+              <Price paise={i.totalPaise} currency={i.currency} className="font-semibold" />
+              <span className="block text-[11px] text-muted-foreground">{i.gstPercent ? `incl. ${i.gstPercent}% GST` : 'No GST'}</span>
+            </Figure>
+            <Figure label="Received">
+              <Price paise={i.paidPaise} currency={i.currency} className={cn('font-semibold', i.paidPaise > 0 && !writtenOff && 'text-success')} />
+              <span className="block text-[11px] text-muted-foreground">
+                {i.payments.length === 0 ? 'No payments yet' : `${i.payments.length} payment${i.payments.length === 1 ? '' : 's'}`}
+              </span>
+            </Figure>
+            <Figure label={writtenOff ? 'Written off' : 'Balance'}>
+              <Price
+                paise={writtenOff ? unpaid : balance}
+                currency={i.currency}
+                className={cn('font-semibold', writtenOff ? 'text-muted-foreground' : i.isOverdue && 'text-destructive')}
+              />
+            </Figure>
+          </dl>
+        </Tile>
+
+        {/* Payment story. */}
+        <Tile
+          span={7}
+          title="Payments"
+          action={
+            isOpen && balance > 0 ? (
+              <Button size="sm" variant="outline" onClick={() => setPayOpen(true)}>
+                <Wallet className="mr-1.5 h-3.5 w-3.5" /> Record payment
+              </Button>
+            ) : undefined
+          }
+        >
+          <ActivityTimeline items={story} />
+          {payments.length === 0 && (
+            <p className={cn('text-sm text-muted-foreground', story.length > 0 && 'mt-5 border-t pt-4')}>
+              {isDraft
+                ? 'Send the invoice first — payments can be recorded once it has been sent.'
+                : writtenOff
+                  ? 'No payments were received before this invoice was written off.'
+                  : 'No payments recorded yet.'}
+            </p>
+          )}
+        </Tile>
+
+        {/* Line items. */}
+        <Tile
+          span={8}
+          title="Line items"
+          action={
+            !isDraft ? (
+              <Tooltip content="Sent invoices can't change amounts. Write it off and duplicate it to reissue.">
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <Lock className="h-3.5 w-3.5" /> Locked{i.sentAt ? ` since ${formatDate(i.sentAt)}` : ''}
+                </span>
+              </Tooltip>
+            ) : undefined
+          }
+        >
+          <div className="-mx-1 overflow-x-auto">
             <Table>
               <THead>
                 <TR>
                   <TH>Description</TH>
                   <TH className="hidden md:table-cell">Project</TH>
                   <TH className="text-right">Qty</TH>
-                  <TH className="text-right">Unit price</TH>
+                  <TH className="hidden text-right sm:table-cell">Unit price</TH>
                   <TH className="text-right">Amount</TH>
                 </TR>
               </THead>
               <TBody>
                 {i.lineItems.map((li, idx) => (
                   <TR key={idx}>
-                    <TD>{li.description}</TD>
+                    <TD>
+                      {li.description}
+                      {li.projectId && (
+                        <span className="mt-0.5 block text-xs text-muted-foreground md:hidden">{projectName.get(li.projectId) ?? 'Deleted project'}</span>
+                      )}
+                    </TD>
                     <TD className="hidden text-muted-foreground md:table-cell">
                       {li.projectId ? (
                         projectName.get(li.projectId) ? (
-                          <Link href={`/projects/${li.projectId}`} className="hover:underline">
-                            {projectName.get(li.projectId)}
-                          </Link>
+                          <ProjectChip id={li.projectId} name={projectName.get(li.projectId)!} href={`/projects/${li.projectId}`} />
                         ) : (
                           'Deleted project'
                         )
@@ -344,9 +546,13 @@ function Inner({ id }: { id: string }) {
                         '—'
                       )}
                     </TD>
-                    <TD className="text-right tabular-nums">{li.qty}</TD>
-                    <TD className="text-right tabular-nums">{money(li.unitPaise)}</TD>
-                    <TD className="text-right tabular-nums">{money(Math.round(li.qty * li.unitPaise))}</TD>
+                    <TD className="text-right font-figures">{li.qty}</TD>
+                    <TD className="hidden text-right sm:table-cell">
+                      <Price paise={li.unitPaise} currency={i.currency} />
+                    </TD>
+                    <TD className="text-right">
+                      <Price paise={Math.round(li.qty * li.unitPaise)} currency={i.currency} />
+                    </TD>
                   </TR>
                 ))}
               </TBody>
@@ -354,148 +560,137 @@ function Inner({ id }: { id: string }) {
           </div>
 
           {projectTotals.size > 1 && (
-            <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-              <p className="mb-1 text-xs font-medium text-muted-foreground">Split across projects</p>
-              {[...projectTotals.entries()].map(([pid, paise]) => (
-                <div key={pid || 'unassigned'} className="flex justify-between py-0.5">
-                  <span className="text-muted-foreground">
-                    {pid ? (projectName.get(pid) ?? 'Deleted project') : 'Not linked to a project'}
-                  </span>
-                  <span className="font-medium tabular-nums">{money(paise)}</span>
-                </div>
-              ))}
+            <div className="mt-4 rounded-lg border bg-muted/40 p-3 text-sm">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Split across projects</p>
+              <SegmentBar
+                height="h-2.5"
+                showLabels={false}
+                segments={[...projectTotals.entries()].map(([pid, paise]) => ({
+                  value: paise,
+                  color: pid ? identityColor(pid) : 'hsl(var(--muted-foreground) / 0.5)',
+                  label: splitName(pid),
+                  display: canSeePrices ? formatCompact(paise, i.currency) : '',
+                }))}
+              />
+              <div className="mt-2.5 space-y-1">
+                {[...projectTotals.entries()].map(([pid, paise]) => (
+                  <div key={pid || 'unassigned'} className="flex items-center justify-between gap-3">
+                    {pid && projectName.get(pid) ? (
+                      <ProjectChip id={pid} name={projectName.get(pid)!} href={`/projects/${pid}?tab=billing`} className="text-muted-foreground" />
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                        <span className="h-2 w-2 rounded-full bg-muted-foreground/50" aria-hidden />
+                        {splitName(pid)}
+                      </span>
+                    )}
+                    <Price paise={paise} currency={i.currency} className="font-medium" />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          <dl className="ml-auto mt-4 grid max-w-xs grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm tabular-nums">
+          <dl className="ml-auto mt-4 grid max-w-xs grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm">
             <dt className="text-muted-foreground">Subtotal</dt>
-            <dd className="text-right">{money(i.subTotalPaise)}</dd>
+            <dd className="text-right">
+              <Price paise={i.subTotalPaise} currency={i.currency} />
+            </dd>
             <dt className="text-muted-foreground">GST {i.gstPercent ? `${i.gstPercent}%` : ''}</dt>
-            <dd className="text-right">{money(i.gstPaise)}</dd>
+            <dd className="text-right">
+              <Price paise={i.gstPaise} currency={i.currency} />
+            </dd>
             <dt className="font-medium">Total</dt>
-            <dd className="text-right font-semibold">{money(i.totalPaise)}</dd>
+            <dd className="text-right font-semibold">
+              <Price paise={i.totalPaise} currency={i.currency} />
+            </dd>
             {i.paidPaise > 0 && (
               <>
                 <dt className="text-muted-foreground">Received</dt>
-                <dd className="text-right text-[hsl(var(--success))]">−{money(i.paidPaise)}</dd>
+                <dd className="text-right text-success">
+                  −<Price paise={i.paidPaise} currency={i.currency} />
+                </dd>
               </>
             )}
             <dt className="font-medium">{writtenOff ? 'Written off' : 'Balance due'}</dt>
-            <dd className="text-right font-semibold">{money(writtenOff ? Math.max(0, i.totalPaise - i.paidPaise) : balance)}</dd>
+            <dd className={cn('text-right font-semibold', writtenOff && 'text-muted-foreground')}>
+              <Price paise={writtenOff ? unpaid : balance} currency={i.currency} />
+            </dd>
+          </dl>
+        </Tile>
+
+        {/* Details: dates, terms, related records, notes. */}
+        <Tile span={4} title="Details">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt className="text-muted-foreground">Issued</dt>
+            <dd className="text-right">{i.issueDate ? formatDate(i.issueDate) : '—'}</dd>
+            <dt className="text-muted-foreground">Due</dt>
+            <dd className={cn('text-right', i.isOverdue && 'font-medium text-destructive')}>{i.dueDate ? formatDate(i.dueDate) : '—'}</dd>
+            {i.clientPaymentTermsDays !== undefined && (
+              <>
+                <dt className="text-muted-foreground">Client terms</dt>
+                <dd className="text-right">{termsLabel(i.clientPaymentTermsDays)}</dd>
+              </>
+            )}
+            <dt className="text-muted-foreground">Sent</dt>
+            <dd className="text-right">{i.sentAt ? formatDate(i.sentAt) : 'Not yet'}</dd>
           </dl>
 
-          {i.notes && (
+          {((i.projects?.length ?? 0) > 0 || (i.contracts?.length ?? 0) > 0) && (
             <div className="mt-4 border-t pt-3">
-              <p className="text-xs font-medium text-muted-foreground">Notes</p>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Related</p>
+              <div className="flex flex-col gap-1.5 text-sm">
+                {(i.projects ?? []).map((p) =>
+                  p.name ? (
+                    <ProjectChip key={p._id} id={p._id} name={p.name} href={`/projects/${p._id}?tab=billing`} />
+                  ) : (
+                    <span key={p._id} className="text-muted-foreground">
+                      Deleted project
+                    </span>
+                  ),
+                )}
+                {(i.contracts ?? []).map((c) =>
+                  c.name ? (
+                    <Link key={c._id} href={`/contracts/${c._id}`} className="hover:underline">
+                      Retainer · {c.name}
+                    </Link>
+                  ) : (
+                    <span key={c._id} className="text-muted-foreground">
+                      Deleted contract
+                    </span>
+                  ),
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 border-t pt-3">
+            <p className="text-xs font-medium text-muted-foreground">Notes</p>
+            {i.notes ? (
               <p className="mt-1 whitespace-pre-line text-sm">{i.notes}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-          <CardTitle className="text-base">Payments</CardTitle>
-          {isOpen && balance > 0 && (
-            <Button size="sm" variant="outline" onClick={() => setPayOpen(true)}>
-              Record payment
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent>
-          {i.payments.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              {isDraft
-                ? 'Send the invoice first — payments can be recorded once it has been sent.'
-                : writtenOff
-                  ? 'No payments were received before this invoice was written off.'
-                  : 'No payments recorded yet.'}
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Date</TH>
-                    <TH>Method</TH>
-                    <TH>Reference</TH>
-                    <TH className="text-right">Amount</TH>
-                    <TH className="w-10">
-                      <span className="sr-only">Actions</span>
-                    </TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {i.payments.map((p) => (
-                    <TR key={p._id}>
-                      <TD className="whitespace-nowrap">{formatDate(p.paidAt)}</TD>
-                      <TD>{p.methodLabel || p.method || '—'}</TD>
-                      <TD className="text-muted-foreground">{p.reference || '—'}</TD>
-                      <TD className="text-right font-medium tabular-nums">{money(p.amountPaise)}</TD>
-                      <TD>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          aria-label="Remove payment"
-                          disabled={removePayment.isPending}
-                          onClick={() => void removeOne(p)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {((i.projects?.length ?? 0) > 0 || (i.contracts?.length ?? 0) > 0) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Related</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            {(i.projects ?? []).map((p) =>
-              p.name ? (
-                <Link
-                  key={p._id}
-                  href={`/projects/${p._id}?tab=billing`}
-                  className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
-                >
-                  Project · {p.name}
-                </Link>
-              ) : (
-                <span key={p._id} className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm text-muted-foreground">
-                  Deleted project
-                </span>
-              ),
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">
+                No notes.{' '}
+                <button type="button" className="font-medium text-foreground hover:underline" onClick={() => setEditOpen(true)}>
+                  Add one
+                </button>
+              </p>
             )}
-            {(i.contracts ?? []).map((c) =>
-              c.name ? (
-                <Link
-                  key={c._id}
-                  href={`/contracts/${c._id}`}
-                  className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
-                >
-                  Contract · {c.name}
-                </Link>
-              ) : (
-                <span key={c._id} className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm text-muted-foreground">
-                  Deleted contract
-                </span>
-              ),
-            )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </Tile>
+      </Bento>
 
       <InvoiceFormDialog open={editOpen} onOpenChange={setEditOpen} invoice={i} />
       <RecordPaymentSheet invoice={i} open={payOpen} onOpenChange={setPayOpen} />
       <WriteOffDialog invoice={i} open={writeOffOpen} onOpenChange={setWriteOffOpen} />
+    </div>
+  );
+}
+
+function Figure({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 break-words">{children}</dd>
     </div>
   );
 }
@@ -507,7 +702,7 @@ function Banner({
 }: {
   icon: React.ComponentType<{ className?: string }>;
   tone?: 'muted' | 'danger';
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div

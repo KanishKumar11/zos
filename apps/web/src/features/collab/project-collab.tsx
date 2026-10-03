@@ -10,6 +10,7 @@ import { PROJECT_FILE_MAX_BYTES, Role, type ContentVisibility } from '@agency/sh
 import { getErrorMessage } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { formatDate, formatDateTime } from '@/lib/formatters';
+import { identityColor } from '@/lib/identity';
 import { useAuthStore } from '@/store/auth.store';
 
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +28,8 @@ import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/states';
 import { Textarea } from '@/components/ui/textarea';
+import { isNewSince, useLastVisit } from '@/lib/last-visit';
+import { ActivityTimeline, Avatar, NewDot } from '@/components/viz';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -106,6 +109,7 @@ export function ProjectUpdates({ projectId, hasClient }: { projectId: string; ha
   const me = useAuthStore((s) => s.user);
   const canShare = !!me && CAN_SHARE.has(me.role);
   const updates = useProjectUpdates(projectId);
+  const since = useLastVisit(`project-updates:${projectId}`);
   const create = useCreateProjectUpdate(projectId);
   const edit = useEditProjectUpdate(projectId);
   const remove = useRemoveProjectUpdate(projectId);
@@ -204,7 +208,11 @@ export function ProjectUpdates({ projectId, hasClient }: { projectId: string; ha
       ) : updates.isError ? (
         <ErrorState error={updates.error} onRetry={() => updates.refetch()} />
       ) : (updates.data ?? []).length === 0 ? (
-        <EmptyState title="No updates yet" description="Post progress here. Choose “Share with client” to show it in their portal." />
+        <EmptyState
+          illustration="inbox"
+          title="No updates yet"
+          description={canShare ? 'Post progress here. Choose “Share with client” to show it in their portal.' : 'Post progress here so the team knows where things stand.'}
+        />
       ) : (
         <ol className="space-y-3">
           {updates.data!.map((u) => {
@@ -215,12 +223,18 @@ export function ProjectUpdates({ projectId, hasClient }: { projectId: string; ha
                 <Card>
                   <CardContent className="space-y-2 p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium">{u.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {u.authorName} · {formatDateTime(u.createdAt)}
-                          {u.editedAt ? ' · edited' : ''}
-                        </p>
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <Avatar id={u.authorId} name={u.authorName} size="sm" />
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-1.5 font-medium">
+                            {u.title}
+                            <NewDot show={!mine && isNewSince(u.createdAt, since)} />
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {u.authorName} · {formatDateTime(u.createdAt)}
+                            {u.editedAt ? ' · edited' : ''}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1">
                         <VisibilityBadge visibility={u.visibility} />
@@ -356,7 +370,7 @@ export function ProjectFiles({ projectId, hasClient }: { projectId: string; hasC
         ) : files.isError ? (
           <ErrorState error={files.error} onRetry={() => files.refetch()} />
         ) : (files.data ?? []).length === 0 ? (
-          <EmptyState title="No files yet" description="Drop files here or use Upload. Files stay internal until you share them with the client." />
+          <EmptyState illustration="files" title="No files yet" description="Drop files here or use Upload. Files stay internal until you share them with the client." />
         ) : (
           <ul className="divide-y">
             {files.data!.map((f) => {
@@ -413,5 +427,40 @@ export function ProjectFiles({ projectId, hasClient }: { projectId: string; hasC
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ── Recent updates (overview snapshot) ───────────────────────────────────────────
+
+/** The latest few updates as a story feed, for the project overview. */
+export function RecentUpdates({ projectId, limit = 3, onOpenAll }: { projectId: string; limit?: number; onOpenAll?: () => void }) {
+  const updates = useProjectUpdates(projectId);
+  if (updates.isLoading) return <TableSkeleton rows={2} columns={1} />;
+  if (updates.isError) return <ErrorState error={updates.error} onRetry={() => updates.refetch()} />;
+  const items = (updates.data ?? []).slice(0, limit);
+  return (
+    <div className="space-y-3">
+      <ActivityTimeline
+        items={items.map((u) => ({
+          key: u._id,
+          date: u.createdAt,
+          color: identityColor(u.authorId),
+          title: u.title,
+          meta: (
+            <>
+              {u.authorName} · {formatDate(u.createdAt)}
+              {u.visibility === 'CLIENT' ? ' · shared with client' : ''}
+            </>
+          ),
+          body: <p className="line-clamp-3 whitespace-pre-line text-muted-foreground">{u.body}</p>,
+        }))}
+        empty={<p className="text-sm text-muted-foreground">No updates yet. Post the first one so everyone knows where things stand.</p>}
+      />
+      {onOpenAll && (
+        <Button variant="ghost" size="sm" onClick={onOpenAll}>
+          {(updates.data ?? []).length > limit ? `See all ${(updates.data ?? []).length} updates` : items.length ? 'Open updates' : 'Post an update'}
+        </Button>
+      )}
+    </div>
   );
 }

@@ -66,9 +66,26 @@ export class ProjectsController {
     @Query(new ZodValidationPipe(listProjectsQuerySchema)) q: ListProjectsQuery,
   ) {
     const page = await this.svc.list(q, user);
-    if (user.role === Role.OWNER) return presentProjects(page, user);
-    const paid = await this.payouts.memberPaidByProject(user.sub, page.items.map((p) => p._id as Types.ObjectId));
-    return presentProjects(page, user, paid);
+    const [names, paid] = await Promise.all([
+      this.svc.memberNames(page.items),
+      user.role === Role.OWNER
+        ? undefined
+        : this.payouts.memberPaidByProject(user.sub, page.items.map((p) => p._id as Types.ObjectId)),
+    ]);
+    const out = presentProjects(page, user, paid);
+    return {
+      ...out,
+      items: out.items.map((p) => ({
+        ...p,
+        members: (p.members ?? []).map((m: { userId: unknown }) => ({ ...m, name: names.get(String(m.userId)) })),
+      })),
+    };
+  }
+
+  @Roles(Role.OWNER)
+  @Get('health')
+  projectBalances(@Query('ids') ids?: string) {
+    return this.svc.projectBalances((ids ?? '').split(',').map((s) => s.trim()).filter(Boolean));
   }
 
   @Roles(Role.OWNER, Role.ADMIN, Role.LEAD)

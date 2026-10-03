@@ -9,7 +9,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { ApiRequestError, getErrorMessage } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { todayLocal } from '@/lib/form';
-import { formatPaise } from '@/lib/formatters';
 
 import { Button } from '@/components/ui/button';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
@@ -20,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Price } from '@/components/viz';
 import { useAllProjects } from '@/features/projects/projects.hooks';
 import { useStaffDirectory } from '@/features/team/team.hooks';
 
@@ -190,7 +190,7 @@ export function ExpenseFormDialog({
       seen.add(c.userId);
       if (!c.amountPaise || c.amountPaise <= 0) e[`contributions.${i}.amountPaise`] = 'Enter an amount';
     });
-    if (overRecovered) e.contributions = `Contributions add up to ${formatPaise(recovered)}, more than the expense.`;
+    if (overRecovered) e.contributions = 'Contributions add up to more than the expense. Lower them or raise the amount.';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -408,22 +408,27 @@ export function ExpenseFormDialog({
             <div className="space-y-1 border-t pt-2 text-sm">
               <div className="flex justify-between text-muted-foreground">
                 <span>Expense</span>
-                <span className="tabular-nums">{formatPaise(gross)}</span>
+                <Price paise={gross} />
               </div>
               {recovered > 0 && (
                 <div className="flex justify-between text-muted-foreground">
                   <span>Covered by team</span>
-                  <span className="tabular-nums">−{formatPaise(recovered)}</span>
+                  <span>
+                    −<Price paise={recovered} />
+                  </span>
                 </div>
               )}
               <div className={cn('flex justify-between font-medium', net < 0 && 'text-destructive')}>
                 <span>Net cost to the agency</span>
-                <span className="tabular-nums">{formatPaise(net)}</span>
+                <Price paise={net} />
               </div>
               {(errors.contributions || overRecovered) && (
                 <p role="alert" className="text-xs text-destructive">
-                  {errors.contributions ??
-                    `Contributions add up to ${formatPaise(recovered)}, more than the expense. Lower them or raise the amount.`}
+                  {errors.contributions ?? (
+                    <>
+                      Contributions add up to <Price paise={recovered} />, more than the expense. Lower them or raise the amount.
+                    </>
+                  )}
                 </p>
               )}
             </div>

@@ -2,6 +2,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { Client, ClientSchema } from '../clients/schemas/client.schema';
 import { Expense, ExpenseSchema } from '../expenses/schemas/expense.schema';
 import { Income, IncomeSchema } from '../income/schemas/income.schema';
 import { Invoice, InvoiceSchema } from '../invoices/schemas/invoice.schema';
@@ -36,6 +37,7 @@ import { DashboardService } from './dashboard.service';
       { name: Income.name, schema: IncomeSchema },
       { name: Payout.name, schema: PayoutSchema },
       { name: User.name, schema: UserSchema },
+      { name: Client.name, schema: ClientSchema },
     ]),
   ],
   controllers: [DashboardController],

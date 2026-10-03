@@ -3,13 +3,13 @@
 'use client';
 
 import { CalendarClock } from 'lucide-react';
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { CompensationType, Role, type UpsertCompensationInput } from '@agency/shared';
 
 import { ApiRequestError, getErrorMessage } from '@/lib/api-client';
 import { toLocalDateInput, todayLocal } from '@/lib/form';
-import { formatDate, formatPaise } from '@/lib/formatters';
+import { formatDate } from '@/lib/formatters';
 
 import { RoleGate } from '@/components/auth/role-gate';
 import { PageHeader } from '@/components/layout/page-header';
@@ -22,6 +22,7 @@ import { MoneyInput } from '@/components/ui/money-input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
+import { Price } from '@/components/viz';
 import {
   useCompensation,
   useCompensationHistory,
@@ -187,7 +188,7 @@ function Inner({ id }: { id: string }) {
           <div>
             {scheduledRows.map((h) => (
               <p key={h._id}>
-                Scheduled: {formatPaise(monthlyFigures(h).gross, h.currency)} a month from {formatDate(h.effectiveFrom)}
+                Scheduled: <Price paise={monthlyFigures(h).gross} currency={h.currency} /> a month from {formatDate(h.effectiveFrom)}
                 {h.reason ? ` — ${h.reason}` : ''}
               </p>
             ))}
@@ -277,17 +278,17 @@ function Inner({ id }: { id: string }) {
               <p className="text-muted-foreground">Paid per project — nothing is added to payroll.</p>
             ) : (
               <>
-                <Row label="Gross pay" value={formatPaise(figures.gross)} />
-                <Row label="Cost to company" value={formatPaise(figures.ctc)} hint={`${formatPaise(figures.ctc * 12)} a year`} />
+                <Row label="Gross pay" value={<Price paise={figures.gross} />} />
+                <Row label="Cost to company" value={<Price paise={figures.ctc} />} hint={<><Price paise={figures.ctc * 12} /> a year</>} />
                 <div className="border-t pt-3">
-                  <Row label="Estimated take-home" value={formatPaise(figures.net)} strong />
+                  <Row label="Estimated take-home" value={<Price paise={figures.net} />} strong />
                   <p className="mt-1 text-xs text-muted-foreground">
                     Before loss of pay, bonuses and one-off deductions on each payslip.
                   </p>
                 </div>
                 {comp.data && (
                   <p className="border-t pt-3 text-xs text-muted-foreground">
-                    Now: {formatPaise(monthlyFigures(comp.data).gross)} gross a month, since {formatDate(comp.data.effectiveFrom)}.
+                    Now: <Price paise={monthlyFigures(comp.data).gross} /> gross a month, since {formatDate(comp.data.effectiveFrom)}.
                   </p>
                 )}
               </>
@@ -330,7 +331,7 @@ function HistoryRow({ row, today, isCurrent }: { row: CompensationHistoryRow; to
     <li className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="font-medium">
-          {row.type === CompensationType.PROJECT_BASED ? 'Paid per project' : `${formatPaise(f.gross, row.currency)} a month`}
+          {row.type === CompensationType.PROJECT_BASED ? 'Paid per project' : <><Price paise={f.gross} currency={row.currency} /> a month</>}
           <span className="font-normal text-muted-foreground"> · {TYPE_LABEL[row.type]}</span>
         </p>
         <p className="text-xs text-muted-foreground">
@@ -343,7 +344,7 @@ function HistoryRow({ row, today, isCurrent }: { row: CompensationHistoryRow; to
   );
 }
 
-function Row({ label, value, hint, strong }: { label: string; value: string; hint?: string; strong?: boolean }) {
+function Row({ label, value, hint, strong }: { label: string; value: ReactNode; hint?: ReactNode; strong?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <span className="text-muted-foreground">{label}</span>

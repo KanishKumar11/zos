@@ -7,6 +7,7 @@ import { useMe } from '@/features/auth/auth.hooks';
 import { useAuthStore } from '@/store/auth.store';
 
 import { CommandPalette } from '@/components/layout/command-palette';
+import { KeyboardShortcuts } from '@/components/layout/keyboard-shortcuts';
 import { MobileNav } from '@/components/layout/mobile-nav';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
@@ -48,6 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       <MobileNav />
       <CommandPalette />
+      <KeyboardShortcuts />
       <LogPaymentSheet />
       <ConfirmHost />
     </TooltipProvider>

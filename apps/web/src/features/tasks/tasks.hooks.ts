@@ -13,7 +13,7 @@ import {
   type UpdateTaskInput,
 } from '@agency/shared';
 
-import { api, unwrap } from '@/lib/api-client';
+import { api, getErrorMessage, unwrap } from '@/lib/api-client';
 import { qk } from '@/lib/query-keys';
 
 export interface TaskRow {
@@ -70,10 +70,47 @@ export const timeApi = {
 
 export function useTasks(q: ListTasksQuery = {}) {
   return useQuery({
-    queryKey: q.projectId ? qk.tasks.byProject(q.projectId, q.status) : qk.tasks.mine(),
+    // Without a project this is every task the viewer may see — its own key, so it never collides
+    // with the "my tasks" cache. Mutations still refresh it through the ['tasks'] prefix.
+    queryKey: q.projectId ? qk.tasks.byProject(q.projectId, q.status) : q.mine ? qk.tasks.mine() : ['tasks', 'list', q],
     queryFn: () => tasksApi.list(q),
   });
 }
+/**
+ * Optimistic status change with rollback, for boards and checklists. `queryKey` is the list the
+ * task lives in (qk.tasks.mine() or qk.tasks.byProject(id)). Marking done offers an Undo.
+ */
+export function useSetTaskStatus(queryKey: readonly unknown[]) {
+  const qc = useQueryClient();
+  return async (task: TaskRow, status: TaskStatus) => {
+    if (task.status === status) return;
+    await qc.cancelQueries({ queryKey });
+    const prev = qc.getQueryData<TaskRow[]>(queryKey);
+    qc.setQueryData<TaskRow[]>(queryKey, (old) => (old ?? []).map((t) => (t._id === task._id ? { ...t, status } : t)));
+    try {
+      await tasksApi.update(task._id, { status });
+      if (status === TaskStatus.DONE) {
+        toast.success('Nice — task done', {
+          action: {
+            label: 'Undo',
+            onClick: () =>
+              void tasksApi
+                .update(task._id, { status: task.status })
+                .then(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
+                .catch((err: unknown) => toast.error(getErrorMessage(err))),
+          },
+        });
+      }
+    } catch (err) {
+      qc.setQueryData(queryKey, prev);
+      toast.error(getErrorMessage(err));
+    } finally {
+      void qc.invalidateQueries({ queryKey: ['tasks'] });
+      void qc.invalidateQueries({ queryKey: ['dashboard'] });
+    }
+  };
+}
+
 export function useMyTasks() {
   return useQuery({ queryKey: qk.tasks.mine(), queryFn: () => tasksApi.list({ mine: true }) });
 }

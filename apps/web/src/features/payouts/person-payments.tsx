@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 import { PAYOUT_METHOD_LABEL, PayeeType } from '@agency/shared';
 
-import { formatDate, formatPaise } from '@/lib/formatters';
+import { formatDate } from '@/lib/formatters';
 import { useQuickActions } from '@/store/quick-actions.store';
 
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/states';
+import { Price } from '@/components/viz';
 
 import { usePayeeBalances, usePayouts } from './payouts.hooks';
 
@@ -31,8 +32,13 @@ export function PersonPayments({ userId }: { userId: string }) {
           <div>
             <CardTitle>Projects &amp; payments</CardTitle>
             <p className="mt-1 text-[13px] text-muted-foreground">
-              Paid {formatPaise(paid)}
-              {pending > 0 && <span className="text-amber-700 dark:text-amber-500"> · {formatPaise(pending)} pending</span>}
+              Paid <Price paise={paid} />
+              {pending > 0 && (
+                <span className="text-warning">
+                  {' '}
+                  · <Price paise={pending} /> pending
+                </span>
+              )}
             </p>
           </div>
           <Button size="sm" onClick={() => openLogPayment({ payeeType: 'MEMBER', userId })}>
@@ -61,8 +67,13 @@ export function PersonPayments({ userId }: { userId: string }) {
                     <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                       {b.projectStatus && <StatusBadge status={b.projectStatus} />}
                       <span>
-                        {formatPaise(b.paidPaise)}
-                        {b.agreedPaise ? ` of ${formatPaise(b.agreedPaise)}` : ''}
+                        <Price paise={b.paidPaise} />
+                        {b.agreedPaise ? (
+                          <>
+                            {' '}
+                            of <Price paise={b.agreedPaise} />
+                          </>
+                        ) : null}
                       </span>
                     </div>
                   </div>
@@ -74,7 +85,13 @@ export function PersonPayments({ userId }: { userId: string }) {
                       className="h-7 px-2.5 text-xs"
                       onClick={() => openLogPayment({ payeeType: 'MEMBER', userId, projectId: b.projectId!, amountPaise: b.pendingPaise || undefined })}
                     >
-                      {b.pendingPaise > 0 ? `Pay ${formatPaise(b.pendingPaise)}` : 'Pay'}
+                      {b.pendingPaise > 0 ? (
+                        <>
+                          Pay <Price paise={b.pendingPaise} compact className="ml-1" />
+                        </>
+                      ) : (
+                        'Pay'
+                      )}
                     </Button>
                   ) : (
                     <span />
@@ -102,13 +119,13 @@ export function PersonPayments({ userId }: { userId: string }) {
                 <li key={p._id}>
                   <button type="button" onClick={() => openLogPayment({}, p._id)} className="flex w-full items-center gap-3 px-5 py-2.5 text-left text-[13px] hover:bg-muted/30">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate">{p.projectName ?? 'General'}</p>
+                      <p className="truncate">{p.projectId ? (p.projectName ?? 'Deleted project') : 'General'}</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {formatDate(p.paidAt)} · {PAYOUT_METHOD_LABEL[p.method]}
                         {p.reference ? ` · ${p.reference}` : ''}
                       </p>
                     </div>
-                    <span className="font-medium tabular-nums">{formatPaise(p.amountPaise, p.currency)}</span>
+                    <Price paise={p.amountPaise} currency={p.currency} className="font-medium" />
                   </button>
                 </li>
               ))}

@@ -106,7 +106,66 @@ export interface TeamEarnings {
   members: TeamMemberEarning[];
 }
 
+// ── Command centre (OWNER only — GET /dashboard/owner/cockpit) ──
+export interface CockpitFlowNode {
+  key: string;
+  label: string;
+  paise: number;
+}
+export interface CockpitFlow {
+  label: string;
+  /** Biggest clients, "N more clients", "Other income", and "From reserves" when more went out than came in. */
+  inflows: CockpitFlowNode[];
+  outflows: { teamPaise: number; freelancerPaise: number; payrollPaise: number; expensesPaise: number };
+  revenuePaise: number;
+  otherIncomePaise: number;
+  inPaise: number;
+  outPaise: number;
+  /** In − out; negative when the period ran at a loss. */
+  keptPaise: number;
+  clientCount: number;
+}
+export type AgingKey = 'current' | '1-30' | '31-60' | '60plus';
+export interface CockpitAging {
+  buckets: { key: AgingKey; label: string; paise: number; count: number }[];
+  outstandingPaise: number;
+  overduePaise: number;
+  openCount: number;
+  overdueCount: number;
+  overdueClients: number;
+  owingClients: number;
+}
+export interface CockpitCashDay {
+  date: string; // yyyy-mm-dd (India)
+  inPaise: number;
+  outPaise: number;
+}
+export interface CockpitProject {
+  projectId: string;
+  name: string;
+  code: string;
+  status: string;
+  clientId: string | null;
+  clientName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  currency: string;
+  budgetPaise: number;
+  invoicedPaise: number;
+  collectedPaise: number;
+  agreedPaise: number;
+  paidOutPaise: number;
+}
+export interface OwnerCockpit {
+  month: CockpitFlow;
+  fy: CockpitFlow;
+  aging: CockpitAging;
+  cash: CockpitCashDay[];
+  projects: CockpitProject[];
+}
+
 export const dashboardApi = {
+  cockpit: () => unwrap<OwnerCockpit>(api.get('/dashboard/owner/cockpit')),
   owner: () => unwrap<OwnerDashboard>(api.get('/dashboard/owner')),
   member: () => unwrap<MemberDashboard>(api.get('/dashboard/me')),
   charts: () => unwrap<OwnerCharts>(api.get('/dashboard/owner/charts')),
@@ -126,6 +185,14 @@ export function useOwnerCharts(enabled: boolean) {
   return useQuery({
     queryKey: [...qk.dashboard.owner(), 'charts'],
     queryFn: dashboardApi.charts,
+    enabled,
+  });
+}
+/** Money flow, aging, daily cash and project health for the owner command centre. */
+export function useOwnerCockpit(enabled: boolean) {
+  return useQuery({
+    queryKey: [...qk.dashboard.owner(), 'cockpit'],
+    queryFn: dashboardApi.cockpit,
     enabled,
   });
 }

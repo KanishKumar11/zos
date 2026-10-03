@@ -1,5 +1,7 @@
+// Billing reminders — retainers due to be billed this month, one row per client. OWNER only.
 'use client';
 
+import { FileText } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -9,7 +11,10 @@ import { useContracts, useGenerateClientInvoice, type ContractRow } from '@/feat
 import { useInvoices } from '@/features/invoices/invoices.hooks';
 import { useClients } from '@/features/clients/clients.hooks';
 import { thisMonthLocal } from '@/lib/form';
-import { formatPaise } from '@/lib/formatters';
+
+import { Button } from '@/components/ui/button';
+import { Price } from '@/components/viz';
+import { AttentionRow } from '@/features/dashboard/attention-row';
 
 export function BillingReminders() {
   const contracts = useContracts({ status: ContractStatus.ACTIVE });
@@ -48,19 +53,17 @@ export function BillingReminders() {
   if (byClient.size === 0) return null;
 
   return (
-    <div>
-      <div className="space-y-2">
-        {[...byClient.entries()].map(([clientId, group]) => (
-          <ReminderRow
-            key={clientId}
-            clientId={clientId}
-            contracts={group}
-            clientName={clientMap.get(clientId) ?? 'Deleted client'}
-            month={currentMonth}
-            onSuccess={(id) => router.push(`/invoices/${id}`)}
-          />
-        ))}
-      </div>
+    <div className="space-y-2">
+      {[...byClient.entries()].map(([clientId, group]) => (
+        <ReminderRow
+          key={clientId}
+          clientId={clientId}
+          contracts={group}
+          clientName={clientMap.get(clientId) ?? 'Deleted client'}
+          month={currentMonth}
+          onSuccess={(id) => router.push(`/invoices/${id}`)}
+        />
+      ))}
     </div>
   );
 }
@@ -80,40 +83,41 @@ function ReminderRow({
   const contractLinks = contracts.map((c, i) => (
     <span key={c._id}>
       {i > 0 && (i === contracts.length - 1 ? ' and ' : ', ')}
-      <Link href={`/contracts/${c._id}`} className="underline">{c.name}</Link>
+      <Link href={`/contracts/${c._id}`} className="underline underline-offset-2 hover:text-brand">{c.name}</Link>
     </span>
   ));
   const total = contracts.reduce((s, c) => s + c.monthlyAmountPaise, 0);
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-900 dark:bg-orange-950/20">
-      {contracts.length === 1 ? (
-        <div>
-          <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">Generate invoice for {contractLinks}</p>
-          <p className="text-xs text-orange-700 mt-0.5 dark:text-orange-400">{clientName} · {monthLabel}</p>
-        </div>
-      ) : (
-        <div>
-          <p className="text-sm font-semibold text-orange-900 dark:text-orange-200">
-            Generate one invoice for {clientName} · {formatPaise(total, contracts[0]!.currency)}
-          </p>
-          <p className="text-xs text-orange-700 mt-0.5 dark:text-orange-400">
-            {contractLinks} · {monthLabel}
-          </p>
-        </div>
-      )}
-      <button
-        onClick={() =>
-          gen.mutate(
-            { clientId, month, contractIds: contracts.map((c) => c._id) },
-            { onSuccess: (data) => onSuccess(data._id) },
-          )
-        }
-        disabled={gen.isPending}
-        className="ml-4 shrink-0 rounded-md bg-orange-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-orange-700 disabled:opacity-50"
-      >
-        {gen.isPending ? 'Generating…' : 'Generate →'}
-      </button>
-    </div>
+    <AttentionRow
+      icon={FileText}
+      tone="brand"
+      title={
+        contracts.length === 1 ? (
+          <>Time to bill {contractLinks} · <Price paise={total} currency={contracts[0]!.currency} compact /></>
+        ) : (
+          <>
+            Bill {clientName} for {contracts.length} retainers in one invoice ·{' '}
+            <Price paise={total} currency={contracts[0]!.currency} compact />
+          </>
+        )
+      }
+      sub={contracts.length === 1 ? <>{clientName} · {monthLabel}</> : <>{contractLinks} · {monthLabel}</>}
+      action={
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            gen.mutate(
+              { clientId, month, contractIds: contracts.map((c) => c._id) },
+              { onSuccess: (data) => onSuccess(data._id) },
+            )
+          }
+          disabled={gen.isPending}
+        >
+          {gen.isPending ? 'Generating…' : 'Generate invoice'}
+        </Button>
+      }
+    />
   );
 }

@@ -22,7 +22,7 @@ export function SheetContent({
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
       <DialogPrimitive.Content
         className={cn(
-          'fixed inset-y-0 z-50 flex w-full flex-col bg-background shadow-xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out sm:max-w-md',
+          'fixed inset-y-0 z-50 flex w-full flex-col bg-card shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out sm:max-w-md',
           side === 'right'
             ? 'right-0 border-l data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right'
             : 'left-0 border-r data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left',
@@ -55,7 +55,7 @@ export function SheetFooter({ className, ...props }: HTMLAttributes<HTMLDivEleme
 }
 
 export function SheetTitle({ className, ...props }: ComponentPropsWithoutRef<typeof DialogPrimitive.Title>) {
-  return <DialogPrimitive.Title className={cn('text-base font-semibold', className)} {...props} />;
+  return <DialogPrimitive.Title className={cn('font-display text-xl font-bold', className)} {...props} />;
 }
 
 export function SheetDescription({

@@ -1,17 +1,20 @@
-// Project tasks — quick-add plus a list grouped by status, with inline status / assignee changes
-// and overdue highlighting. Anyone on the project can add tasks.
+// Project tasks — quick-add plus a list grouped by status (inline status / assignee changes) or an
+// animated board. Assignees show as avatars, overdue work is flagged. Anyone on the project can add.
 'use client';
 
-import { Plus, Trash2 } from 'lucide-react';
+import { Columns3, List, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Role, TASK_STATUS_ORDER, TaskPriority, TaskStatus } from '@agency/shared';
 
 import { cn } from '@/lib/cn';
 import { todayLocal } from '@/lib/form';
 import { formatDate } from '@/lib/formatters';
+import { qk } from '@/lib/query-keys';
 import { useAuthStore } from '@/store/auth.store';
+
+import { ViewToggle } from '@/components/data/view-toggle';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,16 +24,35 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { statusLabel } from '@/components/ui/status-badge';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/states';
+import { Avatar } from '@/components/viz';
 import type { ProjectRow } from '@/features/projects/projects.hooks';
 
-import { useCreateTask, useDeleteTask, useTasks, useUpdateTask, type TaskRow } from './tasks.hooks';
+import { PRIORITY_TONE, TaskBoard } from './task-board';
+import { useCreateTask, useDeleteTask, useSetTaskStatus, useTasks, useUpdateTask, type TaskRow } from './tasks.hooks';
 
-const PRIORITY_TONE: Record<TaskPriority, 'muted' | 'outline' | 'warning' | 'danger'> = {
-  LOW: 'muted',
-  MEDIUM: 'outline',
-  HIGH: 'warning',
-  URGENT: 'danger',
-};
+const VIEW_KEY = 'zos:project-tasks-view';
+/** Remember List/Board for the project Tasks tab (per browser; the tab URL belongs to the page). */
+function useRememberedView(): ['list' | 'board', (v: 'list' | 'board') => void] {
+  const [view, setView] = useState<'list' | 'board'>('list');
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(VIEW_KEY) === 'board') setView('board');
+    } catch {
+      /* storage blocked — default view */
+    }
+  }, []);
+  return [
+    view,
+    (v) => {
+      setView(v);
+      try {
+        localStorage.setItem(VIEW_KEY, v);
+      } catch {
+        /* ignore */
+      }
+    },
+  ];
+}
 
 export function ProjectTasks({ project }: { project: ProjectRow }) {
   const me = useAuthStore((s) => s.user);
@@ -45,8 +67,10 @@ export function ProjectTasks({ project }: { project: ProjectRow }) {
   const [priority, setPriority] = useState<TaskPriority>(TaskPriority.MEDIUM);
   const [showDone, setShowDone] = useState(false);
   const [error, setError] = useState<string>();
+  const [view, setView] = useRememberedView();
+  const setStatus = useSetTaskStatus(qk.tasks.byProject(project._id));
 
-  const names = new Map(project.members.map((m) => [m.userId, m.name ?? 'Team member']));
+  const names = new Map(project.members.map((m) => [m.userId, m.name ?? (m.userId === me?.id ? me?.name : undefined) ?? 'Team member']));
   const today = todayLocal();
 
   const grouped = useMemo(() => {
@@ -88,10 +112,22 @@ export function ProjectTasks({ project }: { project: ProjectRow }) {
             {open} open{overdue > 0 && <span className="text-destructive"> · {overdue} overdue</span>}
           </p>
         </div>
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />
-          Show done
-        </label>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {view === 'list' && (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />
+              Show done
+            </label>
+          )}
+          <ViewToggle
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'list', label: 'List', icon: List },
+              { value: 'board', label: 'Board', icon: Columns3 },
+            ]}
+          />
+        </div>
       </CardHeader>
       <form
         className="grid gap-2 border-b bg-muted/30 px-5 py-3 sm:grid-cols-[1fr_170px_150px_120px_auto]"
@@ -130,7 +166,11 @@ export function ProjectTasks({ project }: { project: ProjectRow }) {
         ) : tasks.isError ? (
           <ErrorState error={tasks.error} onRetry={() => tasks.refetch()} />
         ) : (tasks.data ?? []).length === 0 ? (
-          <EmptyState title="No tasks yet" description="Add the first task above." />
+          <EmptyState illustration="done" title="No tasks yet" description="Add the first task above." />
+        ) : view === 'board' ? (
+          <div className="p-3">
+            <TaskBoard tasks={tasks.data ?? []} onMove={setStatus} assigneeName={(uid) => names.get(uid) ?? 'Former member'} />
+          </div>
         ) : (
           TASK_STATUS_ORDER.filter((s) => (showDone || s !== TaskStatus.DONE) && grouped.get(s)?.length).map((status) => (
             <section key={status}>
@@ -142,7 +182,7 @@ export function ProjectTasks({ project }: { project: ProjectRow }) {
                   const late = t.status !== TaskStatus.DONE && t.dueDate && t.dueDate.slice(0, 10) < today;
                   const canDelete = t.createdBy === me?.id || me?.role === Role.OWNER || me?.role === Role.ADMIN || me?.role === Role.LEAD;
                   return (
-                    <li key={t._id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2">
+                    <li key={t._id} className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2', late && 'bg-destructive/[0.04]')}>
                       <input
                         type="checkbox"
                         aria-label={`Mark ${t.title} done`}
@@ -158,6 +198,11 @@ export function ProjectTasks({ project }: { project: ProjectRow }) {
                           {late ? 'Overdue · ' : ''}
                           {formatDate(t.dueDate)}
                         </span>
+                      )}
+                      {t.assigneeId ? (
+                        <Avatar id={t.assigneeId} name={names.get(t.assigneeId) ?? 'Former member'} size="xs" />
+                      ) : (
+                        <span className="h-5 w-5 shrink-0 rounded-full border border-dashed" title="Unassigned" aria-hidden />
                       )}
                       <Select
                         value={t.assigneeId ?? ''}

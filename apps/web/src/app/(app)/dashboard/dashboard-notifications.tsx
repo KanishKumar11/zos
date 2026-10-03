@@ -1,8 +1,19 @@
+// Owner notifications — payroll not yet run this month, and upcoming team birthdays.
 'use client';
 
+import { CakeSlice, Wallet } from 'lucide-react';
 import Link from 'next/link';
 
+import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/viz';
+import { AttentionRow } from '@/features/dashboard/attention-row';
 import { useDashboardNotifications } from '@/features/dashboard/dashboard.hooks';
+
+function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  if (!y || !m) return month;
+  return new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+}
 
 export function DashboardNotifications() {
   const q = useDashboardNotifications(true);
@@ -13,44 +24,50 @@ export function DashboardNotifications() {
 
   return (
     <div className="space-y-2">
-
       {payrollReminder && (
-        <div className="flex items-center justify-between border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 rounded-lg px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Payroll not run for {payrollReminder.month}</p>
-            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Run payroll to generate payslips for your team.</p>
-          </div>
-          <Link
-            href="/payroll"
-            className="ml-4 shrink-0 rounded-md bg-amber-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
-          >
-            Run payroll
-          </Link>
-        </div>
+        <AttentionRow
+          icon={Wallet}
+          tone="warning"
+          title={`Payroll hasn't been run for ${monthLabel(payrollReminder.month)}`}
+          sub="Run payroll to generate payslips for your team."
+          action={
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/payroll">Run payroll</Link>
+            </Button>
+          }
+        />
       )}
 
-      {birthdays.map((b) => (
-        <div
-          key={b.userId}
-          className="flex items-center justify-between border border-rose-200 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-800 rounded-lg px-4 py-3"
-        >
-          <div>
-            <p className="text-sm font-semibold text-rose-900 dark:text-rose-200">
-              {b.daysUntil === 0 ? '🎂' : '🎉'}{' '}
-              {b.daysUntil === 0
-                ? `Today is ${b.name}'s birthday!`
-                : `${b.name}'s birthday in ${b.daysUntil} day${b.daysUntil === 1 ? '' : 's'}`}
-            </p>
-            <p className="text-xs text-rose-700 dark:text-rose-400 mt-0.5">{b.dateLabel}</p>
-          </div>
-          <Link
-            href={`/team/${b.userId}`}
-            className="ml-4 shrink-0 rounded-md bg-rose-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-rose-700"
-          >
-            Say hello
-          </Link>
-        </div>
-      ))}
+      {birthdays.length > 0 && (
+        <AttentionRow
+          icon={CakeSlice}
+          tone="info"
+          title={
+            birthdays.length === 1
+              ? birthdays[0]!.daysUntil === 0
+                ? `It's ${birthdays[0]!.name}'s birthday today`
+                : `${birthdays[0]!.name}'s birthday is in ${birthdays[0]!.daysUntil} day${birthdays[0]!.daysUntil === 1 ? '' : 's'}`
+              : `${birthdays.length} birthdays this week`
+          }
+          sub={
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {birthdays.map((b) => (
+                <Link key={b.userId} href={`/team/${b.userId}`} className="inline-flex items-center gap-1.5 hover:text-foreground hover:underline">
+                  <Avatar id={b.userId} name={b.name} size="xs" />
+                  {b.name} · {b.daysUntil === 0 ? 'today' : b.dateLabel}
+                </Link>
+              ))}
+            </span>
+          }
+          action={
+            birthdays.length === 1 ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link href={`/team/${birthdays[0]!.userId}`}>Say hello</Link>
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
     </div>
   );
 }

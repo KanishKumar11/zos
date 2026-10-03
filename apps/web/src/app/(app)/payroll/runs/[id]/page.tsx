@@ -1,7 +1,7 @@
 // Payroll run — payslips, people left out, review → finalize → mark paid, reopen (owner), CSV export.
 'use client';
 
-import { AlertTriangle, CheckCircle2, Download, Lock, RefreshCw, RotateCcw, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Lock, RefreshCw, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { use, useMemo, useState } from 'react';
 
@@ -12,22 +12,20 @@ import { csvMoney, downloadCsv } from '@/lib/csv';
 import { env } from '@/lib/env';
 import { todayLocal } from '@/lib/form';
 import { formatDate, formatPaise } from '@/lib/formatters';
-import { isOwner } from '@/lib/roles';
-import { useAuthStore } from '@/store/auth.store';
 
 import { RoleGate } from '@/components/auth/role-gate';
 import { DataTable, type Column } from '@/components/data/data-table';
 import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
-import { StatCard } from '@/components/ui/stat-card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Avatar, Bento, BigNumber, Price, PrivacyChip, Tile, useCanSeePrices } from '@/components/viz';
 import {
   isLegacyProjectRun,
   monthTitle,
@@ -48,14 +46,14 @@ import { toast } from 'sonner';
 export default function PayrollRunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   return (
-    <RoleGate allow={[Role.OWNER, Role.ADMIN]} fallback={<EmptyState title="Payroll is only for the owner and admins" />}>
+    <RoleGate allow={[Role.OWNER]} fallback={<EmptyState illustration="people" title="Payroll is only for the owner" />}>
       <Inner id={id} />
     </RoleGate>
   );
 }
 
 function Inner({ id }: { id: string }) {
-  const role = useAuthStore((s) => s.user?.role);
+  const canSee = useCanSeePrices();
   const run = usePayrollRun(id);
   const slips = useRunPayslips(id);
   const settings = useSettings();
@@ -84,17 +82,23 @@ function Inner({ id }: { id: string }) {
   if (run.isLoading) return <PageSkeleton />;
   if (!run.data) {
     const missing = run.error instanceof ApiRequestError && run.error.status === 404;
-    return missing ? (
-      <EmptyState
-        title="This payroll run no longer exists"
-        action={
-          <Link href="/payroll">
-            <Button variant="outline" size="sm">Back to payroll</Button>
-          </Link>
-        }
-      />
-    ) : (
-      <ErrorState title="Couldn't open this payroll run" error={run.error} onRetry={() => run.refetch()} />
+    return (
+      <div className="space-y-5">
+        <PageHeader title={missing ? 'Payroll run not found' : 'Payroll run'} crumbs={[{ label: 'Payroll', href: '/payroll' }]} />
+        {missing ? (
+          <EmptyState
+            illustration="files"
+            title="This payroll run no longer exists"
+            action={
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/payroll">Back to payroll</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <ErrorState title="Couldn't open this payroll run" error={run.error} onRetry={() => run.refetch()} />
+        )}
+      </div>
     );
   }
 
@@ -127,11 +131,12 @@ function Inner({ id }: { id: string }) {
     if (ok) reopen.mutate(r._id);
   };
 
-  const exportCsv = async () => {
+  const exportCsv = async (kind: 'bank' | 'payslips') => {
+    if (!canSee) return;
     setExporting(true);
     try {
       const file = `payroll-${r.month}`;
-      if (isOwner(role)) {
+      if (kind === 'bank') {
         const bank = await payrollApi.bankExport(r._id);
         downloadCsv(
           `${file}-bank-transfer`,
@@ -152,7 +157,7 @@ function Inner({ id }: { id: string }) {
         downloadCsv(
           file,
           ['Name', 'Email', 'Working days', 'Unpaid days', 'Gross (₹)', 'Deductions (₹)', 'Net pay (₹)'],
-          rows.map((s) => [s.userName ?? '', s.userEmail ?? '', s.workingDays, s.lopDays, csvMoney(s.grossPaise), csvMoney(s.deductionsPaise), csvMoney(s.netPaise)]),
+          rows.map((s) => [s.userName ?? 'Deleted member', s.userEmail ?? '', s.workingDays, s.lopDays, csvMoney(s.grossPaise), csvMoney(s.deductionsPaise), csvMoney(s.netPaise)]),
         );
       }
     } catch (err) {
@@ -167,43 +172,53 @@ function Inner({ id }: { id: string }) {
       id: 'person',
       header: 'Person',
       cell: (s) => (
-        <div>
-          <Link href={`/team/${s.userId}`} className="font-medium hover:underline">
-            {s.userName ?? 'Deleted member'}
-          </Link>
-          {(s.projectPayments ?? []).length > 0 && (
-            <div className="mt-1 space-y-0.5">
-              {s.projectPayments!.map((pp, i) => (
-                <p key={i} className="text-xs text-muted-foreground">
-                  <Link href={`/projects/${pp.projectId}`} className="hover:underline">
-                    {pp.projectName || 'Deleted project'}
-                  </Link>{' '}
-                  · {formatPaise(pp.amountPaise, s.currency)}
-                </p>
-              ))}
-            </div>
-          )}
+        <div className="flex min-w-0 items-start gap-2.5">
+          <Avatar id={s.userId} name={s.userName ?? 'Deleted member'} size="sm" className="mt-0.5" />
+          <div className="min-w-0">
+            {s.userName ? (
+              <Link href={`/team/${s.userId}`} className="font-medium hover:underline">
+                {s.userName}
+              </Link>
+            ) : (
+              <span className="italic text-muted-foreground">Deleted member</span>
+            )}
+            {s.userEmail && <p className="hidden truncate text-xs text-muted-foreground lg:block">{s.userEmail}</p>}
+            {(s.projectPayments ?? []).length > 0 && (
+              <div className="mt-1 space-y-0.5">
+                {s.projectPayments!.map((pp, i) => (
+                  <p key={i} className="text-xs text-muted-foreground">
+                    {pp.projectName ? (
+                      <Link href={`/projects/${pp.projectId}`} className="hover:underline">
+                        {pp.projectName}
+                      </Link>
+                    ) : (
+                      <span className="italic">Deleted project</span>
+                    )}{' '}
+                    · <Price paise={pp.amountPaise} currency={s.currency} />
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       ),
-      footer: <span className="text-muted-foreground">{rows.length} people</span>,
+      footer: <span className="text-muted-foreground">{rows.length === 1 ? '1 person' : `${rows.length} people`}</span>,
     },
     {
       id: 'days',
       header: 'Working days',
       align: 'right',
       hideBelow: 'md',
-      cell: (s) => s.workingDays,
+      cell: (s) => <span className="font-figures">{s.workingDays}</span>,
     },
     {
       id: 'lop',
       header: 'Unpaid days',
       align: 'right',
       cell: (s) => (
-        <span>
+        <span className="font-figures">
           {s.lopDays > 0 ? <span className="text-destructive">{s.lopDays}</span> : <span className="text-muted-foreground">0</span>}
-          {(s.unmarkedDays ?? 0) > 0 && !treatMissing && (
-            <span className="block text-[11px] text-muted-foreground">{s.unmarkedDays} not marked</span>
-          )}
+          {(s.unmarkedDays ?? 0) > 0 && !treatMissing && <span className="block font-sans text-[11px] text-muted-foreground">{s.unmarkedDays} not marked</span>}
         </span>
       ),
     },
@@ -212,16 +227,29 @@ function Inner({ id }: { id: string }) {
       header: 'Gross',
       align: 'right',
       hideBelow: 'sm',
-      cell: (s) => formatPaise(s.grossPaise, s.currency),
-      footer: formatPaise(totals.gross),
+      cell: (s) => <Price paise={s.grossPaise} currency={s.currency} />,
+      footer: <Price paise={totals.gross} />,
     },
     {
       id: 'deductions',
       header: 'Deductions',
       align: 'right',
       hideBelow: 'sm',
-      cell: (s) => (s.deductionsPaise ? <span className="text-destructive">−{formatPaise(s.deductionsPaise, s.currency)}</span> : '—'),
-      footer: totals.deductions ? `−${formatPaise(totals.deductions)}` : '—',
+      cell: (s) =>
+        s.deductionsPaise ? (
+          <span className="text-destructive">
+            −<Price paise={s.deductionsPaise} currency={s.currency} />
+          </span>
+        ) : (
+          <span className="text-muted-foreground">None</span>
+        ),
+      footer: totals.deductions ? (
+        <span className="text-destructive">
+          −<Price paise={totals.deductions} />
+        </span>
+      ) : (
+        <span className="text-muted-foreground">None</span>
+      ),
     },
     {
       id: 'net',
@@ -229,7 +257,7 @@ function Inner({ id }: { id: string }) {
       align: 'right',
       cell: (s) => (
         <span className="font-semibold">
-          {formatPaise(s.netPaise, s.currency)}
+          <Price paise={s.netPaise} currency={s.currency} />
           {s.adjustments.length > 0 && (
             <span className="block text-[11px] font-normal text-muted-foreground">
               {s.adjustments.length} adjustment{s.adjustments.length === 1 ? '' : 's'}
@@ -237,29 +265,27 @@ function Inner({ id }: { id: string }) {
           )}
         </span>
       ),
-      footer: <span className="font-semibold">{formatPaise(totals.net)}</span>,
+      footer: <Price paise={totals.net} className="font-semibold" />,
     },
     {
       id: 'pdf',
       header: '',
       align: 'right',
       cell: (s) => (
-        <a
-          href={`${env.apiBaseUrl}/payroll/payslips/${s._id}/pdf`}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs text-primary hover:underline"
-        >
+        <a href={`${env.apiBaseUrl}/payroll/payslips/${s._id}/pdf`} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand-ink hover:underline">
           PDF
         </a>
       ),
     },
   ];
 
+  const lop = Math.round(totals.lop * 10) / 10;
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
         title={title}
+        eyebrow={`Payroll · ${rows.length === 1 ? '1 person' : `${rows.length} people`}`}
         crumbs={[{ label: 'Payroll', href: '/payroll' }]}
         meta={
           <>
@@ -276,8 +302,11 @@ function Inner({ id }: { id: string }) {
         }
         action={
           <>
-            <Button variant="outline" size="sm" disabled={!rows.length || exporting} onClick={() => void exportCsv()}>
-              <Download className="mr-1.5 h-3.5 w-3.5" /> {exporting ? 'Exporting…' : isOwner(role) ? 'Bank transfer CSV' : 'Export CSV'}
+            <Button variant="outline" size="sm" disabled={!rows.length || exporting || !canSee} onClick={() => void exportCsv('bank')}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> {exporting ? 'Exporting…' : 'Bank transfer CSV'}
+            </Button>
+            <Button variant="outline" size="sm" disabled={!rows.length || exporting || !canSee} onClick={() => void exportCsv('payslips')}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Payslips CSV
             </Button>
             {editable && (
               <>
@@ -285,19 +314,17 @@ function Inner({ id }: { id: string }) {
                   <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${recompute.isPending ? 'animate-spin' : ''}`} />
                   {recompute.isPending ? 'Recalculating…' : 'Recalculate'}
                 </Button>
-                <Button size="sm" disabled={!rows.length} onClick={() => setReviewOpen(true)}>
+                <Button size="sm" variant="brand" disabled={!rows.length} onClick={() => setReviewOpen(true)}>
                   <Lock className="mr-1.5 h-3.5 w-3.5" /> Review & finalize
                 </Button>
               </>
             )}
             {r.status === PayrollStatus.FINALIZED && (
               <>
-                {isOwner(role) && (
-                  <Button variant="outline" size="sm" disabled={reopen.isPending} onClick={() => void onReopen()}>
-                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reopen
-                  </Button>
-                )}
-                <Button size="sm" onClick={() => setPaidOpen(true)}>
+                <Button variant="outline" size="sm" disabled={reopen.isPending} onClick={() => void onReopen()}>
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reopen
+                </Button>
+                <Button size="sm" variant="brand" onClick={() => setPaidOpen(true)}>
                   <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Mark as paid
                 </Button>
               </>
@@ -307,41 +334,70 @@ function Inner({ id }: { id: string }) {
       />
 
       {legacy && (
-        <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+        <div className="rounded-[var(--radius)] border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           This run was created automatically from project payments by an older version of the app. Project payments now live in{' '}
-          <Link href="/payments" className="text-primary hover:underline">
+          <Link href="/payments" className="font-medium text-brand-ink hover:underline">
             Payments
           </Link>
           .
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="People paid" loading={slips.isLoading} value={String(rows.length)} hint={skipped.length ? `${skipped.length} left out` : 'Everyone included'} />
-        <StatCard label="Total net pay" loading={slips.isLoading} value={formatPaise(totals.net)} hint={`Gross ${formatPaise(totals.gross)}`} />
-        <StatCard
-          label="Deductions"
-          loading={slips.isLoading}
-          value={formatPaise(totals.deductions)}
-          hint={totals.manualDeductions ? `incl. ${formatPaise(totals.manualDeductions)} manual` : undefined}
-        />
-        <StatCard
-          label="Unpaid days"
-          loading={slips.isLoading}
-          value={String(Math.round(totals.lop * 10) / 10)}
-          tone={totals.lop ? 'warning' : 'default'}
-          hint={totals.unmarked && !treatMissing ? `${totals.unmarked} unmarked days were paid` : undefined}
-        />
+      <div className="flex justify-end">
+        <PrivacyChip>Only you see these figures</PrivacyChip>
       </div>
 
-      {skipped.length > 0 && <SkippedCard run={r} canSetPay={isOwner(role)} />}
+      {slips.isLoading ? (
+        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-[var(--radius)]" />
+          ))}
+        </div>
+      ) : (
+        <Bento>
+          <Tile span={3} title="Gross pay">
+            <BigNumber caption={totals.bonuses ? <>incl. <Price paise={totals.bonuses} compact /> in bonuses</> : 'Before deductions'}>
+              <Price paise={totals.gross} compact />
+            </BigNumber>
+          </Tile>
+          <Tile span={3} title="Deductions">
+            <BigNumber
+              className={totals.deductions ? '[&>div]:text-destructive' : undefined}
+              caption={totals.manualDeductions ? <>incl. <Price paise={totals.manualDeductions} compact /> manual</> : 'PF, tax, unpaid days and more'}
+            >
+              {totals.deductions ? (
+                <>
+                  −<Price paise={totals.deductions} compact />
+                </>
+              ) : (
+                <Price paise={0} compact />
+              )}
+            </BigNumber>
+          </Tile>
+          <Tile span={3} tone="ink" title="Net pay">
+            <BigNumber className="[&>div]:text-brand" caption={`${rows.length === 1 ? '1 person' : `${rows.length} people`}${skipped.length ? ` · ${skipped.length} left out` : ' · everyone included'}`}>
+              <Price paise={totals.net} compact />
+            </BigNumber>
+          </Tile>
+          <Tile span={3} title="Unpaid days">
+            <BigNumber
+              className={lop ? '[&>div]:text-warning' : undefined}
+              caption={totals.unmarked && !treatMissing ? `${totals.unmarked} unmarked days were paid` : lop ? 'Days marked absent' : 'Nobody lost pay'}
+            >
+              <span className="font-figures">{lop}</span>
+            </BigNumber>
+          </Tile>
+        </Bento>
+      )}
+
+      {skipped.length > 0 && <SkippedCard run={r} />}
 
       {editable && (
         <p className="text-xs text-muted-foreground">
           Only days marked absent count as unpaid
           {treatMissing ? ', and so do working days with no attendance record' : '; days with no attendance record are paid'}. Future days are never
           counted.{' '}
-          <Link href="/settings/general" className="text-primary hover:underline">
+          <Link href="/settings/general" className="font-medium text-brand-ink hover:underline">
             Change in settings
           </Link>
         </p>
@@ -358,7 +414,7 @@ function Inner({ id }: { id: string }) {
         showFooter={rows.length > 0}
         empty={
           <EmptyState
-            icon={Users}
+            illustration="people"
             title="No payslips in this run"
             description={
               skipped.length
@@ -366,9 +422,9 @@ function Inner({ id }: { id: string }) {
                 : 'Nobody on the team can be paid this month yet. Set up pay packages from each person’s compensation page.'
             }
             action={
-              <Link href="/team">
-                <Button variant="outline" size="sm">Go to team</Button>
-              </Link>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/team">Go to team</Link>
+              </Button>
             }
           />
         }
@@ -381,41 +437,41 @@ function Inner({ id }: { id: string }) {
   );
 }
 
-function SkippedCard({ run, canSetPay }: { run: PayrollRunRow; canSetPay: boolean }) {
+function SkippedCard({ run }: { run: PayrollRunRow }) {
   const skipped = run.skipped ?? [];
   return (
-    <Card className="border-amber-500/30">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <AlertTriangle className="h-4 w-4 text-amber-600" /> Left out of this run ({skipped.length})
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ul className="divide-y text-sm">
-          {skipped.map((p) => (
-            <li key={p.userId} className="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between">
-              <span>
+    <Tile
+      className="border-warning/40"
+      title={
+        <span className="flex items-center gap-2 text-foreground">
+          <AlertTriangle className="h-4 w-4 text-warning" /> Left out of this run ({skipped.length})
+        </span>
+      }
+    >
+      <ul className="divide-y text-sm">
+        {skipped.map((p) => (
+          <li key={p.userId} className="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between">
+            <span className="flex min-w-0 items-center gap-2">
+              <Avatar id={p.userId} name={p.name || 'Deleted member'} size="xs" />
+              {p.name ? (
                 <Link href={`/team/${p.userId}`} className="font-medium hover:underline">
                   {p.name}
                 </Link>
-                <span className="text-muted-foreground"> · {PAYROLL_SKIP_REASON_LABEL[p.reason] ?? p.reason}</span>
-              </span>
-              {p.reason === PayrollSkipReason.NO_COMPENSATION &&
-                (canSetPay ? (
-                  <Link href={`/team/${p.userId}/compensation`} className="text-sm text-primary hover:underline">
-                    Set up pay
-                  </Link>
-                ) : (
-                  <span className="text-xs text-muted-foreground">Ask the owner to set up their pay</span>
-                ))}
-            </li>
-          ))}
-        </ul>
-        {run.status === PayrollStatus.DRAFT && (
-          <p className="mt-2 text-xs text-muted-foreground">After fixing this, use Recalculate to add them.</p>
-        )}
-      </CardContent>
-    </Card>
+              ) : (
+                <span className="italic text-muted-foreground">Deleted member</span>
+              )}
+              <span className="text-muted-foreground"> · {PAYROLL_SKIP_REASON_LABEL[p.reason] ?? p.reason}</span>
+            </span>
+            {p.reason === PayrollSkipReason.NO_COMPENSATION && (
+              <Link href={`/team/${p.userId}/compensation`} className="text-sm font-medium text-brand-ink hover:underline">
+                Set up pay
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+      {run.status === PayrollStatus.DRAFT && <p className="mt-2 text-xs text-muted-foreground">After fixing this, use Recalculate to add them.</p>}
+    </Tile>
   );
 }
 
@@ -435,12 +491,13 @@ function ReviewDialog({
   treatMissing: boolean;
 }) {
   const finalize = useFinalizePayrollRun();
+  const canSee = useCanSeePrices();
   const confirm = useConfirm();
   const month = monthTitle(run.month);
   const zeroNet = rows.filter((s) => s.netPaise === 0);
   const checks: { ok: boolean; text: string }[] = [
     { ok: (run.skipped ?? []).length === 0, text: (run.skipped ?? []).length ? `${run.skipped!.length} people are left out (no pay package or project-based)` : 'Everyone who can be paid is included' },
-    { ok: zeroNet.length === 0, text: zeroNet.length ? `${zeroNet.length} payslip${zeroNet.length === 1 ? ' has' : 's have'} ₹0 net pay` : 'No ₹0 payslips' },
+    { ok: zeroNet.length === 0, text: zeroNet.length ? `${zeroNet.length} payslip${zeroNet.length === 1 ? ' has' : 's have'} zero net pay` : 'No payslips with zero net pay' },
     {
       ok: treatMissing || totals.unmarked === 0,
       text:
@@ -453,7 +510,7 @@ function ReviewDialog({
   const go = async () => {
     const ok = await confirm({
       title: `Finalize ${month} payroll?`,
-      description: `Finalize ${month} payroll for ${rows.length} ${rows.length === 1 ? 'person' : 'people'}, ${formatPaise(totals.net)} total? Payslips are emailed and amounts lock.`,
+      description: `Finalize ${month} payroll for ${rows.length} ${rows.length === 1 ? 'person' : 'people'}${canSee ? `, ${formatPaise(totals.net)} total` : ''}? Payslips are emailed and amounts lock.`,
       confirmText: 'Finalize and send',
     });
     if (!ok) return;
@@ -475,19 +532,19 @@ function ReviewDialog({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Total net pay</p>
-              <p className="font-semibold tabular-nums">{formatPaise(totals.net)}</p>
+              <Price paise={totals.net} className="block font-semibold" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Gross</p>
-              <p className="tabular-nums">{formatPaise(totals.gross)}</p>
+              <Price paise={totals.gross} className="block" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Deductions</p>
-              <p className="tabular-nums">{formatPaise(totals.deductions)}</p>
+              <Price paise={totals.deductions} className="block" />
             </div>
             {(totals.bonuses > 0 || totals.manualDeductions > 0) && (
               <div className="col-span-2 text-xs text-muted-foreground">
-                Includes {formatPaise(totals.bonuses)} in bonuses and {formatPaise(totals.manualDeductions)} in manual deductions.
+                Includes <Price paise={totals.bonuses} /> in bonuses and <Price paise={totals.manualDeductions} /> in manual deductions.
               </div>
             )}
           </div>
@@ -495,9 +552,9 @@ function ReviewDialog({
             {checks.map((c) => (
               <li key={c.text} className="flex items-start gap-2">
                 {c.ok ? (
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                 ) : (
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 )}
                 <span className={c.ok ? 'text-muted-foreground' : ''}>{c.text}</span>
               </li>
@@ -542,7 +599,7 @@ function MarkPaidDialog({ open, onOpenChange, run }: { open: boolean; onOpenChan
         <DialogHeader>
           <DialogTitle>Mark {monthTitle(run.month)} payroll as paid</DialogTitle>
           <DialogDescription>
-            Record that {formatPaise(run.totalNetPaise)} went out to {run.employeeCount} {run.employeeCount === 1 ? 'person' : 'people'}. The run can’t be reopened after this.
+            Record that <Price paise={run.totalNetPaise} /> went out to {run.employeeCount} {run.employeeCount === 1 ? 'person' : 'people'}. The run can’t be reopened after this.
           </DialogDescription>
         </DialogHeader>
         <form

@@ -1,10 +1,11 @@
-// People & payments (OWNER) — everyone on a project with their agreed fee, what's been paid and
-// what's pending, plus the payment history behind each number. One click to log a payment.
+// People & payments (OWNER) — everyone on a project as an avatar row: agreed fee (click to edit),
+// a jar filling as it's paid, and a Pay button that opens the log-payment sheet prefilled with what's
+// still owed. Expand a row for the payments behind the number. `compact` is the overview snapshot.
 'use client';
 
 import { ChevronDown, ChevronRight, MoreHorizontal, Pencil, Plus, Send, UserMinus } from 'lucide-react';
 import Link from 'next/link';
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { PAYOUT_METHOD_LABEL, PayeeType, ProjectMemberRole, Role } from '@agency/shared';
 
@@ -14,7 +15,6 @@ import { useQuickActions } from '@/store/quick-actions.store';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Combobox } from '@/components/ui/combobox';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
@@ -26,9 +26,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { FormField } from '@/components/ui/form-field';
 import { MoneyInput } from '@/components/ui/money-input';
-import { ProgressBar } from '@/components/ui/progress-bar';
 import { Select } from '@/components/ui/select';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/states';
+import { Avatar, FillJar, Price, SegmentBar, Tile, useCanSeePrices } from '@/components/viz';
 import { useFreelancers } from '@/features/freelancers/freelancers.hooks';
 import { usePayouts, useProjectPayoutBalances, type BalanceRow } from '@/features/payouts/payouts.hooks';
 import { useStaffDirectory } from '@/features/team/team.hooks';
@@ -43,16 +43,18 @@ import {
   type ProjectRow,
 } from '../projects.hooks';
 
-export function PeoplePayments({ project }: { project: ProjectRow }) {
+export function PeoplePayments({ project, compact = false, onManage }: { project: ProjectRow; compact?: boolean; onManage?: () => void }) {
   const balances = useProjectPayoutBalances(project._id);
-  const ledger = usePayouts({ projectId: project._id, pageSize: 500 });
+  const ledger = usePayouts({ projectId: project._id, pageSize: 500 }, { enabled: !compact });
   const openLogPayment = useQuickActions((s) => s.openLogPayment);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [adding, setAdding] = useState<'member' | 'freelancer' | null>(null);
   const cur = project.currency ?? 'INR';
 
-  const rows = balances.data ?? [];
-  const totals = rows.reduce(
+  const all = balances.data ?? [];
+  // Waiting-to-be-paid first, then by agreed fee — the compact snapshot shows who needs money.
+  const rows = compact ? [...all].sort((a, b) => b.pendingPaise - a.pendingPaise || b.agreedPaise - a.agreedPaise).slice(0, 4) : all;
+  const totals = all.reduce(
     (t, r) => ({ agreed: t.agreed + r.agreedPaise, paid: t.paid + r.paidPaise, pending: t.pending + r.pendingPaise }),
     { agreed: 0, paid: 0, pending: 0 },
   );
@@ -63,196 +65,242 @@ export function PeoplePayments({ project }: { project: ProjectRow }) {
     );
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <CardTitle>People &amp; payments</CardTitle>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Agreed {formatPaise(totals.agreed, cur)} · paid {formatPaise(totals.paid, cur)} ·{' '}
-            <span className={cn(totals.pending > 0 && 'font-medium text-amber-700 dark:text-amber-500')}>
-              {formatPaise(totals.pending, cur)} pending
-            </span>
-          </p>
-        </div>
+    <Tile
+      span={12}
+      title="People & payments"
+      action={
         <div className="flex flex-wrap gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Plus className="mr-1 h-3.5 w-3.5" /> Add person
+          {compact ? (
+            onManage && (
+              <Button variant="ghost" size="sm" onClick={onManage}>
+                Manage people
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setAdding('member')}>Team member</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setAdding('freelancer')}>Freelancer</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button size="sm" onClick={() => openLogPayment({ projectId: project._id })}>
+            )
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Add person
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setAdding('member')}>Team member</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAdding('freelancer')}>Freelancer</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <Button size="sm" variant={compact ? 'outline' : 'default'} onClick={() => openLogPayment({ projectId: project._id })}>
             <Send className="mr-1.5 h-3.5 w-3.5" /> Log payment
           </Button>
         </div>
-      </CardHeader>
+      }
+    >
+      {all.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-end gap-x-8 gap-y-3">
+          <Figure label="Agreed">
+            <Price paise={totals.agreed} currency={cur} />
+          </Figure>
+          <Figure label="Paid">
+            <Price paise={totals.paid} currency={cur} />
+          </Figure>
+          <Figure label="Still to pay" tone={totals.pending > 0 ? 'warn' : undefined}>
+            {totals.pending > 0 ? <Price paise={totals.pending} currency={cur} /> : 'Nothing'}
+          </Figure>
+          <SegmentBar
+            className="min-w-[180px] flex-1"
+            height="h-2.5"
+            showLabels={false}
+            segments={[
+              { value: Math.min(totals.paid, totals.agreed || totals.paid), color: 'hsl(var(--success))', label: 'Paid' },
+              { value: totals.pending, color: 'hsl(var(--warning))', label: 'Still to pay' },
+            ]}
+          />
+        </div>
+      )}
 
       {adding && <AddPersonRow project={project} kind={adding} onDone={() => setAdding(null)} />}
 
-      <CardContent className="p-0">
-        {balances.isLoading ? (
-          <TableSkeleton rows={3} columns={5} />
-        ) : balances.isError ? (
-          <ErrorState error={balances.error} onRetry={() => balances.refetch()} />
-        ) : rows.length === 0 ? (
-          <EmptyState
-            title="Nobody on this project yet"
-            description="Add team members or freelancers with their agreed fee, then log payments against it."
-            action={
+      {balances.isLoading ? (
+        <TableSkeleton rows={3} columns={4} />
+      ) : balances.isError ? (
+        <ErrorState error={balances.error} onRetry={() => balances.refetch()} />
+      ) : all.length === 0 ? (
+        <EmptyState
+          illustration="people"
+          title="Nobody on this project yet"
+          description="Add team members or freelancers with their agreed fee, then log payments against it."
+          action={
+            compact ? (
+              onManage && (
+                <Button size="sm" variant="outline" onClick={onManage}>
+                  Add people
+                </Button>
+              )
+            ) : (
               <Button size="sm" variant="outline" onClick={() => setAdding('member')}>
                 <Plus className="mr-1 h-3.5 w-3.5" /> Add team member
               </Button>
-            }
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
-                <tr>
-                  <th className="h-9 w-8" />
-                  <th className="h-9 px-3 text-left font-medium">Person</th>
-                  <th className="h-9 px-3 text-right font-medium">Agreed</th>
-                  <th className="h-9 px-3 text-right font-medium">Paid</th>
-                  <th className="hidden h-9 px-3 text-left font-medium md:table-cell">Progress</th>
-                  <th className="h-9 px-3 text-right font-medium">Pending</th>
-                  <th className="h-9 w-[150px]" />
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {rows.map((r) => {
-                  const key = `${r.payeeType}:${r.payeeId}`;
-                  const isOpen = expanded === key;
-                  const history = historyFor(r);
-                  const removed =
-                    r.payeeType === PayeeType.MEMBER
-                      ? !roleOf.has(r.payeeId)
-                      : !(project.freelancers ?? []).some((f) => f.freelancerId === r.payeeId);
-                  return (
-                    <Fragment key={key}>
-                      <tr className={cn('align-middle', removed && 'opacity-70')}>
-                        <td className="pl-3">
+            )
+          }
+        />
+      ) : (
+        <ul className="grid gap-2">
+          {rows.map((r) => {
+            const key = `${r.payeeType}:${r.payeeId}`;
+            const isOpen = expanded === key;
+            const history = isOpen ? historyFor(r) : [];
+            const removed =
+              r.payeeType === PayeeType.MEMBER
+                ? !roleOf.has(r.payeeId)
+                : !(project.freelancers ?? []).some((f) => f.freelancerId === r.payeeId);
+            const over = r.agreedPaise > 0 && r.paidPaise > r.agreedPaise;
+            const settled = r.agreedPaise > 0 && !over && r.pendingPaise === 0;
+            return (
+              <li key={key} className={cn('rounded-xl border px-3 py-2.5', removed && 'opacity-70')}>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  {!compact && (
+                    <button
+                      type="button"
+                      aria-label={isOpen ? 'Hide payments' : 'Show payments'}
+                      aria-expanded={isOpen}
+                      className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
+                      disabled={r.payoutCount === 0}
+                      onClick={() => setExpanded(isOpen ? null : key)}
+                    >
+                      {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </button>
+                  )}
+                  <Avatar id={r.payeeId} name={r.payeeName} />
+                  <div className="min-w-0 flex-1 basis-48">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Link
+                        href={r.payeeType === PayeeType.MEMBER ? `/team/${r.payeeId}` : `/freelancers/${r.payeeId}`}
+                        className="font-semibold hover:underline"
+                      >
+                        {r.payeeName}
+                      </Link>
+                      {r.payeeType === PayeeType.FREELANCER ? (
+                        <Badge variant="info">Freelancer</Badge>
+                      ) : (
+                        roleOf.get(r.payeeId) && <span className="text-xs text-muted-foreground">· {roleLabel(roleOf.get(r.payeeId)!)}</span>
+                      )}
+                      {removed && <Badge variant="outline">Removed from project</Badge>}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                      {removed ? (
+                        <span>Fee no longer tracked</span>
+                      ) : compact ? (
+                        r.agreedPaise > 0 ? (
+                          <span>
+                            <Price paise={r.agreedPaise} currency={cur} /> agreed
+                          </span>
+                        ) : (
+                          <span>No fee set</span>
+                        )
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          <AgreedFeeCell project={project} row={r} /> agreed
+                        </span>
+                      )}
+                      <span>
+                        · <Price paise={r.paidPaise} currency={cur} /> paid
+                      </span>
+                      <span>
+                        ·{' '}
+                        {r.payoutCount === 0
+                          ? 'no payments yet'
+                          : `${r.payoutCount} payment${r.payoutCount === 1 ? '' : 's'}, last ${formatDate(r.lastPaidAt!)}`}
+                      </span>
+                    </div>
+                  </div>
+                  <FillJar
+                    value={r.paidPaise}
+                    max={r.agreedPaise}
+                    label={r.agreedPaise > 0 ? `${Math.round((r.paidPaise / r.agreedPaise) * 100)}% of agreed fee paid` : 'No agreed fee'}
+                  />
+                  <div className="flex items-center gap-1.5">
+                    {over ? (
+                      <Badge variant="warning">
+                        <Price paise={r.paidPaise - r.agreedPaise} currency={cur} compact /> over
+                      </Badge>
+                    ) : settled ? (
+                      <Badge variant="success">Settled</Badge>
+                    ) : null}
+                    {!removed && (
+                      <Button
+                        size="sm"
+                        variant={r.pendingPaise > 0 ? 'default' : 'outline'}
+                        className="h-8"
+                        onClick={() =>
+                          openLogPayment({
+                            payeeType: r.payeeType,
+                            userId: r.payeeType === PayeeType.MEMBER ? r.payeeId : undefined,
+                            freelancerId: r.payeeType === PayeeType.FREELANCER ? r.payeeId : undefined,
+                            projectId: project._id,
+                            amountPaise: r.pendingPaise || undefined,
+                          })
+                        }
+                      >
+                        Pay
+                        {r.pendingPaise > 0 && <Price paise={r.pendingPaise} currency={cur} compact className="ml-1" />}
+                      </Button>
+                    )}
+                    {!compact && !removed && <RowMenu project={project} row={r} />}
+                  </div>
+                </div>
+                {isOpen && (
+                  <ul className="mt-2.5 divide-y rounded-lg border bg-background">
+                    {ledger.isLoading ? (
+                      <li className="px-3 py-2 text-[13px] text-muted-foreground">Loading payments…</li>
+                    ) : ledger.isError ? (
+                      <li className="px-3 py-2 text-[13px] text-destructive">Couldn&apos;t load the payments. Try again in a moment.</li>
+                    ) : history.length === 0 ? (
+                      <li className="px-3 py-2 text-[13px] text-muted-foreground">No payments found in the ledger.</li>
+                    ) : (
+                      history.map((p) => (
+                        <li key={p._id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
+                          <span className="w-24 shrink-0 text-muted-foreground">{formatDate(p.paidAt)}</span>
+                          <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                            {PAYOUT_METHOD_LABEL[p.method]}
+                            {p.reference ? ` · ${p.reference}` : ''}
+                            {p.note ? ` · ${p.note}` : ''}
+                          </span>
+                          <Price paise={p.amountPaise} currency={p.currency} className="font-medium" />
                           <button
                             type="button"
-                            aria-label={isOpen ? 'Hide payments' : 'Show payments'}
-                            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
-                            disabled={r.payoutCount === 0}
-                            onClick={() => setExpanded(isOpen ? null : key)}
+                            aria-label="Edit payment"
+                            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                            onClick={() => openLogPayment({}, p._id)}
                           >
-                            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            <Pencil className="h-3.5 w-3.5" />
                           </button>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                              href={r.payeeType === PayeeType.MEMBER ? `/team/${r.payeeId}` : `/freelancers/${r.payeeId}`}
-                              className="font-medium hover:underline"
-                            >
-                              {r.payeeName}
-                            </Link>
-                            {r.payeeType === PayeeType.FREELANCER ? (
-                              <Badge variant="info">Freelancer</Badge>
-                            ) : (
-                              roleOf.get(r.payeeId) && <Badge variant="muted">{roleLabel(roleOf.get(r.payeeId)!)}</Badge>
-                            )}
-                            {removed && <Badge variant="outline">Removed from project</Badge>}
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {r.payoutCount === 0
-                              ? 'No payments yet'
-                              : `${r.payoutCount} payment${r.payoutCount === 1 ? '' : 's'} · last ${formatDate(r.lastPaidAt!)}`}
-                          </p>
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          {removed ? (
-                            <span className="tabular-nums text-muted-foreground">—</span>
-                          ) : (
-                            <AgreedFeeCell project={project} row={r} />
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{formatPaise(r.paidPaise, cur)}</td>
-                        <td className="hidden w-[140px] px-3 md:table-cell">
-                          {r.agreedPaise > 0 ? <ProgressBar value={r.paidPaise} max={r.agreedPaise} /> : <span className="text-xs text-muted-foreground">No fee set</span>}
-                        </td>
-                        <td
-                          className={cn(
-                            'px-3 py-2.5 text-right tabular-nums',
-                            r.pendingPaise > 0 && 'font-medium text-amber-700 dark:text-amber-500',
-                          )}
-                        >
-                          {r.agreedPaise > 0 && r.paidPaise > r.agreedPaise ? (
-                            <span className="text-xs text-amber-700 dark:text-amber-500">
-                              {formatPaise(r.paidPaise - r.agreedPaise, cur)} over
-                            </span>
-                          ) : (
-                            formatPaise(r.pendingPaise, cur)
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center justify-end gap-1">
-                            {!removed && (
-                              <Button
-                                size="sm"
-                                variant={r.pendingPaise > 0 ? 'default' : 'outline'}
-                                className="h-7 px-2.5 text-xs"
-                                onClick={() =>
-                                  openLogPayment({
-                                    payeeType: r.payeeType,
-                                    userId: r.payeeType === PayeeType.MEMBER ? r.payeeId : undefined,
-                                    freelancerId: r.payeeType === PayeeType.FREELANCER ? r.payeeId : undefined,
-                                    projectId: project._id,
-                                    amountPaise: r.pendingPaise || undefined,
-                                  })
-                                }
-                              >
-                                Pay
-                              </Button>
-                            )}
-                            {!removed && <RowMenu project={project} row={r} />}
-                          </div>
-                        </td>
-                      </tr>
-                      {isOpen && (
-                        <tr className="bg-muted/20">
-                          <td />
-                          <td colSpan={6} className="px-3 pb-3 pt-1">
-                            <ul className="divide-y rounded-md border bg-background">
-                              {history.map((p) => (
-                                <li key={p._id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
-                                  <span className="w-24 shrink-0 text-muted-foreground">{formatDate(p.paidAt)}</span>
-                                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                                    {PAYOUT_METHOD_LABEL[p.method]}
-                                    {p.reference ? ` · ${p.reference}` : ''}
-                                    {p.note ? ` · ${p.note}` : ''}
-                                  </span>
-                                  <span className="tabular-nums font-medium">{formatPaise(p.amountPaise, p.currency)}</span>
-                                  <button
-                                    type="button"
-                                    aria-label="Edit payment"
-                                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                                    onClick={() => openLogPayment({}, p._id)}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+          {compact && all.length > rows.length && onManage && (
+            <li>
+              <button type="button" onClick={onManage} className="w-full rounded-xl border border-dashed px-3 py-2 text-xs text-muted-foreground hover:text-foreground">
+                {all.length - rows.length} more {all.length - rows.length === 1 ? 'person' : 'people'} on this project
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+    </Tile>
+  );
+}
+
+function Figure({ label, tone, children }: { label: string; tone?: 'warn'; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={cn('font-figures text-lg font-semibold', tone === 'warn' && 'text-warning')}>{children}</p>
+    </div>
   );
 }
 
@@ -285,16 +333,16 @@ function AgreedFeeCell({ project, row }: { project: ProjectRow; row: BalanceRow 
           setValue(row.agreedPaise);
           setEditing(true);
         }}
-        className="group inline-flex items-center gap-1 rounded px-1 tabular-nums hover:bg-accent"
+        className="group -mx-1 inline-flex items-center gap-1 rounded px-1 tabular-nums hover:bg-accent"
         title="Edit agreed fee"
       >
-        {row.agreedPaise > 0 ? formatPaise(row.agreedPaise, project.currency ?? 'INR') : <span className="text-muted-foreground">Set fee</span>}
+        {row.agreedPaise > 0 ? <Price paise={row.agreedPaise} currency={project.currency ?? 'INR'} /> : <span className="text-foreground underline decoration-dotted">Set fee</span>}
         <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-60" />
       </button>
     );
   }
   return (
-    <div className="ml-auto flex w-[180px] items-center gap-1">
+    <div className="flex w-[200px] items-center gap-1">
       <MoneyInput
         autoFocus
         value={value}
@@ -316,13 +364,14 @@ function RowMenu({ project, row }: { project: ProjectRow; row: BalanceRow }) {
   const confirm = useConfirm();
   const removeMember = useRemoveProjectMember();
   const removeFreelancer = useRemoveProjectFreelancer();
+  const canSee = useCanSeePrices();
 
   const remove = async () => {
     const ok = await confirm({
       title: `Remove ${row.payeeName} from ${project.name}?`,
       description:
         row.payoutCount > 0
-          ? `Their ${row.payoutCount} payment${row.payoutCount === 1 ? '' : 's'} (${formatPaise(row.paidPaise)}) stay in the ledger and still count towards project cost.`
+          ? `Their ${row.payoutCount} payment${row.payoutCount === 1 ? '' : 's'}${canSee ? ` (${formatPaise(row.paidPaise, project.currency ?? 'INR')})` : ''} stay in the ledger and still count towards project cost.`
           : row.payeeType === PayeeType.MEMBER
             ? 'They will lose access to this project.'
             : 'Their agreed fee on this project will be removed.',
@@ -394,7 +443,7 @@ function AddPersonRow({ project, kind, onDone }: { project: ProjectRow; kind: 'm
   };
 
   return (
-    <div className="grid gap-3 border-b bg-muted/30 px-5 py-4 sm:grid-cols-[1fr_160px_180px_auto] sm:items-end">
+    <div className="mb-3 grid gap-3 rounded-xl border bg-muted/30 p-3 sm:grid-cols-[1fr_160px_180px_auto] sm:items-end">
       <FormField label={kind === 'member' ? 'Team member' : 'Freelancer'} error={error}>
         <Combobox
           options={options}

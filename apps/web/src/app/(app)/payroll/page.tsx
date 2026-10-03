@@ -1,7 +1,7 @@
-// Payroll runs — OWNER+ADMIN. Start a draft for a month, then review, finalize and mark paid on the run page.
+// Payroll runs — OWNER only. Start a draft for a month, then review, finalize and mark paid on the run page.
 'use client';
 
-import { Plus, Wallet } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -10,20 +10,20 @@ import { PayrollStatus, Role } from '@agency/shared';
 
 import { getErrorMessage } from '@/lib/api-client';
 import { thisMonthLocal } from '@/lib/form';
-import { formatDate, formatPaise } from '@/lib/formatters';
+import { formatDate } from '@/lib/formatters';
+import { useListState } from '@/lib/list-state';
 
 import { RoleGate } from '@/components/auth/role-gate';
 import { DataTable, sortRows, type Column } from '@/components/data/data-table';
-import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
-import { StatCard } from '@/components/ui/stat-card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { useListState } from '@/lib/list-state';
+import { Bento, BigNumber, Hero, HeroFigure, HeroMark, Price, PrivacyChip, Sparkline, Tile, TrendDelta, useCanSeePrices } from '@/components/viz';
 import {
   isLegacyProjectRun,
   monthTitle,
@@ -34,17 +34,26 @@ import {
 
 export default function PayrollPage() {
   return (
-    <RoleGate allow={[Role.OWNER, Role.ADMIN]} fallback={<EmptyState title="Payroll is only for the owner and admins" />}>
+    <RoleGate allow={[Role.OWNER]} fallback={<EmptyState illustration="people" title="Payroll is only for the owner" />}>
       <Inner />
     </RoleGate>
   );
 }
 
+/** "2026-10" → "October". */
+const monthName = (month: string) => {
+  const [y, m] = month.split('-').map(Number);
+  return y && m ? new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long' }) : month;
+};
+const people = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
+
 function Inner() {
   const runs = usePayrollRuns();
+  const canSee = useCanSeePrices();
   const list = useListState('payroll', { sort: 'month:desc' });
   const [createOpen, setCreateOpen] = useState(false);
   const all = runs.data ?? [];
+  const month = thisMonthLocal();
 
   const columns: Column<PayrollRunRow>[] = [
     {
@@ -69,9 +78,9 @@ function Inner() {
       sortable: true,
       sortValue: (r) => r.employeeCount,
       cell: (r) => (
-        <span>
+        <span className="font-figures">
           {r.employeeCount}
-          {(r.skipped?.length ?? 0) > 0 && <span className="block text-[11px] text-amber-600">{r.skipped!.length} left out</span>}
+          {(r.skipped?.length ?? 0) > 0 && <span className="block font-sans text-[11px] text-warning">{r.skipped!.length} left out</span>}
         </span>
       ),
     },
@@ -81,7 +90,7 @@ function Inner() {
       align: 'right',
       sortable: true,
       sortValue: (r) => r.totalNetPaise,
-      cell: (r) => <span className="font-medium">{formatPaise(r.totalNetPaise)}</span>,
+      cell: (r) => <Price paise={r.totalNetPaise} className="font-medium" />,
     },
     {
       id: 'when',
@@ -101,7 +110,7 @@ function Inner() {
       header: '',
       align: 'right',
       cell: (r) => (
-        <Link href={`/payroll/runs/${r._id}`} className="text-sm text-primary hover:underline">
+        <Link href={`/payroll/runs/${r._id}`} className="text-sm font-medium text-brand-ink hover:underline">
           {r.status === PayrollStatus.DRAFT ? 'Review' : 'View'}
         </Link>
       ),
@@ -110,62 +119,149 @@ function Inner() {
 
   const sorted = sortRows(all, columns, list.sort);
   const regular = all.filter((r) => !isLegacyProjectRun(r));
-  const drafts = regular.filter((r) => r.status === PayrollStatus.DRAFT).length;
+  const drafts = regular.filter((r) => r.status === PayrollStatus.DRAFT);
   const awaitingPayment = regular.filter((r) => r.status === PayrollStatus.FINALIZED);
-  const lastPaid = regular.find((r) => r.status === PayrollStatus.PAID);
+  const byMonth = [...regular].sort((a, b) => a.month.localeCompare(b.month));
+  const lastPaid = [...byMonth].reverse().find((r) => r.status === PayrollStatus.PAID);
+  const current = regular.find((r) => r.month === month);
+  const previous = [...byMonth].reverse().find((r) => r.month < month);
+  // Net payroll over the last 12 runs, oldest first (sparkline: owner only).
+  const trend = byMonth.slice(-12);
+  const latest = trend[trend.length - 1];
+  const beforeLatest = trend[trend.length - 2];
+
+  const statusLine = (r: PayrollRunRow) =>
+    r.status === PayrollStatus.PAID
+      ? `Paid${r.paidAt ? ` on ${formatDate(r.paidAt)}` : ''}.`
+      : r.status === PayrollStatus.FINALIZED
+        ? 'Finalized — payslips are out, waiting to be marked paid.'
+        : 'Still a draft — review it, then finalize to send payslips.';
 
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title="Payroll"
-        description="Monthly salary runs: review payslips, finalize to send them, then mark paid."
-        action={
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> New run
-          </Button>
+    <div className="space-y-6">
+      <Hero
+        pageTitle="Payroll"
+        eyebrow={`Payroll · ${monthTitle(month)}`}
+        loading={runs.isLoading}
+        aside={
+          <>
+            {all.length > 0 && <PrivacyChip>Only you see these figures</PrivacyChip>}
+            <Button size="sm" variant="brand" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> New run
+            </Button>
+          </>
         }
-      />
+        lede={
+          runs.error ? undefined : current ? (
+            <>
+              {statusLine(current)}
+              {awaitingPayment.some((r) => r._id !== current._id) && ` ${awaitingPayment.filter((r) => r._id !== current._id).map((r) => monthName(r.month)).join(', ')} still to be marked paid.`}
+            </>
+          ) : previous ? (
+            <>
+              {monthName(previous.month)} was <Price paise={previous.totalNetPaise} className="font-medium text-foreground" /> for {people(previous.employeeCount)} — {statusLine(previous).charAt(0).toLowerCase() + statusLine(previous).slice(1)}
+            </>
+          ) : (
+            'Start a draft for a month. Everyone with a pay package is included, and nothing is sent until you finalize.'
+          )
+        }
+      >
+        {runs.error ? (
+          'Couldn’t load payroll.'
+        ) : current ? (
+          <>
+            {monthName(current.month)} payroll:{' '}
+            <HeroFigure>
+              <Price paise={current.totalNetPaise} compact />
+            </HeroFigure>{' '}
+            net for {people(current.employeeCount)}.
+          </>
+        ) : (
+          <>
+            Payroll for <HeroMark>{monthName(month)}</HeroMark> hasn’t been run yet.
+          </>
+        )}
+      </Hero>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Drafts to review" loading={runs.isLoading} value={String(drafts)} tone={drafts ? 'warning' : 'default'} />
-        <StatCard
-          label="Finalized, not yet paid"
+      {runs.isLoading ? (
+        <div className="grid gap-3.5 lg:grid-cols-3">
+          <Skeleton className="h-40 rounded-[var(--radius)] lg:col-span-2" />
+          <Skeleton className="h-40 rounded-[var(--radius)]" />
+        </div>
+      ) : (
+        !runs.error &&
+        regular.length > 0 && (
+          <Bento>
+            <Tile
+              span={8}
+              title={`Net payroll · last ${trend.length} ${trend.length === 1 ? 'run' : 'runs'}`}
+              action={latest && beforeLatest && canSee ? <TrendDelta current={latest.totalNetPaise} previous={beforeLatest.totalNetPaise} invert suffix={`vs ${monthName(beforeLatest.month)}`} /> : undefined}
+            >
+              {trend.length >= 2 && canSee ? (
+                <>
+                  <Sparkline values={trend.map((r) => r.totalNetPaise / 100)} height={72} />
+                  <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                    <span>{monthTitle(trend[0]!.month)}</span>
+                    <span>{monthTitle(latest!.month)}</span>
+                  </div>
+                </>
+              ) : (
+                <p className="py-6 text-sm text-muted-foreground">The trend shows up once there are two or more runs.</p>
+              )}
+            </Tile>
+            <Tile span={4} tone="ink" title="Last paid run">
+              {lastPaid ? (
+                <BigNumber className="[&>div]:text-brand" caption={`${monthTitle(lastPaid.month)} · ${people(lastPaid.employeeCount)}${lastPaid.paidAt ? ` · paid ${formatDate(lastPaid.paidAt)}` : ''}`}>
+                  <Price paise={lastPaid.totalNetPaise} compact />
+                </BigNumber>
+              ) : (
+                <BigNumber caption="No run has been marked paid yet">—</BigNumber>
+              )}
+              <div className="mt-4 space-y-1 text-xs opacity-80">
+                <p>
+                  {drafts.length ? `${drafts.length} draft${drafts.length === 1 ? '' : 's'} to review` : 'No drafts waiting'}
+                </p>
+                <p>
+                  {awaitingPayment.length ? (
+                    <>
+                      <Price paise={awaitingPayment.reduce((s, r) => s + r.totalNetPaise, 0)} compact /> finalized, not yet paid
+                    </>
+                  ) : (
+                    'Nothing waiting to be paid'
+                  )}
+                </p>
+              </div>
+            </Tile>
+          </Bento>
+        )
+      )}
+
+      <div className="space-y-3">
+        <h2 className="font-display text-lg font-bold">All runs</h2>
+        <DataTable
+          columns={columns}
+          rows={sorted}
+          rowKey={(r) => r._id}
           loading={runs.isLoading}
-          value={formatPaise(awaitingPayment.reduce((s, r) => s + r.totalNetPaise, 0))}
-          hint={awaitingPayment.length ? awaitingPayment.map((r) => monthTitle(r.month)).join(', ') : 'Nothing waiting'}
-          tone={awaitingPayment.length ? 'warning' : 'default'}
-        />
-        <StatCard
-          label="Last paid run"
-          loading={runs.isLoading}
-          value={lastPaid ? formatPaise(lastPaid.totalNetPaise) : '—'}
-          hint={lastPaid ? monthTitle(lastPaid.month) : 'No paid runs yet'}
+          error={runs.error}
+          onRetry={() => runs.refetch()}
+          sort={list.sort}
+          onSortChange={list.setSort}
+          rowHref={(r) => `/payroll/runs/${r._id}`}
+          empty={
+            <EmptyState
+              illustration="people"
+              title="No payroll runs yet"
+              description="Start a draft for a month. Everyone with a pay package is included; you can review before anything is sent."
+              action={
+                <Button size="sm" variant="brand" onClick={() => setCreateOpen(true)}>
+                  Start your first run
+                </Button>
+              }
+            />
+          }
         />
       </div>
-
-      <DataTable
-        columns={columns}
-        rows={sorted}
-        rowKey={(r) => r._id}
-        loading={runs.isLoading}
-        error={runs.error}
-        onRetry={() => runs.refetch()}
-        sort={list.sort}
-        onSortChange={list.setSort}
-        rowHref={(r) => `/payroll/runs/${r._id}`}
-        empty={
-          <EmptyState
-            icon={Wallet}
-            title="No payroll runs yet"
-            description="Start a draft for a month. Everyone with a pay package is included; you can review before anything is sent."
-            action={
-              <Button size="sm" onClick={() => setCreateOpen(true)}>
-                Start your first run
-              </Button>
-            }
-          />
-        }
-      />
 
       <NewRunDialog open={createOpen} onOpenChange={setCreateOpen} runs={all} />
     </div>
@@ -221,7 +317,7 @@ function NewRunDialog({ open, onOpenChange, runs }: { open: boolean; onOpenChang
             error={error}
             hint={
               existing ? (
-                <Link href={`/payroll/runs/${existing._id}`} className="text-primary hover:underline" onClick={() => onOpenChange(false)}>
+                <Link href={`/payroll/runs/${existing._id}`} className="text-brand-ink hover:underline" onClick={() => onOpenChange(false)}>
                   Open the existing {monthTitle(month)} run
                 </Link>
               ) : future ? (
@@ -229,10 +325,14 @@ function NewRunDialog({ open, onOpenChange, runs }: { open: boolean; onOpenChang
               ) : undefined
             }
           >
-            <Input type="month" value={month} onChange={(e) => {
+            <Input
+              type="month"
+              value={month}
+              onChange={(e) => {
                 setMonth(e.target.value);
                 setError(undefined);
-              }} />
+              }}
+            />
           </FormField>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

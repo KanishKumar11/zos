@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { FormField } from '@/components/ui/form-field';
 import { Textarea } from '@/components/ui/textarea';
 import { getErrorMessage } from '@/lib/api-client';
-import { formatPaise } from '@/lib/formatters';
+
+import { Price } from '@/components/viz';
 
 import { useWriteOffInvoice, type InvoiceRow } from './invoices.hooks';
 
@@ -53,8 +54,13 @@ export function WriteOffDialog({
           <DialogHeader>
             <DialogTitle>Write off {invoice.number}?</DialogTitle>
             <DialogDescription>
-              {formatPaise(balance, invoice.currency)} will stop counting as outstanding.
-              {invoice.paidPaise > 0 && ` The ${formatPaise(invoice.paidPaise, invoice.currency)} already received stays recorded.`}{' '}
+              <Price paise={balance} currency={invoice.currency} /> will stop counting as outstanding.
+              {invoice.paidPaise > 0 && (
+                <>
+                  {' '}
+                  The <Price paise={invoice.paidPaise} currency={invoice.currency} /> already received stays recorded.
+                </>
+              )}{' '}
               The invoice stays in your records and can be reopened later.
             </DialogDescription>
           </DialogHeader>

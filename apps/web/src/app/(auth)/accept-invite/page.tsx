@@ -22,9 +22,9 @@ function Inner() {
 
   if (!token) {
     return (
-      <Card className="shadow-md">
+      <Card className="border-0 bg-transparent shadow-none lg:border lg:bg-card lg:shadow-sm">
         <CardHeader>
-          <CardTitle className="text-[18px]">This link is incomplete</CardTitle>
+          <CardTitle className="font-display text-[1.6rem] font-bold">This link is incomplete</CardTitle>
           <CardDescription>Open the invite link from your email again, or ask for a new invite.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -54,9 +54,9 @@ function Inner() {
   };
 
   return (
-    <Card className="shadow-md">
+    <Card className="border-0 bg-transparent shadow-none lg:border lg:bg-card lg:shadow-sm">
       <CardHeader className="pb-4 pt-6">
-        <CardTitle className="text-[18px]">Set up your account</CardTitle>
+        <CardTitle className="font-display text-[1.6rem] font-bold">Set up your account</CardTitle>
         <CardDescription>Choose a password to activate your access.</CardDescription>
       </CardHeader>
       <CardContent className="pb-6">

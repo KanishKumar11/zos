@@ -41,6 +41,10 @@ export class TasksService {
     if (q.projectId) {
       await this.projects.byId(q.projectId, viewer); // membership check side-effect
       filter.projectId = new Types.ObjectId(q.projectId);
+    } else if (viewer.role !== Role.OWNER && viewer.role !== Role.ADMIN) {
+      // Staff only see tasks on projects they belong to (plus anything assigned to them).
+      const projectIds = await this.projects.memberProjectIds(viewer.sub);
+      filter.$or = [{ projectId: { $in: projectIds } }, { assigneeId: new Types.ObjectId(viewer.sub) }];
     }
     if (q.status) filter.status = q.status;
     if (q.assigneeId) filter.assigneeId = new Types.ObjectId(q.assigneeId);

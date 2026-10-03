@@ -1,4 +1,3 @@
-import { SearchX } from 'lucide-react';
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
@@ -6,9 +5,9 @@ import { EmptyState } from '@/components/ui/states';
 
 export default function NotFound() {
   return (
-    <div className="rounded-lg border bg-card">
+    <div className="rounded-[var(--radius)] border bg-card">
       <EmptyState
-        icon={SearchX}
+        illustration="inbox"
         title="We couldn't find that page"
         description="It may have been moved or deleted, or the link is wrong."
         action={

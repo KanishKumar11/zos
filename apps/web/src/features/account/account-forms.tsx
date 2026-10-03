@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 import { ApiRequestError, getErrorMessage } from '@/lib/api-client';
 
@@ -37,7 +38,11 @@ export function ProfileDetailsCard() {
     try {
       await update.mutateAsync({ name: name.trim(), ...(phone ? { phone } : {}) });
     } catch (err) {
-      if (err instanceof ApiRequestError) setErrors({ name: err.fieldErrors.name?.[0], phone: err.fieldErrors.phone?.[0] });
+      const name = err instanceof ApiRequestError ? err.fieldErrors.name?.[0] : undefined;
+      const phone = err instanceof ApiRequestError ? err.fieldErrors.phone?.[0] : undefined;
+      setErrors({ name, phone });
+      // Nothing fails silently: anything that isn't a field error is shown as a toast.
+      if (!name && !phone) toast.error(getErrorMessage(err, "Couldn't save your details"));
     }
   };
 
@@ -169,6 +174,8 @@ export function ChangePasswordCard() {
     } catch (err) {
       if (err instanceof ApiRequestError && Object.keys(err.fieldErrors).length) {
         setErrors(Object.fromEntries(Object.entries(err.fieldErrors).map(([k, m]) => [k, m[0]])));
+      } else {
+        toast.error(getErrorMessage(err, "Couldn't change your password"));
       }
     }
   };

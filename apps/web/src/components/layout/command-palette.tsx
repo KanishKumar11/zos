@@ -3,7 +3,7 @@
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Building2, FolderKanban, Search, UserRound, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Building2, FolderKanban, Handshake, Receipt, Search, UserRound, type LucideIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -77,6 +77,20 @@ export function CommandPalette() {
     enabled: searching && canSeeClients,
     queryFn: () => unwrap<{ _id: string; name: string }[]>(api.get('/clients', { params: { search: q } })),
   });
+  // Invoices and freelancers carry money, so only the owner searches them.
+  const invoices = useQuery({
+    queryKey: ['palette', 'invoices', q],
+    enabled: searching && canSeeClients,
+    queryFn: () =>
+      unwrapPaginated<{ _id: string; number: string; clientName: string | null }>(
+        api.get('/invoices', { params: { q, page: 1, pageSize: 6 } }),
+      ),
+  });
+  const freelancers = useQuery({
+    queryKey: ['palette', 'freelancers', q],
+    enabled: searching && canSeeClients,
+    queryFn: () => unwrap<{ _id: string; name: string; skill?: string }[]>(api.get('/freelancers', { params: { q } })),
+  });
   const canSeePeople = role === Role.OWNER || role === Role.ADMIN || role === Role.LEAD;
   const people = useQuery({
     queryKey: ['palette', 'people', q],
@@ -129,6 +143,22 @@ export function CommandPalette() {
         icon: Building2,
         run: go(`/clients/${c._id}`),
       })),
+      ...(invoices.data?.items ?? []).map((inv) => ({
+        id: `i:${inv._id}`,
+        group: 'Invoices',
+        label: inv.number,
+        hint: inv.clientName ?? 'Deleted client',
+        icon: Receipt,
+        run: go(`/invoices/${inv._id}`),
+      })),
+      ...(freelancers.data ?? []).slice(0, 6).map((f) => ({
+        id: `f:${f._id}`,
+        group: 'Freelancers',
+        label: f.name,
+        hint: f.skill,
+        icon: Handshake,
+        run: go(`/freelancers/${f._id}`),
+      })),
       ...(people.data?.items ?? []).map((u) => ({
         id: `u:${u._id}`,
         group: 'People',
@@ -141,22 +171,22 @@ export function CommandPalette() {
     ];
     return [...quick.filter(match), ...pages.filter(match), ...(searching ? found : [])];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, actions, role, projects.data, clients.data, people.data, searching]);
+  }, [query, actions, role, projects.data, clients.data, invoices.data, freelancers.data, people.data, searching]);
 
   useEffect(() => setActive(0), [query]);
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [active]);
 
-  const loading = searching && (projects.isFetching || clients.isFetching || people.isFetching);
+  const loading = searching && (projects.isFetching || clients.isFetching || invoices.isFetching || freelancers.isFetching || people.isFetching);
   let lastGroup = '';
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[hsl(var(--rail)/0.5)] backdrop-blur-[2px]" />
         <DialogPrimitive.Content
-          className="fixed left-1/2 top-[12vh] z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border bg-popover shadow-2xl"
+          className="fixed left-1/2 top-[12vh] z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 overflow-hidden rounded-2xl border bg-popover shadow-2xl"
           aria-describedby={undefined}
         >
           <DialogPrimitive.Title className="sr-only">Search</DialogPrimitive.Title>
@@ -166,7 +196,7 @@ export function CommandPalette() {
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search projects, clients, people, pages…"
+              placeholder={canSeeClients ? 'Search projects, clients, invoices, people…' : 'Search projects, people, pages…'}
               className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {
@@ -219,6 +249,7 @@ export function CommandPalette() {
             <span>↑↓ to move</span>
             <span>Enter to open</span>
             <span>Esc to close</span>
+            <span className="ml-auto">Press ? anywhere for shortcuts</span>
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

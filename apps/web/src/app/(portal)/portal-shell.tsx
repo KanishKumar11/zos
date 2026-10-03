@@ -19,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { BrandLogo, BrandMark } from '@/components/layout/brand';
 import { ConfirmHost } from '@/components/ui/confirm-dialog';
 import { PageSkeleton } from '@/components/ui/states';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -68,8 +69,11 @@ export function PortalShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur-sm">
           <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 md:px-6">
             <Link href="/portal" className="flex min-w-0 items-center gap-2.5">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-[11px] font-bold text-primary-foreground">Z</span>
-              <span className="truncate text-sm font-semibold">{portal.data?.client.name ?? 'Client portal'}</span>
+              <BrandMark />
+              <span className="flex min-w-0 flex-col leading-tight">
+                <span className="truncate text-sm font-semibold">{portal.data?.client.name ?? 'Client portal'}</span>
+                <span className="text-[11px] text-muted-foreground">with Zlaark</span>
+              </span>
             </Link>
             <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="Portal">
               {NAV.map((n) => (
@@ -78,8 +82,8 @@ export function PortalShell({ children }: { children: ReactNode }) {
                   href={n.href}
                   aria-current={active(n.href, n.exact) ? 'page' : undefined}
                   className={cn(
-                    'rounded-md px-3 py-1.5 text-sm transition-colors',
-                    active(n.href, n.exact) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    'rounded-full px-3.5 py-1.5 text-sm transition-colors',
+                    active(n.href, n.exact) ? 'bg-foreground font-medium text-background' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                   )}
                 >
                   {n.label}
@@ -97,7 +101,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
               </Link>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="Account menu" className="ml-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                  <button type="button" aria-label="Account menu" className="ml-1 flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-background">
                     {user ? initials(user.name) : '?'}
                   </button>
                 </DropdownMenuTrigger>
@@ -125,7 +129,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
           {menuOpen && (
             <nav className="border-t px-4 py-2 md:hidden">
               {NAV.map((n) => (
-                <Link key={n.href} href={n.href} className={cn('block rounded-md px-3 py-2 text-sm', active(n.href, n.exact) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground')}>
+                <Link key={n.href} href={n.href} className={cn('block rounded-md px-3 py-2 text-sm', active(n.href, n.exact) ? 'bg-brand-wash font-medium text-brand-ink' : 'text-muted-foreground')}>
                   {n.label}
                 </Link>
               ))}
@@ -135,6 +139,10 @@ export function PortalShell({ children }: { children: ReactNode }) {
         <main className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
           <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
         </main>
+        <footer className="mx-auto flex max-w-6xl items-center gap-2 px-4 pb-8 text-xs text-muted-foreground md:px-6">
+          <BrandLogo className="h-3.5 opacity-70" />
+          <span>· Your project workspace</span>
+        </footer>
       </div>
       <ConfirmHost />
     </TooltipProvider>

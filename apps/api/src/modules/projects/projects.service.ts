@@ -65,6 +65,15 @@ export class ProjectsService {
     return paginate(items, total, page, pageSize);
   }
 
+  /** Ids of live projects the user is a member of — scopes cross-project lists for staff. */
+  async memberProjectIds(userId: string): Promise<Types.ObjectId[]> {
+    const rows = await this.model
+      .find({ deletedAt: { $exists: false }, 'members.userId': new Types.ObjectId(userId) }, { _id: 1 })
+      .lean()
+      .exec();
+    return rows.map((r) => r._id as Types.ObjectId);
+  }
+
   async byId(id: string, viewer: Actor): Promise<ProjectDocument> {
     const doc = await this.findOrThrow(id);
     if (viewer.role !== Role.OWNER && viewer.role !== Role.ADMIN) {
@@ -425,6 +434,28 @@ export class ProjectsService {
   }
 
   /** Display names for a project's people (colleagues may always see each other's names). */
+  /** Names of every member across a page of projects, in one query (no money). */
+  async memberNames(docs: ProjectDocument[]): Promise<Map<string, string>> {
+    const ids = [...new Set(docs.flatMap((d) => d.members.map((m) => String(m.userId))))];
+    if (ids.length === 0) return new Map();
+    const users = await this.users.find({ _id: { $in: ids } }).select('name').exec();
+    return new Map(users.map((u) => [u.id as string, u.name]));
+  }
+
+  /** Balances for many projects at once (OWNER) — powers the projects board without one request per card. */
+  async projectBalances(ids: string[]): Promise<Record<string, Awaited<ReturnType<ProjectsService['projectBalance']>>>> {
+    const unique = [...new Set(ids)].filter((id) => Types.ObjectId.isValid(id)).slice(0, 50);
+    const rows = await Promise.all(
+      unique.map((id) =>
+        this.projectBalance(id).then(
+          (b) => [id, b] as const,
+          () => null, // deleted or missing project: just leave it out
+        ),
+      ),
+    );
+    return Object.fromEntries(rows.filter((r): r is NonNullable<typeof r> => r !== null));
+  }
+
   async peopleNames(doc: ProjectDocument): Promise<{ users: Map<string, string>; freelancers: Map<string, string> }> {
     const [users, fls] = await Promise.all([
       this.users.find({ _id: { $in: doc.members.map((m) => m.userId) } }).select('name').exec(),

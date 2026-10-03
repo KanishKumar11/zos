@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn';
 import { emptyToUndefined, emptyToUndefinedNumber } from '@/lib/form';
 import { formatPaise } from '@/lib/formatters';
 
+import { Price, useCanSeePrices } from '@/components/viz';
 import type { ProjectRow } from '@/features/projects/projects.hooks';
 
 // Kept as re-exports for existing imports; new code should import from '@/lib/form'.
@@ -72,6 +73,8 @@ interface Props {
 
 export function InvoiceLineItems({ value, onChange, projects, currency = 'INR', showQty = false, errors = {}, disabled }: Props) {
   const subTotal = value.reduce((sum, li) => sum + lineTotal(li), 0);
+  // <option> text can only be a string, so the milestone amount is built only for viewers allowed to see it.
+  const canSeePrices = useCanSeePrices();
 
   // Per-project breakdown — the reason a combined invoice is safe to send.
   const byProject = new Map<string, number>();
@@ -141,7 +144,8 @@ export function InvoiceLineItems({ value, onChange, projects, currency = 'INR', 
                       .filter((m) => m.status !== 'COLLECTED' || m._id === li.milestoneId)
                       .map((m) => (
                         <option key={m._id} value={`${p._id}:${m._id}`}>
-                          {m.name} · {formatPaise(m.amountPaise ?? 0, currency)}
+                          {m.name}
+                          {canSeePrices ? ` · ${formatPaise(m.amountPaise ?? 0, currency)}` : ''}
                           {m.status === 'INVOICED' && m._id !== li.milestoneId ? ' (invoiced)' : ''}
                         </option>
                       ))}
@@ -204,7 +208,7 @@ export function InvoiceLineItems({ value, onChange, projects, currency = 'INR', 
           <span />
         )}
         <span className="text-sm tabular-nums">
-          Subtotal <span className="font-semibold">{formatPaise(subTotal, currency)}</span>
+          Subtotal <Price paise={subTotal} currency={currency} className="font-semibold" />
         </span>
       </div>
 
@@ -216,7 +220,7 @@ export function InvoiceLineItems({ value, onChange, projects, currency = 'INR', 
               <span className="text-muted-foreground">
                 {projectId ? (projects.find((p) => p._id === projectId)?.name ?? 'Deleted project') : 'Not linked to a project'}
               </span>
-              <span className="font-medium tabular-nums">{formatPaise(paise, currency)}</span>
+              <Price paise={paise} currency={currency} className="font-medium" />
             </div>
           ))}
         </div>

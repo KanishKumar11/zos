@@ -59,6 +59,51 @@ export function billingProblem(c: ContractRow, month: string): string | undefine
 export const dueThisMonth = (c: ContractRow, month = thisMonthLocal()): boolean =>
   !billingProblem(c, month) && !(c.billing?.billedMonths ?? []).includes(month);
 
+const pad = (n: number) => String(n).padStart(2, '0');
+const daysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
+
+/** Whole days from today (local) to a yyyy-mm-dd date; negative when it's past. */
+export function daysUntil(date: string): number {
+  const target = new Date(`${date.slice(0, 10)}T00:00:00`);
+  const today = new Date(`${todayLocal()}T00:00:00`);
+  return Math.round((target.getTime() - today.getTime()) / DAY_MS);
+}
+
+/**
+ * Next billing reminder date (yyyy-mm-dd, local) for an active contract with a billing day — today
+ * counts. Short months clamp the day (31 → 30 Sep). Undefined when there's no reminder to show.
+ */
+export function nextBillingDate(c: Pick<ContractRow, 'status' | 'billingDay' | 'startDate' | 'endDate'>): string | undefined {
+  if (c.status !== ContractStatus.ACTIVE || !c.billingDay) return undefined;
+  const [ty, tm, td] = todayLocal().split('-').map(Number) as [number, number, number];
+  let y = ty;
+  let m = tm;
+  if (c.startDate && c.startDate.slice(0, 7) > `${ty}-${pad(tm)}`) {
+    [y, m] = c.startDate.slice(0, 7).split('-').map(Number) as [number, number];
+  } else if (Math.min(c.billingDay, daysInMonth(y, m)) < td) {
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  const date = `${y}-${pad(m)}-${pad(Math.min(c.billingDay, daysInMonth(y, m)))}`;
+  if (c.endDate && date.slice(0, 7) > c.endDate.slice(0, 7)) return undefined;
+  return date;
+}
+
+/** First day (yyyy-mm-dd) of the Indian financial year (April–March) that contains today. */
+export function financialYearStart(): string {
+  const [y, m] = todayLocal().split('-').map(Number) as [number, number];
+  return `${m >= 4 ? y : y - 1}-04-01`;
+}
+
+/** "FY 2026–27" label for the current financial year. */
+export function financialYearLabel(): string {
+  const start = Number(financialYearStart().slice(0, 4));
+  return `FY ${start}–${String(start + 1).slice(2)}`;
+}
+
 /** Default GST for a contract's invoices: its own rate, else 18% in INR (0% for export billing). */
 export const defaultGst = (c: Pick<ContractRow, 'gstPercent' | 'currency'>): number =>
   typeof c.gstPercent === 'number' ? c.gstPercent : c.currency === 'INR' ? 18 : 0;

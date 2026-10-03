@@ -38,6 +38,10 @@ export interface PortalProjectSummary {
   milestoneCount: number;
   milestonesDone: number;
   nextMilestone: { name: string; dueDate?: string } | null;
+  /** Journey steps only (no amounts). */
+  milestones?: { name: string; dueDate?: string; status: string }[];
+  /** The project lead — the client's contact. */
+  lead?: { name: string; email: string; title?: string } | null;
 }
 
 export interface PortalProject {
@@ -50,6 +54,8 @@ export interface PortalProject {
   endDate?: string;
   currency: string;
   lead: { name: string; email: string } | null;
+  /** Who's on the project — names and titles only, never pay. */
+  team?: { name: string; title?: string; lead: boolean }[];
   milestones: {
     _id: string;
     name: string;

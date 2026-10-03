@@ -16,6 +16,8 @@ import { ApiRequestError, getErrorMessage } from '@/lib/api-client';
 import { todayLocal } from '@/lib/form';
 import { formatPaise } from '@/lib/formatters';
 
+import { Price, useCanSeePrices } from '@/components/viz';
+
 import { useRecordPayment, type InvoiceRow } from './invoices.hooks';
 
 type Errors = Partial<Record<'amountPaise' | 'paidAt' | 'method' | 'reference', string>>;
@@ -30,6 +32,7 @@ export function RecordPaymentSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const pay = useRecordPayment();
+  const canSeePrices = useCanSeePrices();
   const balance = invoice.balancePaise ?? Math.max(0, invoice.totalPaise - invoice.paidPaise);
   const lastMethod = invoice.payments.at(-1)?.method;
 
@@ -61,7 +64,8 @@ export function RecordPaymentSheet({
     ev.preventDefault();
     const e: Errors = {};
     if (!amount || amount <= 0) e.amountPaise = 'Enter the amount received';
-    else if (amount > balance) e.amountPaise = `More than the balance due (${formatPaise(balance, invoice.currency)})`;
+    else if (amount > balance)
+      e.amountPaise = `More than the balance due${canSeePrices ? ` (${formatPaise(balance, invoice.currency)})` : ''}`;
     if (!paidAt) e.paidAt = 'Pick the date it was received';
     else if (paidAt > todayLocal()) e.paidAt = "Can't be in the future";
     setErrors(e);
@@ -99,15 +103,15 @@ export function RecordPaymentSheet({
             <div className="grid grid-cols-3 gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground">Total</p>
-                <p className="font-medium tabular-nums">{formatPaise(invoice.totalPaise, invoice.currency)}</p>
+                <Price paise={invoice.totalPaise} currency={invoice.currency} className="block font-medium" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Paid so far</p>
-                <p className="font-medium tabular-nums">{formatPaise(invoice.paidPaise, invoice.currency)}</p>
+                <Price paise={invoice.paidPaise} currency={invoice.currency} className="block font-medium text-success" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Balance due</p>
-                <p className="font-semibold tabular-nums">{formatPaise(balance, invoice.currency)}</p>
+                <Price paise={balance} currency={invoice.currency} className="block font-semibold" />
               </div>
             </div>
 
@@ -118,7 +122,7 @@ export function RecordPaymentSheet({
               hint={
                 amount && amount < balance ? (
                   <>
-                    {formatPaise(after, invoice.currency)} will still be due.{' '}
+                    <Price paise={after} currency={invoice.currency} /> will still be due.{' '}
                     <button type="button" className="text-primary hover:underline" onClick={() => setAmount(balance)}>
                       Full balance
                     </button>

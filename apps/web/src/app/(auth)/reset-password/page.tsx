@@ -25,9 +25,9 @@ function Inner() {
     defaultValues: { token, password: '', confirmPassword: '' },
   });
   return (
-    <Card className="shadow-md">
+    <Card className="border-0 bg-transparent shadow-none lg:border lg:bg-card lg:shadow-sm">
       <CardHeader className="pb-4 pt-6">
-        <CardTitle className="text-[18px]">Reset password</CardTitle>
+        <CardTitle className="font-display text-[1.6rem] font-bold">Reset password</CardTitle>
         <p className="text-[13px] text-muted-foreground">Choose a strong new password for your account.</p>
       </CardHeader>
       <CardContent className="pb-6">

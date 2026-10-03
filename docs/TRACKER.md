@@ -196,24 +196,30 @@ Rule: only the owner, and each client for their own company, ever see real price
 **B. Design language** (Zlaark brand: orange `#f85f00`, the real logo and mark from `zlaark-brand-kit`)
 - [x] Brand files in `apps/web/public/brand/`, and the favicon from the brand icon.
 - [x] Design preview of 4 screens published for sign-off: https://claude.ai/artifact/M4edvaFHiXz1wYutyxiBRJ
-- [ ] Tokens, fonts and the `components/viz/*` building blocks (after sign-off).
+- [x] Studio tokens (paper/ink/orange, `--p1..p8` identity palette, dark mode), Bricolage Grotesque display face, Geist Mono figures.
+- [x] Shell: ink rail with the Zlaark logo/mark, restyled top bar, auth split screen, portal header and footer with brand. Ink primary buttons plus a `brand` variant; display-font page headers, dialogs and sheets; restyled stat cards, empty states (spot illustrations), tabs, inputs, tables; `ViewToggle`.
+- [x] `components/viz/*`: Hero, Bento/Tile, Price, MoneyFlow, CalendarHeatmap, SegmentBar, DivergingBars, HealthRing, BurnBar, FillJar, MilestoneJourney, Sparkline, TrendDelta, WeekStrip, ActivityTimeline, CountUp, Avatar/AvatarStack/ProjectChip, SpotIllustration, NewDot. Design brief: `docs/DESIGN_BRIEF.md`.
+- [x] Dashboard split into one home per role (`owner-home`, `team-pulse`, `member-home`).
 
 **C. Per-person redesign**
-- [ ] Owner pages.
-- [ ] Project & client pages.
-- [ ] Team & admin pages.
-- [ ] Client portal & team-member home.
+- [x] Owner pages: command centre (money-flow sankey, kept tile, aging bar, who-owes-whom, cash calendar, project health wall; new owner-only `GET /dashboard/owner/cockpit`), payments timeline + heatmap, invoice lanes with aging filter and paid stamps, expenses/income treemaps + recurring costs, freelancer cards and deal jars, CRM board with drag-and-drop, contracts, SOWs, payroll.
+- [x] Project & client pages: owner health-ring board (one batched owner-only `GET /projects/health` request), staff cards with no money, project hero with burn bar + milestone journey, people rows with fill jars and Pay, billing journey, client relationship timeline + aging, task board with animated moves.
+- [x] Team & admin pages: team pulse home (no money), people grid with onboarding rings, profile header, audit timeline, grouped notifications, announcement story feed, attendance heatmap.
+- [x] Client portal & team-member home: portal journey, balance meter, story feed with file cards, invoice cards with paid stamps; "My day" home with week strip and earnings jars; earnings page with monthly bars and receipts.
+- [x] Price audit: every on-screen amount uses `<Price>`; every remaining raw format call is behind `useCanSeePrices`.
 
 **D. Extras**
-- [ ] Keyboard shortcuts.
-- [ ] Search across invoices and freelancers.
-- [ ] "Since your last visit" markers.
+- [x] Keyboard shortcuts (`g d/t/p/c/i/y/f/m/e/n`, `n` new, `/` search, `l` log payment, `?` help).
+- [x] Search across invoices and freelancers (owner only) in the ⌘K palette.
+- [x] "Since your last visit" markers on payments, invoices and project updates.
 
 ## Blockers
 - **pnpm can't install packages.** Windows Defender flags pnpm 9.7.0's own `pnpm.exe` shim (the version pinned in `package.json`) as potentially unwanted software. Until that's resolved on the machine, no new dependencies can be added (`sanitize-html` now, `cmdk` in Phase 1).
 - **Lint doesn't run.** ESLint 9 is installed but the repo still uses `.eslintrc.cjs`, so `pnpm lint` fails. This predates the current work. Fix it by migrating to `eslint.config.js` or pinning ESLint 8.
 
 ## Later / parked
+- Expected payment dates for team pay (the member home says "still to come" because no date is stored)
+- Server-side invoice aging filter (the invoices page filters `?aging=` in the browser)
 - Leaves and Time tracking (flags in `apps/web/src/lib/features.ts`)
 - Client-visible tasks and feedback
 - Freelancer logins
@@ -229,6 +235,7 @@ Rule: only the owner, and each client for their own company, ever see real price
 - Click through each phase in the running app (`pnpm dev`) as Owner, Member and Client, with screenshots at desktop and phone width.
 
 ## Changelog
+- **2026-10-03**: Phase 6 done. Studio redesign across every page for owner, admin/lead, member and client. New owner-only endpoints `GET /dashboard/owner/cockpit` and `GET /projects/health`; portal responses gained milestone steps, lead contact and team names (no ids, no pay). Staff `GET /tasks` without a project is now limited to their projects. Project lists carry member names. Keyboard shortcuts, invoice/freelancer search, last-visit markers. Web and api typecheck clean; 83 API tests pass. Not yet checked in a browser.
 - **2026-10-03**: Removed malware hidden in `apps/web/postcss.config.mjs` (present in git history since May; see chat). Phase 6 started: price-privacy lockdown done, design preview published.
 - **2026-10-02**: Phase 5 done. All five phases complete. `tsc --noEmit` clean for web and api; 54 API unit tests pass (presenters, client-deny guard, storage access, portal scoping, invoice rules, payroll LOP/adjustments, expense repeat dates). Not yet run against a live database.
 - **2026-10-02**: Phases 1–4 built: UI kit + refined look, payments ledger + freelancer directory, team earnings view, client portal. Both apps typecheck. Phase 5 page rollout in progress.

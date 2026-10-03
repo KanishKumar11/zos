@@ -1,128 +1,158 @@
 // My tasks — what's assigned to me, grouped by when it's due (list) or by status (board).
+// Every task carries its project's colour; overdue work is flagged; board moves animate.
 'use client';
 
-import {
-  DndContext,
-  PointerSensor,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Columns3, List } from 'lucide-react';
+import { Columns3, List } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo } from 'react';
-import { toast } from 'sonner';
+import { useMemo, useState } from 'react';
 
-import { TASK_STATUS_ORDER, TaskPriority, TaskStatus } from '@agency/shared';
+import { TaskPriority, TaskStatus } from '@agency/shared';
 
-import { getErrorMessage } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { todayLocal, toLocalDateInput } from '@/lib/form';
 import { formatDate } from '@/lib/formatters';
+import { identityColor } from '@/lib/identity';
 import { useListState } from '@/lib/list-state';
 import { qk } from '@/lib/query-keys';
+import { useAuthStore } from '@/store/auth.store';
 
-import { FilterBar, SelectFilter } from '@/components/data/filter-bar';
-import { PageHeader } from '@/components/layout/page-header';
+import { FilterBar, ResetFilters, SelectFilter } from '@/components/data/filter-bar';
+import { ViewToggle } from '@/components/data/view-toggle';
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
 import { statusLabel } from '@/components/ui/status-badge';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/states';
+import { Bento, Hero, HeroFigure, HeroMark, ProjectChip, Tile, WeekStrip } from '@/components/viz';
 import { useAllProjects } from '@/features/projects/projects.hooks';
-import { tasksApi, useMyTasks, type TaskRow } from '@/features/tasks/tasks.hooks';
-
-const PRIORITY_TONE: Record<string, 'muted' | 'outline' | 'warning' | 'danger'> = {
-  LOW: 'muted',
-  MEDIUM: 'outline',
-  HIGH: 'warning',
-  URGENT: 'danger',
-};
-
-/** Optimistic status change with rollback — used by both views. */
-function useSetStatus() {
-  const qc = useQueryClient();
-  return async (task: TaskRow, status: TaskStatus) => {
-    const key = qk.tasks.mine();
-    const prev = qc.getQueryData<TaskRow[]>(key);
-    qc.setQueryData<TaskRow[]>(key, (old) => (old ?? []).map((t) => (t._id === task._id ? { ...t, status } : t)));
-    try {
-      await tasksApi.update(task._id, { status });
-      if (status === TaskStatus.DONE) toast.success('Nice — task done', { action: { label: 'Undo', onClick: () => void tasksApi.update(task._id, { status: task.status }).then(() => qc.invalidateQueries({ queryKey: ['tasks'] })) } });
-    } catch (err) {
-      qc.setQueryData(key, prev);
-      toast.error(getErrorMessage(err));
-    } finally {
-      void qc.invalidateQueries({ queryKey: ['tasks'] });
-      void qc.invalidateQueries({ queryKey: ['dashboard'] });
-    }
-  };
-}
+import { isOverdue, PRIORITY_TONE, TaskBoard } from '@/features/tasks/task-board';
+import { useMyTasks, useSetTaskStatus, type TaskRow } from '@/features/tasks/tasks.hooks';
 
 export default function MyTasksPage() {
+  const me = useAuthStore((s) => s.user);
   const tasks = useMyTasks();
   const projects = useAllProjects();
   const list = useListState('my-tasks', { view: 'list', projectId: '', showDone: '' });
-  const projectName = new Map((projects.data?.items ?? []).map((p) => [p._id, p.name]));
-  const setStatus = useSetStatus();
+  // A picked day from the week strip is a quick look, not a remembered filter.
+  const [day, setDay] = useState('');
+  const view = list.params.view === 'board' ? 'board' : 'list';
+  const projectNames = useMemo(() => new Map((projects.data?.items ?? []).map((p) => [p._id, p.name])), [projects.data]);
+  const projectName = (id: string) => projectNames.get(id) ?? (projects.isLoading ? undefined : 'Project');
+  const setStatus = useSetTaskStatus(qk.tasks.mine());
 
-  const rows = (tasks.data ?? []).filter((t) => !list.params.projectId || t.projectId === list.params.projectId);
+  const all = tasks.data ?? [];
+  const rows = all.filter((t) => (!list.params.projectId || t.projectId === list.params.projectId) && (!day || t.dueDate?.slice(0, 10) === day));
   const open = rows.filter((t) => t.status !== TaskStatus.DONE);
   const today = todayLocal();
-  const overdue = open.filter((t) => t.dueDate && t.dueDate.slice(0, 10) < today).length;
+  const allOpen = all.filter((t) => t.status !== TaskStatus.DONE);
+  const overdue = allOpen.filter((t) => isOverdue(t, today)).length;
+  const dueToday = allOpen.filter((t) => t.dueDate?.slice(0, 10) === today).length;
+  const filterCount = (list.params.projectId ? 1 : 0) + (list.params.showDone ? 1 : 0) + (day ? 1 : 0);
+  const projectCount = new Set(allOpen.map((t) => t.projectId)).size;
+  const firstName = me?.name?.split(' ')[0];
 
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title="My tasks"
-        description={tasks.isLoading ? undefined : `${open.length} open${overdue ? ` · ${overdue} overdue` : ''}`}
-        action={
-          <div className="inline-flex rounded-md border p-0.5">
-            {(['list', 'board'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => list.set({ view: v })}
-                className={cn('flex items-center gap-1.5 rounded px-2.5 py-1 text-xs', list.params.view === v ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:text-foreground')}
-              >
-                {v === 'list' ? <List className="h-3.5 w-3.5" /> : <Columns3 className="h-3.5 w-3.5" />}
-                {v === 'list' ? 'List' : 'Board'}
-              </button>
-            ))}
-          </div>
+    <div className="space-y-6">
+      <Hero
+        pageTitle="My tasks"
+        eyebrow={new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+        loading={tasks.isLoading}
+        lede={
+          allOpen.length
+            ? `${dueToday ? `${dueToday} due today. ` : ''}Spread across ${projectCount} project${projectCount === 1 ? '' : 's'}. Drag cards on the board to change their status.`
+            : 'New tasks assigned to you on any project show up here.'
         }
-      />
-      <FilterBar>
-        <SelectFilter
-          value={list.params.projectId}
-          onChange={(projectId) => list.set({ projectId })}
-          allLabel="All projects"
-          options={(projects.data?.items ?? []).map((p) => ({ value: p._id, label: p.name }))}
-        />
-        {list.params.view === 'list' && (
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input type="checkbox" checked={list.params.showDone === '1'} onChange={(e) => list.set({ showDone: e.target.checked ? '1' : '' })} />
-            Show completed
-          </label>
+      >
+        {allOpen.length === 0 ? (
+          <>Nothing on your plate{firstName ? `, ${firstName}` : ''}. Nice.</>
+        ) : (
+          <>
+            You have <HeroFigure>{allOpen.length} open task{allOpen.length === 1 ? '' : 's'}</HeroFigure>
+            {overdue ? (
+              <>
+                {' '}— <HeroMark>{overdue} overdue</HeroMark>.
+              </>
+            ) : dueToday ? (
+              <>
+                {' '}— {dueToday} due today.
+              </>
+            ) : (
+              ' — none overdue.'
+            )}
+          </>
         )}
-      </FilterBar>
+      </Hero>
+
+      {allOpen.some((t) => t.dueDate) && (
+        <Bento>
+          <Tile span={12} title="This week" action={day && <button type="button" className="text-xs text-brand-ink hover:underline" onClick={() => setDay('')}>Show every day</button>}>
+            <WeekStrip
+              dots={allOpen
+                .filter((t) => t.dueDate)
+                .map((t) => ({ date: t.dueDate!.slice(0, 10), color: identityColor(t.projectId), title: t.title }))}
+              selected={day || undefined}
+              onSelect={(d) => setDay(day === d ? '' : d)}
+            />
+          </Tile>
+        </Bento>
+      )}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <FilterBar className="flex-1">
+          <SelectFilter
+            value={list.params.projectId}
+            onChange={(projectId) => list.set({ projectId })}
+            allLabel="All projects"
+            options={(projects.data?.items ?? []).map((p) => ({ value: p._id, label: p.name }))}
+          />
+          {view === 'list' && (
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={list.params.showDone === '1'} onChange={(e) => list.set({ showDone: e.target.checked ? '1' : '' })} />
+              Show completed
+            </label>
+          )}
+          {day && <Badge variant="info">Due {formatDate(`${day}T00:00:00`, { weekday: 'short', day: 'numeric', month: 'short' })}</Badge>}
+          <ResetFilters count={filterCount} onReset={() => {
+              setDay('');
+              list.set({ projectId: '', showDone: '' });
+            }} />
+        </FilterBar>
+        <ViewToggle
+          value={view}
+          onChange={(v) => list.set({ view: v })}
+          options={[
+            { value: 'list', label: 'List', icon: List },
+            { value: 'board', label: 'Board', icon: Columns3 },
+          ]}
+        />
+      </div>
 
       {tasks.isLoading ? (
-        <Card>
+        <div className="rounded-[var(--radius)] border bg-card">
           <TableSkeleton rows={6} columns={3} />
-        </Card>
+        </div>
       ) : tasks.isError ? (
-        <ErrorState error={tasks.error} onRetry={() => tasks.refetch()} />
+        <div className="rounded-[var(--radius)] border bg-card">
+          <ErrorState error={tasks.error} onRetry={() => tasks.refetch()} />
+        </div>
       ) : rows.length === 0 ? (
-        <Card>
-          <EmptyState icon={CheckCircle2} title="Nothing assigned to you" description="Tasks assigned to you on any project show up here." />
-        </Card>
-      ) : list.params.view === 'board' ? (
-        <Board tasks={rows} projectName={projectName} onMove={setStatus} />
+        <div className="rounded-[var(--radius)] border bg-card">
+          <EmptyState
+            illustration="done"
+            title={filterCount ? 'No tasks match these filters' : 'Nothing assigned to you'}
+            description={filterCount ? undefined : 'Tasks assigned to you on any project show up here.'}
+          />
+        </div>
+      ) : view === 'board' ? (
+        <TaskBoard tasks={rows} projectName={projectName} onMove={setStatus} />
+      ) : (list.params.showDone === '1' ? rows : open).length === 0 ? (
+        <div className="rounded-[var(--radius)] border bg-card">
+          <EmptyState illustration="done" title="All done here" description="Everything in this view is complete. Tick “Show completed” to see it." />
+        </div>
       ) : (
-        <GroupedList tasks={list.params.showDone === '1' ? rows : open} projectName={projectName} onToggle={(t) => setStatus(t, t.status === TaskStatus.DONE ? TaskStatus.TODO : TaskStatus.DONE)} />
+        <GroupedList
+          tasks={list.params.showDone === '1' ? rows : open}
+          projectName={projectName}
+          onToggle={(t) => setStatus(t, t.status === TaskStatus.DONE ? TaskStatus.TODO : TaskStatus.DONE)}
+        />
       )}
     </div>
   );
@@ -139,7 +169,7 @@ function bucketOf(t: TaskRow, today: string, weekEnd: string): string {
 }
 const BUCKETS = ['Overdue', 'Today', 'This week', 'Later', 'No due date', 'Done'];
 
-function GroupedList({ tasks, projectName, onToggle }: { tasks: TaskRow[]; projectName: Map<string, string>; onToggle: (t: TaskRow) => void }) {
+function GroupedList({ tasks, projectName, onToggle }: { tasks: TaskRow[]; projectName: (id: string) => string | undefined; onToggle: (t: TaskRow) => void }) {
   const today = todayLocal();
   const weekEnd = toLocalDateInput(new Date(Date.now() + 6 * 86_400_000));
   const groups = useMemo(() => {
@@ -154,96 +184,38 @@ function GroupedList({ tasks, projectName, onToggle }: { tasks: TaskRow[]; proje
   }, [tasks, today, weekEnd]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {BUCKETS.filter((b) => groups.get(b)?.length).map((b) => (
         <section key={b}>
-          <p className={cn('mb-1.5 text-xs font-medium', b === 'Overdue' ? 'text-destructive' : 'text-muted-foreground')}>
-            {b} · {groups.get(b)!.length}
+          <p className={cn('mb-2 text-[13px] font-semibold', b === 'Overdue' ? 'text-destructive' : 'text-muted-foreground')}>
+            {b} · <span className="font-figures">{groups.get(b)!.length}</span>
           </p>
-          <Card>
-            <ul className="divide-y">
-              {groups.get(b)!.map((t) => (
-                <li key={t._id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
-                  <input type="checkbox" aria-label={`Mark ${t.title} done`} checked={t.status === TaskStatus.DONE} onChange={() => onToggle(t)} />
-                  <Link href={`/tasks/${t._id}`} className={cn('min-w-0 flex-1 truncate text-sm hover:underline', t.status === TaskStatus.DONE && 'text-muted-foreground line-through')}>
-                    {t.title}
-                  </Link>
-                  <Link href={`/projects/${t.projectId}?tab=tasks`} className="text-xs text-muted-foreground hover:text-foreground">
-                    {projectName.get(t.projectId) ?? 'Project'}
-                  </Link>
-                  {t.status !== TaskStatus.TODO && t.status !== TaskStatus.DONE && <Badge variant="outline">{statusLabel(t.status)}</Badge>}
-                  {t.priority !== TaskPriority.MEDIUM && <Badge variant={PRIORITY_TONE[t.priority]}>{statusLabel(t.priority)}</Badge>}
-                  {t.dueDate && <span className={cn('w-20 text-right text-xs', b === 'Overdue' ? 'text-destructive' : 'text-muted-foreground')}>{formatDate(t.dueDate)}</span>}
-                </li>
-              ))}
-            </ul>
-          </Card>
+          <ul className={cn('divide-y overflow-hidden rounded-[var(--radius)] border bg-card', b === 'Overdue' && 'border-destructive/40')}>
+            {groups.get(b)!.map((t) => (
+              <li
+                key={t._id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 border-l-[3px] px-4 py-2.5"
+                style={{ borderLeftColor: identityColor(t.projectId) }}
+              >
+                <input type="checkbox" aria-label={`Mark ${t.title} done`} checked={t.status === TaskStatus.DONE} onChange={() => onToggle(t)} />
+                <Link href={`/tasks/${t._id}`} className={cn('min-w-0 flex-1 truncate text-sm font-medium hover:underline', t.status === TaskStatus.DONE && 'text-muted-foreground line-through')}>
+                  {t.title}
+                </Link>
+                <ProjectChip id={t.projectId} name={projectName(t.projectId) ?? 'Project'} href={`/projects/${t.projectId}?tab=tasks`} className="max-w-[12rem] text-xs text-muted-foreground" />
+                {t.status !== TaskStatus.TODO && t.status !== TaskStatus.DONE && (
+                  <Badge variant={t.status === TaskStatus.BLOCKED ? 'danger' : 'outline'}>{statusLabel(t.status)}</Badge>
+                )}
+                {t.priority !== TaskPriority.MEDIUM && <Badge variant={PRIORITY_TONE[t.priority]}>{statusLabel(t.priority)}</Badge>}
+                {t.dueDate && (
+                  <span className={cn('w-20 text-right text-xs', b === 'Overdue' ? 'font-semibold text-destructive' : 'text-muted-foreground')}>
+                    {formatDate(t.dueDate, { day: 'numeric', month: 'short' })}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       ))}
-    </div>
-  );
-}
-
-function Board({ tasks, projectName, onMove }: { tasks: TaskRow[]; projectName: Map<string, string>; onMove: (t: TaskRow, s: TaskStatus) => void }) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const byStatus = useMemo(() => {
-    const g = new Map<TaskStatus, TaskRow[]>(TASK_STATUS_ORDER.map((s) => [s, []]));
-    for (const t of tasks) g.get(t.status)?.push(t);
-    return g;
-  }, [tasks]);
-  const onDragEnd = (e: DragEndEvent) => {
-    const target = e.over?.id as TaskStatus | undefined;
-    const task = tasks.find((t) => t._id === String(e.active.id));
-    if (task && target && task.status !== target) onMove(task, target);
-  };
-  return (
-    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {TASK_STATUS_ORDER.map((s) => (
-          <BoardColumn key={s} status={s} tasks={byStatus.get(s) ?? []} projectName={projectName} />
-        ))}
-      </div>
-    </DndContext>
-  );
-}
-
-function BoardColumn({ status, tasks, projectName }: { status: TaskStatus; tasks: TaskRow[]; projectName: Map<string, string> }) {
-  const { setNodeRef, isOver } = useDroppable({ id: status });
-  return (
-    <div ref={setNodeRef} className={cn('flex min-h-[120px] flex-col rounded-lg border bg-card', isOver && 'ring-2 ring-primary')}>
-      <div className="flex items-center justify-between border-b px-3 py-2 text-xs font-medium">
-        {statusLabel(status)}
-        <span className="rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">{tasks.length}</span>
-      </div>
-      <div className="flex flex-col gap-2 p-2">
-        {tasks.map((t) => (
-          <BoardCard key={t._id} task={t} projectName={projectName.get(t.projectId)} />
-        ))}
-        {tasks.length === 0 && <p className="py-4 text-center text-[11px] text-muted-foreground">Drop here</p>}
-      </div>
-    </div>
-  );
-}
-
-function BoardCard({ task, projectName }: { task: TaskRow; projectName?: string }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task._id });
-  const late = task.status !== TaskStatus.DONE && task.dueDate && task.dueDate.slice(0, 10) < todayLocal();
-  return (
-    <div
-      ref={setNodeRef}
-      style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
-      {...attributes}
-      {...listeners}
-      className={cn('cursor-grab rounded-md border bg-background px-3 py-2 shadow-sm active:cursor-grabbing', isDragging && 'opacity-50')}
-    >
-      <Link href={`/tasks/${task._id}`} onClick={(e) => e.stopPropagation()} className="block text-[13px] font-medium leading-snug hover:text-primary">
-        {task.title}
-      </Link>
-      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{projectName ?? 'Project'}</p>
-      <div className="mt-1.5 flex items-center justify-between gap-2">
-        {task.priority !== TaskPriority.MEDIUM ? <Badge variant={PRIORITY_TONE[task.priority]}>{statusLabel(task.priority)}</Badge> : <span />}
-        {task.dueDate && <span className={cn('text-[11px]', late ? 'font-medium text-destructive' : 'text-muted-foreground')}>{formatDate(task.dueDate)}</span>}
-      </div>
     </div>
   );
 }

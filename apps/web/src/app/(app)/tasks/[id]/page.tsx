@@ -1,4 +1,5 @@
-// Task detail — edit everything inline, discuss in comments, @mention teammates.
+// Task detail — edit everything inline, discuss in comments, @mention teammates. The project's
+// identity colour runs through the page; overdue tasks are flagged in the header.
 'use client';
 
 import { Trash2 } from 'lucide-react';
@@ -10,10 +11,12 @@ import { Role, TASK_STATUS_ORDER, TaskPriority, TaskStatus } from '@agency/share
 
 import { cn } from '@/lib/cn';
 import { todayLocal } from '@/lib/form';
-import { formatDateTime, initials } from '@/lib/formatters';
+import { formatDate, formatDateTime } from '@/lib/formatters';
+import { identityColor } from '@/lib/identity';
 import { useAuthStore } from '@/store/auth.store';
 
 import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -23,6 +26,7 @@ import { Select } from '@/components/ui/select';
 import { StatusBadge, statusLabel } from '@/components/ui/status-badge';
 import { ErrorState, PageSkeleton } from '@/components/ui/states';
 import { Textarea } from '@/components/ui/textarea';
+import { Avatar, ProjectChip } from '@/components/viz';
 import { useProject } from '@/features/projects/projects.hooks';
 import { useAddComment, useDeleteTask, useTask, useTaskComments, useUpdateTask } from '@/features/tasks/tasks.hooks';
 
@@ -76,7 +80,20 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
           { label: 'My tasks', href: '/tasks' },
           ...(project.data ? [{ label: project.data.name, href: `/projects/${t.projectId}?tab=tasks` }] : []),
         ]}
-        meta={<StatusBadge status={t.status} />}
+        eyebrow={
+          <ProjectChip
+            id={t.projectId}
+            name={project.data?.name ?? (project.isError ? 'Project' : '…')}
+            href={`/projects/${t.projectId}?tab=tasks`}
+            className="text-[13px] font-medium text-foreground"
+          />
+        }
+        meta={
+          <>
+            <StatusBadge status={t.status} />
+            {late && <Badge variant="danger">Overdue · was due {formatDate(t.dueDate!, { day: 'numeric', month: 'short' })}</Badge>}
+          </>
+        }
         action={
           canDelete && (
             <Button
@@ -128,7 +145,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                 <ul className="space-y-3">
                   {comments.data!.map((c) => (
                     <li key={c._id} className="flex gap-3">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">{initials(nameOf(c.authorId))}</span>
+                      <Avatar id={c.authorId} name={nameOf(c.authorId)} size="sm" />
                       <div className="min-w-0 flex-1">
                         <p className="text-xs text-muted-foreground">
                           <span className="font-medium text-foreground">{nameOf(c.authorId)}</span> · {formatDateTime(c.createdAt)}
@@ -177,7 +194,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
           </Card>
         </div>
 
-        <Card className="h-fit">
+        <Card className="relative h-fit overflow-hidden">
+          <span className="absolute inset-x-0 top-0 h-1" style={{ background: identityColor(t.projectId) }} aria-hidden />
           <CardContent className="space-y-3 p-5">
             <FormField label="Status">
               <Select value={t.status} onChange={(e) => save({ status: e.target.value })}>
@@ -189,6 +207,12 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
               </Select>
             </FormField>
             <FormField label="Assignee">
+              <div className="flex items-center gap-2">
+                {t.assigneeId ? (
+                  <Avatar id={t.assigneeId} name={nameOf(t.assigneeId)} size="sm" />
+                ) : (
+                  <span className="h-7 w-7 shrink-0 rounded-full border border-dashed" title="Unassigned" aria-hidden />
+                )}
               <Select value={t.assigneeId ?? ''} onChange={(e) => save({ assigneeId: e.target.value || null })}>
                 <option value="">Unassigned</option>
                 {members.map((m) => (
@@ -196,7 +220,9 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                     {m.userId === me?.id ? `${m.name ?? 'Me'} (me)` : m.name ?? 'Team member'}
                   </option>
                 ))}
+                {project.data && t.assigneeId && !members.some((m) => m.userId === t.assigneeId) && <option value={t.assigneeId}>Former member</option>}
               </Select>
+              </div>
             </FormField>
             <FormField label="Priority">
               <Select value={t.priority} onChange={(e) => save({ priority: e.target.value })}>

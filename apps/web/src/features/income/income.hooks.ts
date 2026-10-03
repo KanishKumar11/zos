@@ -77,7 +77,28 @@ export const incomeApi = {
   remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/income/${id}`)),
 };
 
+/** Rows for the overview charts — every match for the filters, newest first, capped so it stays quick. */
+export interface IncomeWindow {
+  items: IncomeRow[];
+  /** True when there were more rows than the cap (the charts then cover the newest ones only). */
+  truncated: boolean;
+}
+
+const WINDOW_PAGE_SIZE = 500;
+const WINDOW_MAX_PAGES = 10;
+
+async function listWindow(filters: IncomeFilters): Promise<IncomeWindow> {
+  const items: IncomeRow[] = [];
+  for (let page = 1; ; page++) {
+    const res = await incomeApi.list({ ...filters, sort: 'date:desc', page, limit: WINDOW_PAGE_SIZE });
+    items.push(...res.items);
+    if (page >= res.meta.totalPages) return { items, truncated: false };
+    if (page >= WINDOW_MAX_PAGES) return { items, truncated: true };
+  }
+}
+
 const QK = {
+  window: (f: IncomeFilters) => ['income', 'window', clean(f)] as const,
   list: (p: IncomeListParams) => ['income', 'list', clean(p)] as const,
   summary: (f: IncomeFilters) => ['income', 'summary', clean(f)] as const,
 };
@@ -88,8 +109,13 @@ function invalidateIncomeViews(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: ['dashboard'] });
 }
 
-export function useIncome(params: IncomeListParams = {}) {
-  return useQuery({ queryKey: QK.list(params), queryFn: () => incomeApi.list(params), placeholderData: keepPreviousData });
+export function useIncome(params: IncomeListParams = {}, enabled = true) {
+  return useQuery({ queryKey: QK.list(params), queryFn: () => incomeApi.list(params), enabled, placeholderData: keepPreviousData });
+}
+
+/** Every income entry matching `filters` (usually a 12-month window) for the overview charts. */
+export function useIncomeWindow(filters: IncomeFilters, enabled = true) {
+  return useQuery({ queryKey: QK.window(filters), queryFn: () => listWindow(filters), enabled, placeholderData: keepPreviousData });
 }
 
 export function useIncomeSummary(filters: IncomeFilters = {}) {

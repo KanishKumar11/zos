@@ -13,7 +13,7 @@ export function ProgressBar({ value, max, className }: { value: number; max: num
       aria-valuemax={100}
     >
       <div
-        className={cn('h-full rounded-full transition-[width]', over ? 'bg-amber-500' : pct >= 100 ? 'bg-[hsl(var(--success))]' : 'bg-primary')}
+        className={cn('h-full rounded-full transition-[width]', over ? 'bg-warning' : pct >= 100 ? 'bg-success' : 'bg-primary')}
         style={{ width: `${pct}%` }}
       />
     </div>

@@ -1,7 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
 
-import { InvoiceStatus, Role } from '@agency/shared';
+import { InvoiceStatus, ProjectMemberRole, Role } from '@agency/shared';
 
 import { PortalService } from './portal.service';
 
@@ -75,5 +75,87 @@ describe('PortalService scoping', () => {
     const svc = new PortalService(users as never, {} as never, {} as never, {} as never, {} as never, {} as never);
     await svc.clientIdFor('user1');
     expect(seen[0]!.role).toBe(Role.CLIENT);
+  });
+});
+
+describe('PortalService project data', () => {
+  const LEAD = new Types.ObjectId();
+  const MEMBER = new Types.ObjectId();
+  const projectDoc = (clientId: string) => ({
+    _id: new Types.ObjectId(),
+    id: 'p1',
+    name: 'Website',
+    code: 'WEB',
+    status: 'ACTIVE',
+    currency: 'INR',
+    clientId: new Types.ObjectId(clientId),
+    members: [
+      { userId: LEAD, role: ProjectMemberRole.LEAD, amountPaise: 5_000_000 },
+      { userId: MEMBER, role: ProjectMemberRole.CONTRIBUTOR, amountPaise: 2_000_000 },
+    ],
+    milestones: [{ _id: new Types.ObjectId(), name: 'Design', amountPaise: 100_000, status: 'PENDING' }],
+  });
+  const people = [
+    { id: LEAD.toString(), name: 'Lena Lead', email: 'lena@agency.test', title: 'Design lead', amountPaise: 1 },
+    { id: MEMBER.toString(), name: 'Max Member', email: 'max@agency.test' },
+  ];
+
+  function makeProjectService(owner = CLIENT_A) {
+    const projectFilters: Record<string, unknown>[] = [];
+    const collabCalls: string[][] = [];
+    const users = { find: () => query(people) };
+    const projects = {
+      find: (f: Record<string, unknown>) => {
+        projectFilters.push(f);
+        return query(String(f.clientId) === owner ? [projectDoc(owner)] : []);
+      },
+      findOne: (f: Record<string, unknown>) => {
+        projectFilters.push(f);
+        return query(String(f.clientId) === owner ? projectDoc(owner) : null);
+      },
+    };
+    const invoices = { find: () => query([]) };
+    const collab = {
+      projectForClient: async (projectId: string, clientId: string) => {
+        collabCalls.push([projectId, clientId]);
+        if (clientId !== owner) throw new NotFoundException();
+        return projectDoc(owner);
+      },
+      listUpdates: async () => [],
+      listFiles: async () => [],
+    };
+    const svc = new PortalService(users as never, {} as never, projects as never, invoices as never, collab as never, {} as never);
+    return { svc, projectFilters, collabCalls };
+  }
+
+  it('lists only the caller client’s visible projects, with the lead contact and no amounts', async () => {
+    const { svc, projectFilters } = makeProjectService();
+    const list = await svc.projects(CLIENT_A);
+    expect(String(projectFilters[0]!.clientId)).toBe(CLIENT_A);
+    expect(projectFilters[0]!.portalVisible).toEqual({ $ne: false });
+    expect(list[0]!.lead).toEqual({ name: 'Lena Lead', email: 'lena@agency.test', title: 'Design lead' });
+    expect(list[0]!.milestones[0]).not.toHaveProperty('amountPaise');
+    await expect(svc.projects(CLIENT_B)).resolves.toEqual([]);
+  });
+
+  it('shows the project team by name only — no ids, no pay', async () => {
+    const { svc, collabCalls } = makeProjectService();
+    const p = await svc.project(CLIENT_A, 'p1');
+    expect(collabCalls[0]).toEqual(['p1', CLIENT_A]);
+    expect(p.team).toEqual([
+      { name: 'Lena Lead', title: 'Design lead', lead: true },
+      { name: 'Max Member', title: undefined, lead: false },
+    ]);
+    const json = JSON.stringify(p.team);
+    expect(json).not.toContain('amountPaise');
+    expect(json).not.toContain(LEAD.toString());
+  });
+
+  it("never opens another client's project, even for the owner preview", async () => {
+    const { svc, projectFilters } = makeProjectService(CLIENT_B);
+    await expect(svc.project(CLIENT_A, 'p1')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc.project(CLIENT_A, 'p1', { includeHidden: true })).rejects.toBeInstanceOf(NotFoundException);
+    expect(String(projectFilters[0]!.clientId)).toBe(CLIENT_A);
+    expect(projectFilters[0]!.deletedAt).toEqual({ $exists: false });
   });
 });

@@ -81,7 +81,14 @@ export class PortalService {
       .sort((a, b) => a.dueDate!.getTime() - b.dueDate!.getTime())[0];
 
     const updates = (
-      await Promise.all(projects.map(async (p) => (await this.collab.listUpdates(p.id, { clientOnly: true })).slice(0, 5).map((u) => ({ ...u, projectName: p.name }))))
+      await Promise.all(
+        projects.map(async (p) =>
+          (await this.collab.listUpdates(p.id, { clientOnly: true }))
+            .slice(0, 5)
+            // Strip internal author/uploader ids, as on the project page.
+            .map(({ authorId: _a, ...u }) => ({ ...u, files: u.files.map(({ uploadedBy: _u, ...f }) => f), projectName: p.name })),
+        ),
+      )
     )
       .flat()
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -103,12 +110,19 @@ export class PortalService {
 
   async projects(clientId: string) {
     const docs = await this.projectModel.find(this.projectFilter(clientId)).sort({ createdAt: -1 }).exec();
+    // One lookup for every project lead, so the portal can show "your contact" without N queries.
+    const leadIds = [...new Set(docs.map((p) => leadOf(p)).filter(Boolean) as string[])];
+    const leads = leadIds.length
+      ? await this.users.find({ _id: { $in: leadIds }, deletedAt: { $exists: false } }).select('name email title').exec()
+      : [];
+    const leadById = new Map(leads.map((u) => [u.id as string, u]));
     return docs.map((p) => {
       const ms = p.milestones ?? [];
       const done = ms.filter((m) => m.status === 'COLLECTED' || m.status === 'INVOICED').length;
       const next = ms
         .filter((m) => m.status === 'PENDING')
         .sort((a, b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity))[0];
+      const lead = leadById.get(leadOf(p) ?? '');
       return {
         _id: p.id as string,
         name: p.name,
@@ -120,15 +134,25 @@ export class PortalService {
         milestoneCount: ms.length,
         milestonesDone: done,
         nextMilestone: next ? { name: next.name, dueDate: next.dueDate } : null,
+        // The journey only: names, dates and state. Amounts live on the project page.
+        milestones: ms.map((m) => ({ name: m.name, dueDate: m.dueDate, status: m.status })),
+        lead: lead ? { name: lead.name, email: lead.email, title: lead.title } : null,
       };
     });
   }
 
-  async project(clientId: string, projectId: string) {
-    const p = await this.collab.projectForClient(projectId, clientId);
-    const leadId = p.members.find((m) => m.role === ProjectMemberRole.LEAD)?.userId;
-    const [lead, updates, files, invoices] = await Promise.all([
-      leadId ? this.users.findById(leadId).select('name email').exec() : null,
+  /**
+   * One project as the client sees it. `includeHidden` is only for the owner's preview of a project
+   * that is switched off in the portal; the lookup is still scoped to the given client.
+   */
+  async project(clientId: string, projectId: string, opts: { includeHidden?: boolean } = {}) {
+    const p = opts.includeHidden ? await this.projectOfClient(clientId, projectId) : await this.collab.projectForClient(projectId, clientId);
+    const leadId = leadOf(p);
+    const memberIds = [...new Set((p.members ?? []).map((m) => m.userId?.toString()).filter(Boolean) as string[])];
+    const [people, updates, files, invoices] = await Promise.all([
+      memberIds.length
+        ? this.users.find({ _id: { $in: memberIds }, deletedAt: { $exists: false } }).select('name email title').exec()
+        : [],
       this.collab.listUpdates(p.id, { clientOnly: true }),
       this.collab.listFiles(p.id, { clientOnly: true }),
       this.invoiceModel
@@ -137,6 +161,14 @@ export class PortalService {
         .exec(),
     ]);
     const invoiceById = new Map(invoices.map((i) => [i.id as string, i]));
+    const personById = new Map(people.map((u) => [u.id as string, u]));
+    const lead = leadId ? personById.get(leadId) : undefined;
+    // Who's on the project: names and job titles only — never ids, roles' pay or agreed fees.
+    const team = memberIds
+      .map((id) => personById.get(id))
+      .filter((u): u is NonNullable<typeof u> => Boolean(u))
+      .map((u) => ({ name: u.name, title: u.title, lead: u.id === leadId }))
+      .sort((a, b) => Number(b.lead) - Number(a.lead));
     return {
       _id: p.id as string,
       name: p.name,
@@ -147,6 +179,7 @@ export class PortalService {
       endDate: p.endDate,
       currency: p.currency ?? 'INR',
       lead: lead ? { name: lead.name, email: lead.email } : null,
+      team,
       milestones: (p.milestones ?? []).map((m) => {
         const inv = m.invoiceId ? invoiceById.get(m.invoiceId.toString()) : undefined;
         return {
@@ -162,6 +195,12 @@ export class PortalService {
       updates: updates.map(({ authorId: _a, ...u }) => ({ ...u, files: u.files.map(({ uploadedBy: _u, ...f }) => f) })),
       files: files.map(({ uploadedBy: _u, ...f }) => f),
     };
+  }
+
+  private async projectOfClient(clientId: string, projectId: string) {
+    const doc = await this.projectModel.findOne({ _id: projectId, clientId: new Types.ObjectId(clientId), deletedAt: { $exists: false } }).exec();
+    if (!doc) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
+    return doc;
   }
 
   async fileUrl(clientId: string, projectId: string, fileId: string) {
@@ -220,6 +259,13 @@ export class PortalService {
       paidPaise: doc.paidPaise,
       balancePaise: Math.max(0, balance),
       projects: projectNamesOn,
+      // The client's own payments against this invoice — the portal draws a payment timeline from them.
+      payments: ((doc.payments ?? []) as unknown as { paidAt: Date; amountPaise: number; reference?: string; method?: string }[]).map((p) => ({
+        paidAt: p.paidAt,
+        amountPaise: p.amountPaise,
+        reference: p.reference,
+        method: p.method,
+      })),
       ...(detail
         ? {
             lineItems: (doc.lineItems ?? []).map((l) => ({
@@ -227,12 +273,6 @@ export class PortalService {
               qty: l.qty,
               unitPaise: l.unitPaise,
               amountPaise: Math.round(l.qty * l.unitPaise),
-            })),
-            payments: ((doc.payments ?? []) as unknown as { paidAt: Date; amountPaise: number; reference?: string; method?: string }[]).map((p) => ({
-              paidAt: p.paidAt,
-              amountPaise: p.amountPaise,
-              reference: p.reference,
-              method: p.method,
             })),
             notes: doc.notes,
           }
@@ -242,3 +282,6 @@ export class PortalService {
 }
 
 const d = (id: Types.ObjectId | undefined | null) => (id ? id.toString() : undefined);
+
+const leadOf = (p: { members?: { role: ProjectMemberRole; userId?: Types.ObjectId }[] }) =>
+  p.members?.find((m) => m.role === ProjectMemberRole.LEAD)?.userId?.toString();

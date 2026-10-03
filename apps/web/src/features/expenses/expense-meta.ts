@@ -49,3 +49,17 @@ export function nextPeriodYmd(ymd: string, recurring: 'MONTHLY' | 'YEARLY'): str
 
 /** The stored day of an expense (dates are saved at 12:00 UTC, so the UTC day is the calendar day). */
 export const storedYmd = (iso: string): string => iso.slice(0, 10);
+
+/** How a category reads mid-sentence: "₹12k of it on software". */
+const EXPENSE_CATEGORY_PHRASE: Record<string, string> = {
+  TOOLS: 'tools',
+  SOFTWARE: 'software',
+  INFRASTRUCTURE: 'infrastructure',
+  MARKETING: 'marketing',
+  OPERATIONS: 'operations',
+  PAYROLL: 'old payroll entries',
+  FREELANCER: 'old freelancer entries',
+  OTHER: 'other costs',
+};
+
+export const categoryPhrase = (c: string): string => EXPENSE_CATEGORY_PHRASE[c] ?? categoryLabel(c).toLowerCase();

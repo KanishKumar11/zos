@@ -1,14 +1,19 @@
-// Client — the full picture: money owed, projects, invoices, contracts, contacts and portal access.
+// Client (OWNER) — the relationship at a glance: what they owe and how late (aging bar), the story
+// so far (projects, invoices, payments), and who has portal access. Tabs keep the detail.
 'use client';
 
-import { FolderPlus, Mail, MoreHorizontal, Pencil, Phone, Receipt, RotateCw, Trash2, UserPlus, Users, X } from 'lucide-react';
+import { FolderPlus, Mail, MoreHorizontal, Pencil, Phone, Receipt, RotateCw, Trash2, UserPlus, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { use, useState } from 'react';
+import { use, useMemo, useState } from 'react';
 
-import { formatDate, formatPaise } from '@/lib/formatters';
+import { Role } from '@agency/shared';
 
-import { PageHeader } from '@/components/layout/page-header';
+import { formatDate } from '@/lib/formatters';
+import { identityColor } from '@/lib/identity';
+import { useAuthStore } from '@/store/auth.store';
+
+import { PageHeader, usePageTitle } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,10 +28,27 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
-import { StatCard } from '@/components/ui/stat-card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  ActivityTimeline,
+  Avatar,
+  AvatarStack,
+  Bento,
+  BigNumber,
+  formatCompact,
+  Legend,
+  Price,
+  PrivacyChip,
+  ProjectChip,
+  SegmentBar,
+  Tile,
+  useCanSeePrices,
+  type TimelineItem,
+} from '@/components/viz';
+import { AGING_COLORS, AGING_LABELS, agingOf, type AgingBuckets } from '@/features/clients/client-signals';
 import { ClientFormDialog } from '@/features/clients/client-form-dialog';
 import {
   useClient,
@@ -39,19 +61,48 @@ import {
   useResendPortalInvite,
   useRevokePortalInvite,
   type ClientRow,
+  type ClientStats,
 } from '@/features/clients/clients.hooks';
 import { useContracts } from '@/features/contracts/contracts.hooks';
-import { useInvoices } from '@/features/invoices/invoices.hooks';
+import { useInvoices, type InvoiceRow } from '@/features/invoices/invoices.hooks';
 import { ProjectFormDialog } from '@/features/projects/components/project-form-dialog';
-import { useProjects } from '@/features/projects/projects.hooks';
+import { useProjects, type ProjectRow } from '@/features/projects/projects.hooks';
 
 export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const role = useAuthStore((s) => s.user?.role);
+  if (role && role !== Role.OWNER) return <OwnerOnly />;
+  return <ClientDetail id={id} />;
+}
+
+function OwnerOnly() {
+  usePageTitle('Client', [{ label: 'Clients', href: '/clients' }]);
+  return (
+    <div className="rounded-[var(--radius)] border bg-card">
+      <EmptyState
+        illustration="people"
+        title="Clients are managed by the owner"
+        description="Client details, invoices and balances are only visible to the studio owner."
+        action={
+          <Button size="sm" asChild>
+            <Link href="/projects">Go to my projects</Link>
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
+function ClientDetail({ id }: { id: string }) {
   const client = useClient(id);
   const stats = useClientStats(id);
+  const invoices = useInvoices({ clientId: id });
+  const projects = useProjects({ clientId: id, pageSize: 100 });
+  const portal = usePortalAccess(id);
   const router = useRouter();
   const pathname = usePathname();
   const tab = useSearchParams().get('tab') ?? 'overview';
+  const setTab = (t: string) => router.replace(`${pathname}${t === 'overview' ? '' : `?tab=${t}`}`, { scroll: false });
   const del = useDeleteClient();
   const confirm = useConfirm();
   const [editOpen, setEditOpen] = useState(false);
@@ -61,13 +112,28 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   if (client.isError || !client.data) return <ErrorState title="Couldn't open this client" error={client.error} onRetry={() => client.refetch()} />;
   const c = client.data;
   const s = stats.data;
+  const portalUsers = (portal.data?.users ?? []).filter((u) => u.status === 'ACTIVE');
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={c.name}
         crumbs={[{ label: 'Clients', href: '/clients' }]}
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <Avatar id={c._id} name={c.name} size="xs" />
+            Client since {formatDate(c.createdAt, { month: 'long', year: 'numeric' })}
+          </span>
+        }
         description={[c.state, c.gstin && `GSTIN ${c.gstin}`].filter(Boolean).join(' · ') || undefined}
+        meta={
+          portalUsers.length > 0 ? (
+            <button type="button" onClick={() => setTab('people')} className="inline-flex items-center gap-2 rounded-full border bg-card py-0.5 pl-1 pr-2.5 text-xs text-muted-foreground hover:text-foreground" title="People with portal access">
+              <AvatarStack people={portalUsers.map((u) => ({ id: u._id, name: u.name }))} size="xs" max={4} />
+              {portalUsers.length} on portal
+            </button>
+          ) : undefined
+        }
         action={
           <>
             <Button size="sm" variant="outline" onClick={() => setProjectOpen(true)}>
@@ -113,14 +179,21 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Outstanding" tone={s?.outstandingPaise ? 'warning' : 'default'} loading={stats.isLoading} value={formatPaise(s?.outstandingPaise ?? 0)} hint={s?.overduePaise ? `${formatPaise(s.overduePaise)} overdue` : 'Nothing overdue'} />
-        <StatCard label="Invoiced" loading={stats.isLoading} value={formatPaise(s?.invoicedPaise ?? 0)} hint={s?.lastPaymentAt ? `Last paid ${formatDate(s.lastPaymentAt)}` : undefined} />
-        <StatCard label="Collected" tone="success" loading={stats.isLoading} value={formatPaise(s?.collectedPaise ?? 0)} />
-        <StatCard label="Projects" loading={stats.isLoading} value={`${s?.activeProjects ?? 0} active`} hint={`${s?.totalProjects ?? 0} total`} />
-      </div>
+      <Bento>
+        <OutstandingTile clientId={c._id} stats={s} statsLoading={stats.isLoading} invoices={invoices.data} invoicesLoading={invoices.isLoading} />
+        <Tile span={7} title="The relationship so far" action={<PrivacyChip>Only you see these figures</PrivacyChip>}>
+          <RelationshipTimeline
+            projects={projects.data?.items}
+            invoices={invoices.data}
+            loading={projects.isLoading || invoices.isLoading}
+            error={projects.isError || invoices.isError}
+            createdAt={c.createdAt}
+            clientName={c.name}
+          />
+        </Tile>
+      </Bento>
 
-      <Tabs value={tab} onValueChange={(t) => router.replace(`${pathname}${t === 'overview' ? '' : `?tab=${t}`}`, { scroll: false })}>
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">Projects &amp; billing</TabsTrigger>
           <TabsTrigger value="people">
@@ -129,8 +202,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           <TabsTrigger value="details">Details</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="space-y-6">
-          <ClientProjects clientId={c._id} onNew={() => setProjectOpen(true)} />
-          <ClientInvoices clientId={c._id} />
+          <ClientProjects projects={projects.data?.items} loading={projects.isLoading} error={projects.error} onRetry={() => projects.refetch()} onNew={() => setProjectOpen(true)} />
+          <ClientInvoices clientId={c._id} invoices={invoices.data} loading={invoices.isLoading} error={invoices.error} onRetry={() => invoices.refetch()} />
           <ClientContracts clientId={c._id} />
         </TabsContent>
         <TabsContent value="people" className="space-y-6">
@@ -148,9 +221,192 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   );
 }
 
-function ClientProjects({ clientId, onNew }: { clientId: string; onNew: () => void }) {
-  const projects = useProjects({ clientId, pageSize: 100 });
-  const items = projects.data?.items ?? [];
+function OutstandingTile({
+  clientId,
+  stats: s,
+  statsLoading,
+  invoices,
+  invoicesLoading,
+}: {
+  clientId: string;
+  stats: ClientStats | null | undefined;
+  statsLoading: boolean;
+  invoices: InvoiceRow[] | undefined;
+  invoicesLoading: boolean;
+}) {
+  const router = useRouter();
+  const canSee = useCanSeePrices();
+  const aging = useMemo(() => agingOf(invoices ?? []), [invoices]);
+  const keys = Object.keys(AGING_LABELS) as (keyof AgingBuckets)[];
+  const owed = keys.reduce((t, k) => t + aging[k], 0);
+  return (
+    <Tile span={5} title="They owe you">
+      {statsLoading ? (
+        <Skeleton className="h-10 w-40" />
+      ) : (
+        <BigNumber caption={s?.overduePaise ? <span className="text-destructive">{<Price paise={s.overduePaise} />} of it is overdue</span> : s?.outstandingPaise ? 'Nothing overdue' : 'All settled up'}>
+          {s?.outstandingPaise ? <Price paise={s.outstandingPaise} /> : <span className="text-success">Nothing</span>}
+        </BigNumber>
+      )}
+      <div className="mt-4">
+        {invoicesLoading ? (
+          <Skeleton className="h-9 w-full" />
+        ) : owed > 0 ? (
+          <>
+            <SegmentBar
+              segments={keys.map((k) => ({
+                value: aging[k],
+                color: AGING_COLORS[k],
+                label: AGING_LABELS[k],
+                display: canSee ? formatCompact(aging[k]) : '',
+                onClick: () => router.push(`/invoices?clientId=${clientId}${k === 'notDue' ? '&status=open' : '&status=OVERDUE'}`),
+              }))}
+            />
+            <Legend className="mt-2" items={keys.filter((k) => aging[k] > 0).map((k) => ({ color: AGING_COLORS[k], label: AGING_LABELS[k] }))} />
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">No open invoices.</p>
+        )}
+      </div>
+      <dl className="mt-5 grid grid-cols-3 gap-3 border-t pt-3 text-sm">
+        <div>
+          <dt className="text-xs text-muted-foreground">Invoiced</dt>
+          <dd className="font-figures font-semibold">{statsLoading ? '…' : <Price paise={s?.invoicedPaise ?? 0} compact />}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Collected</dt>
+          <dd className="font-figures font-semibold text-success">{statsLoading ? '…' : <Price paise={s?.collectedPaise ?? 0} compact />}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Projects</dt>
+          <dd className="font-figures font-semibold">
+            {s?.activeProjects ?? 0}
+            <span className="font-normal text-muted-foreground"> / {s?.totalProjects ?? 0}</span>
+          </dd>
+        </div>
+      </dl>
+      {s?.lastPaymentAt && <p className="mt-2 text-xs text-muted-foreground">Last paid {formatDate(s.lastPaymentAt)}</p>}
+    </Tile>
+  );
+}
+
+function RelationshipTimeline({
+  projects,
+  invoices,
+  loading,
+  error,
+  createdAt,
+  clientName,
+}: {
+  projects: ProjectRow[] | undefined;
+  invoices: InvoiceRow[] | undefined;
+  loading: boolean;
+  error: boolean;
+  createdAt: string;
+  clientName: string;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const items = useMemo(() => {
+    const out: TimelineItem[] = [];
+    for (const p of projects ?? []) {
+      out.push({
+        key: `p-${p._id}`,
+        date: p.startDate ?? p.createdAt ?? createdAt,
+        color: identityColor(p._id),
+        title: (
+          <>
+            Project started: <ProjectChip id={p._id} name={p.name} href={`/projects/${p._id}`} className="align-bottom" />
+          </>
+        ),
+        meta: (
+          <>
+            {formatDate(p.startDate ?? p.createdAt ?? createdAt)} · <StatusBadge status={p.status} className="align-middle" />
+            {p.clientBudgetPaise ? (
+              <>
+                {' '}· budget <Price paise={p.clientBudgetPaise} currency={p.currency ?? 'INR'} compact />
+              </>
+            ) : null}
+          </>
+        ),
+      });
+    }
+    for (const i of invoices ?? []) {
+      if (i.status !== 'DRAFT') {
+        const issued = i.issueDate ?? i.createdAt ?? createdAt;
+        out.push({
+          key: `i-${i._id}`,
+          date: issued,
+          color: i.isOverdue ? 'hsl(var(--destructive))' : 'hsl(var(--info))',
+          title: (
+            <>
+              Invoice{' '}
+              <Link href={`/invoices/${i._id}`} className="font-figures hover:underline">
+                {i.number}
+              </Link>{' '}
+              sent
+            </>
+          ),
+          meta: (
+            <>
+              {formatDate(issued)} · <Price paise={i.totalPaise} currency={i.currency} />
+              {i.isOverdue ? ` · ${i.daysOverdue ?? ''}${i.daysOverdue ? ' days ' : ''}overdue` : i.status === 'PAID' ? ' · paid' : ''}
+            </>
+          ),
+        });
+      }
+      for (const pay of i.payments ?? []) {
+        out.push({
+          key: `pay-${pay._id}`,
+          date: pay.paidAt,
+          color: 'hsl(var(--success))',
+          title: (
+            <>
+              Payment received · <Price paise={pay.amountPaise} currency={i.currency} />
+            </>
+          ),
+          meta: (
+            <>
+              {formatDate(pay.paidAt)} · for {i.number}
+              {pay.methodLabel || pay.method ? ` · ${pay.methodLabel ?? pay.method}` : ''}
+            </>
+          ),
+        });
+      }
+    }
+    out.sort((a, b) => b.date.localeCompare(a.date));
+    out.push({ key: 'joined', date: createdAt, color: 'hsl(var(--muted-foreground))', title: `${clientName} became a client`, meta: formatDate(createdAt) });
+    return out;
+  }, [projects, invoices, createdAt, clientName]);
+
+  if (loading) return <Skeleton className="h-40 w-full" />;
+  if (error) return <p className="text-sm text-destructive">Couldn&apos;t load the full history. Refresh to try again.</p>;
+  const shown = showAll ? items : items.slice(0, 7);
+  return (
+    <div className="space-y-3">
+      <ActivityTimeline items={shown} />
+      {items.length > shown.length && (
+        <Button size="sm" variant="ghost" onClick={() => setShowAll(true)}>
+          Show all {items.length} events
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function ClientProjects({
+  projects,
+  loading,
+  error,
+  onRetry,
+  onNew,
+}: {
+  projects: ProjectRow[] | undefined;
+  loading: boolean;
+  error: unknown;
+  onRetry: () => void;
+  onNew: () => void;
+}) {
+  const items = projects ?? [];
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -160,16 +416,23 @@ function ClientProjects({ clientId, onNew }: { clientId: string; onNew: () => vo
         </Button>
       </CardHeader>
       <CardContent className="p-0">
-        {items.length === 0 ? (
-          <EmptyState title="No projects yet" className="py-8" />
+        {loading ? (
+          <div className="space-y-2 p-5">
+            <Skeleton className="h-5 w-full" />
+            <Skeleton className="h-5 w-2/3" />
+          </div>
+        ) : error ? (
+          <ErrorState error={error} onRetry={onRetry} />
+        ) : items.length === 0 ? (
+          <EmptyState illustration="projects" title="No projects yet" className="py-8" action={<Button size="sm" variant="outline" onClick={onNew}>Start a project</Button>} />
         ) : (
           <ul className="divide-y">
             {items.map((p) => (
               <li key={p._id}>
-                <Link href={`/projects/${p._id}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-muted/30">
-                  <span className="flex-1 truncate text-sm font-medium">{p.name}</span>
+                <Link href={`/projects/${p._id}`} className="flex items-center gap-3 border-l-[3px] px-5 py-2.5 hover:bg-muted/30" style={{ borderLeftColor: identityColor(p._id) }}>
+                  <ProjectChip id={p._id} name={p.name} className="flex-1 text-sm font-medium" />
                   {p.portalVisible === false && <Badge variant="outline">Hidden from portal</Badge>}
-                  <span className="hidden text-xs text-muted-foreground sm:inline">{p.clientBudgetPaise ? formatPaise(p.clientBudgetPaise, p.currency ?? 'INR') : ''}</span>
+                  {p.clientBudgetPaise ? <Price paise={p.clientBudgetPaise} currency={p.currency ?? 'INR'} className="hidden text-xs text-muted-foreground sm:inline" /> : null}
                   <StatusBadge status={p.status} />
                 </Link>
               </li>
@@ -181,39 +444,81 @@ function ClientProjects({ clientId, onNew }: { clientId: string; onNew: () => vo
   );
 }
 
-function ClientInvoices({ clientId }: { clientId: string }) {
-  const invoices = useInvoices({ clientId });
-  const items = invoices.data ?? [];
+function ClientInvoices({
+  clientId,
+  invoices,
+  loading,
+  error,
+  onRetry,
+}: {
+  clientId: string;
+  invoices: InvoiceRow[] | undefined;
+  loading: boolean;
+  error: unknown;
+  onRetry: () => void;
+}) {
+  const items = invoices ?? [];
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Invoices</CardTitle>
-        <Link href={`/invoices?clientId=${clientId}`} className="text-xs text-primary hover:underline">
+        <Link href={`/invoices?clientId=${clientId}`} className="text-xs text-brand-ink hover:underline">
           Open in Invoices
         </Link>
       </CardHeader>
       <CardContent className="p-0">
-        {items.length === 0 ? (
-          <EmptyState title="No invoices yet" className="py-8" />
+        {loading ? (
+          <div className="space-y-2 p-5">
+            <Skeleton className="h-5 w-full" />
+            <Skeleton className="h-5 w-2/3" />
+          </div>
+        ) : error ? (
+          <ErrorState error={error} onRetry={onRetry} />
+        ) : items.length === 0 ? (
+          <EmptyState
+            illustration="money"
+            title="No invoices yet"
+            className="py-8"
+            action={
+              <Button size="sm" variant="outline" asChild>
+                <Link href={`/invoices?new=1&clientId=${clientId}`}>Create an invoice</Link>
+              </Button>
+            }
+          />
         ) : (
           <ul className="divide-y">
             {items.slice(0, 10).map((i) => {
-              const balance = i.totalPaise - i.paidPaise;
+              const balance = i.balancePaise ?? i.totalPaise - i.paidPaise;
               return (
                 <li key={i._id}>
                   <Link href={`/invoices/${i._id}`} className="flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-muted/30">
-                    <span className="w-28 font-medium">{i.number}</span>
+                    <span className="w-28 font-figures font-medium">{i.number}</span>
                     <span className="hidden flex-1 text-xs text-muted-foreground sm:block">
-                      {i.issueDate ? formatDate(i.issueDate) : '—'}
+                      {i.issueDate ? formatDate(i.issueDate) : 'Not issued'}
                       {i.dueDate ? ` · due ${formatDate(i.dueDate)}` : ''}
                     </span>
-                    <span className="ml-auto tabular-nums">{formatPaise(i.totalPaise, i.currency)}</span>
-                    <span className="hidden w-28 text-right text-xs tabular-nums text-muted-foreground md:block">{balance > 0 ? `${formatPaise(balance, i.currency)} due` : 'Settled'}</span>
-                    <StatusBadge status={i.status} />
+                    <Price paise={i.totalPaise} currency={i.currency} className="ml-auto" />
+                    <span className="hidden w-28 text-right text-xs text-muted-foreground md:block">
+                      {balance > 0 && i.status !== 'WRITTEN_OFF' ? (
+                        <>
+                          <Price paise={balance} currency={i.currency} /> due
+                        </>
+                      ) : (
+                        'Settled'
+                      )}
+                    </span>
+                    <StatusBadge status={i.isOverdue && i.status !== 'PAID' ? 'OVERDUE' : i.status} />
                   </Link>
                 </li>
               );
             })}
+            {items.length > 10 && (
+              <li className="px-5 py-2.5 text-xs text-muted-foreground">
+                <Link href={`/invoices?clientId=${clientId}`} className="hover:text-foreground hover:underline">
+                  {items.length - 10} more in Invoices
+                </Link>
+              </li>
+            )}
           </ul>
         )}
       </CardContent>
@@ -236,7 +541,10 @@ function ClientContracts({ clientId }: { clientId: string }) {
             <li key={k._id}>
               <Link href={`/contracts/${k._id}`} className="flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-muted/30">
                 <span className="flex-1 truncate font-medium">{k.name}</span>
-                <span className="text-xs text-muted-foreground">{formatPaise(k.monthlyAmountPaise, k.currency)}/month</span>
+                <span className="text-xs text-muted-foreground">
+                  <Price paise={k.monthlyAmountPaise} currency={k.currency} />
+                  /month
+                </span>
                 <StatusBadge status={k.status} />
               </Link>
             </li>
@@ -304,12 +612,17 @@ function PortalAccessCard({ client }: { client: ClientRow }) {
           </div>
         )}
 
-        {access.isLoading ? null : users.length === 0 && invites.length === 0 ? (
-          <EmptyState icon={Users} title="No one has portal access yet" description="Invite a contact — they'll get an email to set their password." className="py-6" />
+        {access.isLoading ? (
+          <Skeleton className="h-16 w-full" />
+        ) : access.isError ? (
+          <ErrorState error={access.error} onRetry={() => access.refetch()} />
+        ) : users.length === 0 && invites.length === 0 ? (
+          <EmptyState illustration="people" title="No one has portal access yet" description="Invite a contact — they'll get an email to set their password." className="py-6" />
         ) : (
           <ul className="divide-y rounded-md border">
             {users.map((u) => (
               <li key={u._id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm">
+                <Avatar id={u._id} name={u.name} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">
                     {u.name}
@@ -346,6 +659,9 @@ function PortalAccessCard({ client }: { client: ClientRow }) {
             ))}
             {invites.map((i) => (
               <li key={i._id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-dashed text-muted-foreground" aria-hidden>
+                  <Mail className="h-3.5 w-3.5" />
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">
                     {i.name}
@@ -476,12 +792,13 @@ function ContactsCard({ client, onEdit }: { client: ClientRow; onEdit: () => voi
       </CardHeader>
       <CardContent className="p-0">
         {client.contacts.length === 0 ? (
-          <EmptyState title="No contacts" className="py-6" />
+          <EmptyState illustration="people" title="No contacts yet" className="py-6" action={<Button size="sm" variant="outline" onClick={onEdit}>Add a contact</Button>} />
         ) : (
           <ul className="divide-y">
             {client.contacts.map((c, i) => (
               <li key={i} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2.5 text-sm">
-                <span className="font-medium">
+                <span className="inline-flex items-center gap-2 font-medium">
+                  <Avatar name={c.name} size="sm" />
                   {c.name}
                   {c.role && <span className="font-normal text-muted-foreground"> · {c.role}</span>}
                 </span>

@@ -9,7 +9,7 @@ import {
   type UpdateAnnouncementInput,
 } from '@agency/shared';
 
-import { api, unwrap } from '@/lib/api-client';
+import { api, getErrorMessage, unwrap } from '@/lib/api-client';
 import { qk } from '@/lib/query-keys';
 
 export interface AnnouncementRow {
@@ -68,7 +68,7 @@ export function useCreateAnnouncement() {
       qc.invalidateQueries({ queryKey: ['notifications'] });
       toast.success('Announcement published');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }
 export function useUpdateAnnouncement() {
@@ -76,6 +76,7 @@ export function useUpdateAnnouncement() {
   return useMutation({
     mutationFn: (vars: { id: string; body: UpdateAnnouncementInput }) => announcementsApi.update(vars.id, vars.body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['announcements'] }),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }
 export function useDeleteAnnouncement() {
@@ -86,7 +87,7 @@ export function useDeleteAnnouncement() {
       qc.invalidateQueries({ queryKey: ['announcements'] });
       toast.success('Deleted');
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 }
 
@@ -105,6 +106,7 @@ export function useMarkAllRead() {
   return useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onError: (err) => toast.error(getErrorMessage(err, "Couldn't mark everything as read")),
   });
 }
 export function useMarkRead() {
@@ -112,6 +114,7 @@ export function useMarkRead() {
   return useMutation({
     mutationFn: (ids: string[]) => notificationsApi.markRead(ids),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onError: (err) => toast.error(getErrorMessage(err, "Couldn't mark it as read")),
   });
 }
 export function useMarkAnnouncementRead() {

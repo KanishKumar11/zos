@@ -23,10 +23,10 @@ export default function ForgotPasswordPage() {
   });
   if (m.isSuccess) {
     return (
-      <Card className="shadow-md">
+      <Card className="border-0 bg-transparent shadow-none lg:border lg:bg-card lg:shadow-sm">
         <CardHeader className="items-center pb-4 pt-6 text-center">
           <MailCheck className="mb-2 h-8 w-8 text-primary" />
-          <CardTitle className="text-[18px]">Check your email</CardTitle>
+          <CardTitle className="font-display text-[1.6rem] font-bold">Check your email</CardTitle>
           <CardDescription>
             If an account exists for {getValues('email')}, a reset link is on its way. It expires in 2 hours — check spam if you don&apos;t see it.
           </CardDescription>
@@ -43,9 +43,9 @@ export default function ForgotPasswordPage() {
     );
   }
   return (
-    <Card className="shadow-md">
+    <Card className="border-0 bg-transparent shadow-none lg:border lg:bg-card lg:shadow-sm">
       <CardHeader className="pb-4 pt-6">
-        <CardTitle className="text-[18px]">Forgot password</CardTitle>
+        <CardTitle className="font-display text-[1.6rem] font-bold">Forgot password</CardTitle>
         <CardDescription>Enter your work email and we&apos;ll send a reset link.</CardDescription>
       </CardHeader>
       <CardContent className="pb-6">

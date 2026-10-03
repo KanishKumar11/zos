@@ -1,5 +1,5 @@
-// Team member detail — profile, employment details, access & role, documents, onboarding and
-// (OWNER) earnings, projects & payments, payslips and shared-cost contributions.
+// Team member detail — profile header, details, projects & work, access & role, documents, onboarding
+// and (OWNER only, gates unchanged) earnings, projects & payments, payslips and shared-cost contributions.
 'use client';
 
 import { Pencil } from 'lucide-react';
@@ -10,19 +10,17 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { Role } from '@agency/shared';
 
 import { ApiRequestError } from '@/lib/api-client';
-import { formatDate, formatDateTime, formatPaise } from '@/lib/formatters';
+import { formatDate, formatDateTime } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
 import { useQuickActions } from '@/store/quick-actions.store';
 
-import { PageHeader } from '@/components/layout/page-header';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartTooltip } from '@/components/ui/chart-tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
-import { StatusBadge } from '@/components/ui/status-badge';
+import { Bento, Price, Tile, useCanSeePrices } from '@/components/viz';
 import { useMemberStats } from '@/features/dashboard/dashboard.hooks';
 import { useExpenses } from '@/features/expenses/expenses.hooks';
 import { useDepartments, useDesignations } from '@/features/org/org.hooks';
@@ -34,7 +32,7 @@ import { MemberAdminActions } from '@/features/team/member-admin-actions';
 import { MemberDocuments } from '@/features/team/member-documents';
 import { MemberEmploymentSheet } from '@/features/team/member-employment-sheet';
 import { MemberOnboarding } from '@/features/team/member-onboarding';
-import { ROLE_LABEL } from '@/features/team/team.api';
+import { MemberProfileHeader, MemberWork } from '@/features/team/member-profile';
 import { useStaffDirectory, useTeamMember } from '@/features/team/team.hooks';
 
 export default function TeamMemberPage({ params }: { params: Promise<{ id: string }> }) {
@@ -53,6 +51,7 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
   const contributions = useExpenses({ contributorId: id, limit: 50 }, isOwnerViewer);
   const personBalances = usePayeeBalances('MEMBER', id, { enabled: isOwnerViewer });
   const openLogPayment = useQuickActions((s) => s.openLogPayment);
+  const canSeePrices = useCanSeePrices();
 
   const lookups = useMemo(
     () => ({
@@ -91,60 +90,57 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={u.name}
-        crumbs={[{ label: 'Team', href: '/team' }]}
-        description={u.email}
-        meta={
+      <MemberProfileHeader
+        user={u}
+        dept={deptLabel}
+        desig={desigLabel}
+        manager={u.reportingManagerId && managerLabel ? { id: u.reportingManagerId, name: managerLabel } : undefined}
+        actions={
           <>
-            <StatusBadge status={u.status} />
-            <Badge variant="outline">{ROLE_LABEL[u.role] ?? u.role}</Badge>
-          </>
-        }
-        action={
-          me?.role === Role.OWNER ? (
-            <>
-              <Button size="sm" onClick={() => openLogPayment({ payeeType: 'MEMBER', userId: u._id })}>
-                Log payment
+            {me?.role === Role.OWNER && (
+              <>
+                <Button size="sm" variant="brand" onClick={() => openLogPayment({ payeeType: 'MEMBER', userId: u._id })}>
+                  Log payment
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/team/${u._id}/compensation`}>Compensation</Link>
+                </Button>
+              </>
+            )}
+            {canManage && (
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit details
               </Button>
-              <Link href={`/team/${u._id}/compensation`}>
-                <Button variant="outline" size="sm">Compensation</Button>
-              </Link>
-            </>
-          ) : undefined
+            )}
+          </>
         }
       />
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-          <CardTitle>Profile</CardTitle>
-          {canManage && (
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-              <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit details
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent className="grid gap-4 text-sm sm:grid-cols-2 md:grid-cols-3">
-          <Field label="Department" value={deptLabel} />
-          <Field label="Designation" value={desigLabel} />
-          <Field
-            label="Reports to"
-            value={
-              u.reportingManagerId && managerLabel ? (
-                <Link href={`/team/${u.reportingManagerId}`} className="hover:underline">
-                  {managerLabel}
-                </Link>
-              ) : undefined
-            }
-          />
-          <Field label="Phone" value={u.phone} />
-          <Field label="Joined" value={u.dateOfJoining ? formatDate(u.dateOfJoining) : undefined} />
-          {u.dateOfBirth !== undefined && (
-            <Field label="Birthday" value={u.dateOfBirth ? formatDate(u.dateOfBirth, { day: 'numeric', month: 'short' }) : undefined} />
-          )}
-          <Field label="Last sign-in" value={u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Never'} />
-        </CardContent>
-      </Card>
+      <Bento>
+        <Tile span={12} title="Details">
+          <div className="grid gap-4 text-sm sm:grid-cols-2 md:grid-cols-4">
+            <Field label="Department" value={deptLabel} />
+            <Field label="Designation" value={desigLabel} />
+            <Field
+              label="Reports to"
+              value={
+                u.reportingManagerId && managerLabel ? (
+                  <Link href={`/team/${u.reportingManagerId}`} className="hover:underline">
+                    {managerLabel}
+                  </Link>
+                ) : undefined
+              }
+            />
+            <Field label="Phone" value={u.phone} />
+            <Field label="Joined" value={u.dateOfJoining ? formatDate(u.dateOfJoining) : undefined} />
+            {u.dateOfBirth !== undefined && (
+              <Field label="Birthday" value={u.dateOfBirth ? formatDate(u.dateOfBirth, { day: 'numeric', month: 'short' }) : undefined} />
+            )}
+            <Field label="Last sign-in" value={u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Never'} />
+          </div>
+        </Tile>
+        <MemberWork userId={u._id} viewerRole={me?.role} />
+      </Bento>
 
       {canManage && <MemberAdminActions user={u} viewerId={me?.id} viewerRole={me?.role} />}
 
@@ -163,15 +159,15 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
                 <StatCard
                   label="Last payslip (net)"
                   loading={payslips.isLoading}
-                  value={lastSlip ? formatPaise(lastSlip.netPaise, lastSlip.currency) : '—'}
+                  value={lastSlip ? <Price paise={lastSlip.netPaise} currency={lastSlip.currency} /> : '—'}
                 />
                 <StatCard
                   label="Pending project payouts"
                   loading={personBalances.isLoading}
                   tone={pendingAcrossProjects > 0 ? 'warning' : 'default'}
-                  value={formatPaise(pendingAcrossProjects, 'INR')}
+                  value={<Price paise={pendingAcrossProjects} />}
                 />
-                <StatCard label="Shared costs recovered" loading={contributions.isLoading} value={formatPaise(totalContributed, 'INR')} />
+                <StatCard label="Shared costs recovered" loading={contributions.isLoading} value={<Price paise={totalContributed} />} />
               </div>
             );
           })()}
@@ -199,9 +195,9 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
                       <CartesianGrid stroke="hsl(var(--border))" horizontal vertical={false} />
                       <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={48}
-                        tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`} />
+                        tickFormatter={(v: number) => (canSeePrices ? `₹${(v / 1000).toFixed(0)}k` : '')} />
                       <Tooltip
-                        content={<ChartTooltip formatValue={(v) => `₹${v.toLocaleString('en-IN')}`} />}
+                        content={<ChartTooltip formatValue={(v) => (canSeePrices ? `₹${v.toLocaleString('en-IN')}` : '')} />}
                         cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
                       />
                       <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8, color: 'hsl(var(--muted-foreground))' }} iconType="circle" iconSize={8} />
@@ -222,15 +218,15 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
                       <>
                         <div>
                           <p className="text-xs text-muted-foreground">Last month net</p>
-                          <p className="mt-1 font-semibold">{last?.netPaise ? formatPaise(last.netPaise, 'INR') : '—'}</p>
+                          <p className="mt-1 font-semibold">{last?.netPaise ? <Price paise={last.netPaise} /> : '—'}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">12-month average</p>
-                          <p className="mt-1 font-semibold">{avg ? formatPaise(avg, 'INR') : '—'}</p>
+                          <p className="mt-1 font-semibold">{avg ? <Price paise={avg} /> : '—'}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">12-month total</p>
-                          <p className="mt-1 font-semibold">{total ? formatPaise(total, 'INR') : '—'}</p>
+                          <p className="mt-1 font-semibold">{total ? <Price paise={total} /> : '—'}</p>
                         </div>
                       </>
                     );
@@ -277,7 +273,7 @@ export default function TeamMemberPage({ params }: { params: Promise<{ id: strin
                           {mine.note && ` · ${mine.note}`}
                         </p>
                       </div>
-                      <span className="font-semibold tabular-nums text-destructive">−{formatPaise(mine.amountPaise, e.currency)}</span>
+                      <span className="font-semibold tabular-nums text-destructive">−<Price paise={mine.amountPaise} currency={e.currency} /></span>
                     </div>
                   );
                 })}

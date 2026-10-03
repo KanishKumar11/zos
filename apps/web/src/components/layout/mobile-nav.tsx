@@ -20,13 +20,13 @@ export function MobileNav() {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetContent side="left" className="w-[260px] sm:max-w-[260px]">
+      <SheetContent side="left" className="w-[264px] border-r-0 bg-rail text-rail-foreground sm:max-w-[264px] [&>button]:text-rail-foreground/60 [&>button:hover]:bg-rail-foreground/10 [&>button:hover]:text-rail-foreground">
         <SheetTitle className="sr-only">Navigation</SheetTitle>
-        <div className="flex h-14 items-center border-b px-4">
-          <Brand />
+        <div className="flex h-16 items-center px-4">
+          <Brand tone="rail" />
         </div>
         <nav className="flex-1 overflow-y-auto p-2 pt-3">
-          <NavList onNavigate={() => setOpen(false)} />
+          <NavList tone="rail" onNavigate={() => setOpen(false)} />
         </nav>
       </SheetContent>
     </Sheet>

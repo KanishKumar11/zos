@@ -1,4 +1,5 @@
-// Attendance — check in/out, my month, holidays (everyone), team view (LEAD+), manual marking (OWNER/ADMIN).
+// Attendance — check in/out, a 26-week calendar of my days, my month, holidays (everyone), team view
+// (LEAD+), manual marking (OWNER/ADMIN).
 'use client';
 
 import { CalendarDays, Clock } from 'lucide-react';
@@ -9,9 +10,9 @@ import { AttendanceStatus, Role } from '@agency/shared';
 
 import { thisMonthLocal, todayLocal } from '@/lib/form';
 import { formatDate } from '@/lib/formatters';
+import { Avatar, Bento, CalendarHeatmap, Hero, HeroFigure, Legend, Tile, type HeatDay } from '@/components/viz';
 import { useAuthStore } from '@/store/auth.store';
 
-import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,6 +28,7 @@ import {
   useCheckIn,
   useCheckOut,
   useMyAttendance,
+  useMyAttendanceHistory,
   useTeamAttendance,
   type AttendanceEntryRow,
 } from '@/features/attendance/attendance.hooks';
@@ -46,27 +48,59 @@ const hours = (min: number) => (min ? `${Math.floor(min / 60)}h ${String(min % 6
 /** 'YYYY-MM-DD' (holiday dates are stored at UTC midnight) → a local Date for display. */
 const asLocal = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`);
 
+/** The current month and the `count - 1` before it, as yyyy-mm (local time). */
+function lastMonths(count: number): string[] {
+  const now = new Date();
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+}
+
 export default function AttendancePage() {
   const role = useAuthStore((s) => s.user?.role);
   const [month, setMonth] = useState(thisMonthLocal());
   const [date, setDate] = useState(todayLocal());
   const me = useMyAttendance(month);
   const today = useMyAttendance(thisMonthLocal());
+  const history = useMyAttendanceHistory(useMemo(() => lastMonths(7), []));
+  const holidays = useHolidays(new Date().getFullYear());
   const checkIn = useCheckIn();
   const checkOut = useCheckOut();
   const isManager = !!role && [Role.OWNER, Role.ADMIN, Role.LEAD].includes(role);
 
   const todayKey = todayLocal();
-  const todayEntry = today.data?.find((e) => e.date === todayKey);
+  const todayEntry = today.data?.find((e) => e.date.slice(0, 10) === todayKey);
+  const daysInThisMonth = (today.data ?? []).filter((e) => e.status === AttendanceStatus.PRESENT || e.status === AttendanceStatus.HALF_DAY).length;
+  const nextHoliday = (holidays.data ?? []).find((h) => h.date.slice(0, 10) >= todayKey);
+
+  // Heatmap: hours worked per day (a day you were in but didn't check out still shows lightly).
+  const heat: HeatDay[] = useMemo(
+    () =>
+      history.entries
+        .filter((e) => e.status === AttendanceStatus.PRESENT || e.status === AttendanceStatus.HALF_DAY)
+        .map((e) => ({ date: e.date.slice(0, 10), a: Math.max(0.5, (e.workedMinutes ?? 0) / 60) })),
+    [history.entries],
+  );
+  const daysIn = heat.length;
+
+  const lede = [
+    `${daysInThisMonth} ${daysInThisMonth === 1 ? 'day' : 'days'} in so far this month.`,
+    nextHoliday ? `Next holiday: ${nextHoliday.name} on ${formatDate(asLocal(nextHoliday.date), { weekday: 'short', day: 'numeric', month: 'short' })}.` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Attendance"
-        description="Check in and out, see your month, and the holiday calendar."
-        action={
+      <Hero
+        pageTitle="Attendance"
+        eyebrow={new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}
+        loading={today.isLoading}
+        lede={today.isError ? undefined : lede}
+        aside={
           <>
-            <Button size="sm" onClick={() => checkIn.mutate(undefined)} disabled={!!todayEntry?.checkInAt || checkIn.isPending}>
+            <Button size="sm" variant="brand" onClick={() => checkIn.mutate(undefined)} disabled={!!todayEntry?.checkInAt || checkIn.isPending}>
               {todayEntry?.checkInAt ? `Checked in ${time(todayEntry.checkInAt)}` : checkIn.isPending ? 'Checking in…' : 'Check in'}
             </Button>
             <Button
@@ -75,60 +109,90 @@ export default function AttendancePage() {
               onClick={() => checkOut.mutate(undefined)}
               disabled={!todayEntry?.checkInAt || !!todayEntry?.checkOutAt || checkOut.isPending}
             >
-              {todayEntry?.checkOutAt ? `Checked out ${time(todayEntry.checkOutAt)}` : 'Check out'}
+              {todayEntry?.checkOutAt ? `Checked out ${time(todayEntry.checkOutAt)}` : checkOut.isPending ? 'Checking out…' : 'Check out'}
             </Button>
           </>
         }
-      />
+      >
+        {today.isError ? (
+          <>Check in and out, see your month, and the holiday calendar.</>
+        ) : todayEntry?.checkOutAt ? (
+          <>
+            Done for today — <HeroFigure>{hours(todayEntry.workedMinutes)}</HeroFigure> worked.
+          </>
+        ) : todayEntry?.checkInAt ? (
+          <>
+            You checked in at <HeroFigure>{time(todayEntry.checkInAt)}</HeroFigure>. Have a good day.
+          </>
+        ) : todayEntry && todayEntry.status !== AttendanceStatus.PRESENT ? (
+          <>
+            Today is marked <HeroFigure>{STATUS_LABEL[todayEntry.status].toLowerCase()}</HeroFigure>.
+          </>
+        ) : (
+          <>You haven&apos;t checked in yet today.</>
+        )}
+      </Hero>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-            <CardTitle>My month</CardTitle>
-            <Input type="month" value={month} max={thisMonthLocal()} onChange={(e) => e.target.value && setMonth(e.target.value)} className="w-44" />
-          </CardHeader>
-          <CardContent>
-            {me.isLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-8" />
-                <Skeleton className="h-8" />
-                <Skeleton className="h-8" />
-              </div>
-            ) : me.isError ? (
-              <ErrorState error={me.error} onRetry={() => me.refetch()} className="py-6" />
-            ) : (me.data ?? []).length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No attendance recorded for this month.</p>
-            ) : (
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Date</TH>
-                    <TH>Status</TH>
-                    <TH>In</TH>
-                    <TH>Out</TH>
-                    <TH className="text-right">Worked</TH>
+      <Bento>
+        <Tile
+          span={12}
+          title="My last 26 weeks"
+          action={<Legend items={[{ color: 'hsl(var(--success))', label: `${daysIn} ${daysIn === 1 ? 'day' : 'days'} in · darker = longer day` }]} />}
+        >
+          {history.isLoading ? (
+            <Skeleton className="h-32 w-full" />
+          ) : history.isError && history.entries.length === 0 ? (
+            <ErrorState error={history.error} onRetry={history.refetch} className="py-6" />
+          ) : (
+            <CalendarHeatmap days={heat} weeks={26} split={false} labelA="Hours" format={(v) => (v ? `${v.toFixed(1)}h` : 'not in')} />
+          )}
+        </Tile>
+
+        <Tile
+          span={8}
+          title="My month"
+          action={<Input type="month" value={month} max={thisMonthLocal()} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-8 w-44" aria-label="Month" />}
+        >
+          {me.isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8" />
+              <Skeleton className="h-8" />
+              <Skeleton className="h-8" />
+            </div>
+          ) : me.isError ? (
+            <ErrorState error={me.error} onRetry={() => me.refetch()} className="py-6" />
+          ) : (me.data ?? []).length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No attendance recorded for this month.</p>
+          ) : (
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Date</TH>
+                  <TH>Status</TH>
+                  <TH>In</TH>
+                  <TH>Out</TH>
+                  <TH className="text-right">Worked</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {(me.data ?? []).map((e) => (
+                  <TR key={e._id}>
+                    <TD className="whitespace-nowrap">{formatDate(asLocal(e.date), { weekday: 'short', day: 'numeric', month: 'short' })}</TD>
+                    <TD>
+                      <StatusPill status={e.status} />
+                    </TD>
+                    <TD className="font-figures">{time(e.checkInAt)}</TD>
+                    <TD className="font-figures">{time(e.checkOutAt)}</TD>
+                    <TD className="text-right font-figures tabular-nums">{hours(e.workedMinutes)}</TD>
                   </TR>
-                </THead>
-                <TBody>
-                  {(me.data ?? []).map((e) => (
-                    <TR key={e._id}>
-                      <TD className="whitespace-nowrap">{formatDate(asLocal(e.date), { weekday: 'short', day: 'numeric', month: 'short' })}</TD>
-                      <TD>
-                        <StatusPill status={e.status} />
-                      </TD>
-                      <TD>{time(e.checkInAt)}</TD>
-                      <TD>{time(e.checkOutAt)}</TD>
-                      <TD className="text-right tabular-nums">{hours(e.workedMinutes)}</TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </Tile>
 
         <HolidaysCard canManage={role === Role.OWNER || role === Role.ADMIN} />
-      </div>
+      </Bento>
 
       {isManager && <TeamDayCard date={date} onDate={setDate} />}
 
@@ -147,18 +211,21 @@ function HolidaysCard({ canManage }: { canManage: boolean }) {
   const past = rows.length - upcoming.length;
 
   return (
-    <Card className="h-fit">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <CalendarDays className="h-4 w-4 text-muted-foreground" /> Holidays {year}
-        </CardTitle>
-        {canManage && (
-          <Link href="/settings/holidays" className="text-xs text-primary hover:underline">
+    <Tile
+      span={4}
+      title={
+        <span className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4" /> Holidays {year}
+        </span>
+      }
+      action={
+        canManage ? (
+          <Link href="/settings/holidays" className="text-xs font-medium text-brand-ink hover:underline">
             Manage
           </Link>
-        )}
-      </CardHeader>
-      <CardContent>
+        ) : undefined
+      }
+    >
         {holidays.isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-8" />
@@ -174,7 +241,7 @@ function HolidaysCard({ canManage }: { canManage: boolean }) {
           <ul className="space-y-2.5 text-sm">
             {upcoming.map((h) => (
               <li key={h._id} className="flex items-start gap-3">
-                <div className="w-14 shrink-0 text-xs tabular-nums text-muted-foreground">
+                <div className="w-14 shrink-0 rounded-lg bg-muted/60 px-1.5 py-1 text-center text-xs tabular-nums text-muted-foreground">
                   {formatDate(asLocal(h.date), { day: 'numeric', month: 'short' })}
                   <span className="block">{asLocal(h.date).toLocaleDateString('en-IN', { weekday: 'short' })}</span>
                 </div>
@@ -193,8 +260,7 @@ function HolidaysCard({ canManage }: { canManage: boolean }) {
             {past} earlier holiday{past === 1 ? '' : 's'} this year.
           </p>
         )}
-      </CardContent>
-    </Card>
+    </Tile>
   );
 }
 
@@ -238,7 +304,8 @@ function TeamDayCard({ date, onDate }: { date: string; onDate: (d: string) => vo
               {rows.map((e) => (
                 <TR key={e._id}>
                   <TD>
-                    <Link href={`/team/${e.userId}`} className="font-medium hover:underline">
+                    <Link href={`/team/${e.userId}`} className="inline-flex items-center gap-2 font-medium hover:underline">
+                      <Avatar id={e.userId} name={names.get(e.userId) ?? 'Former team member'} size="xs" />
                       {names.get(e.userId) ?? (staff.isLoading ? '…' : 'Former team member')}
                     </Link>
                   </TD>

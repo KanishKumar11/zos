@@ -7,7 +7,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { MilestoneStatus, SUPPORTED_CURRENCIES } from '@agency/shared';
 
 import { ApiRequestError, getErrorMessage } from '@/lib/api-client';
-import { formatPaise } from '@/lib/formatters';
 
 import { Button } from '@/components/ui/button';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
@@ -17,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Price } from '@/components/viz';
 import { useClients } from '@/features/clients/clients.hooks';
 import { useAllProjects } from '@/features/projects/projects.hooks';
 
@@ -264,20 +264,29 @@ export function SowFormDialog({
                 <div
                   className={
                     mismatch
-                      ? 'flex flex-wrap items-center justify-between gap-2 rounded-md bg-amber-600/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-500'
+                      ? 'flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning'
                       : 'px-1 text-xs text-muted-foreground'
                   }
                 >
-                  <span className="flex items-center gap-1.5">
+                  <span className="flex flex-wrap items-center gap-1.5">
                     {mismatch && <AlertTriangle className="h-3.5 w-3.5" />}
-                    Milestones add up to {formatPaise(msTotal, v.currency)}
-                    {v.totalValuePaise !== undefined && ` of ${formatPaise(v.totalValuePaise, v.currency)}`}
-                    {mismatch && v.totalValuePaise !== undefined &&
-                      ` — ${formatPaise(Math.abs(v.totalValuePaise - msTotal), v.currency)} ${msTotal > v.totalValuePaise ? 'over' : 'short'}`}
+                    Milestones add up to <Price paise={msTotal} currency={v.currency} />
+                    {v.totalValuePaise !== undefined && (
+                      <>
+                        {' '}
+                        of <Price paise={v.totalValuePaise} currency={v.currency} />
+                      </>
+                    )}
+                    {mismatch && v.totalValuePaise !== undefined && (
+                      <>
+                        {' '}
+                        — <Price paise={Math.abs(v.totalValuePaise - msTotal)} currency={v.currency} /> {msTotal > v.totalValuePaise ? 'over' : 'short'}
+                      </>
+                    )}
                   </span>
                   {mismatch && (
                     <button type="button" className="font-medium underline" onClick={() => set('totalValuePaise', msTotal)}>
-                      Use {formatPaise(msTotal, v.currency)} as the total
+                      Use <Price paise={msTotal} currency={v.currency} /> as the total
                     </button>
                   )}
                 </div>

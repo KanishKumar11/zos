@@ -111,17 +111,22 @@ export const crmApi = {
   remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/crm/opportunities/${id}`)),
 };
 
-export function useClients(search?: string) {
-  return useQuery({ queryKey: [...qk.clients.all(), search], queryFn: () => clientsApi.list(search) });
+/** Clients are OWNER-only — pass `enabled: false` for other roles so no request fails with 403. */
+export function useClients(search?: string, opts: { enabled?: boolean } = {}) {
+  return useQuery({ queryKey: [...qk.clients.all(), search], queryFn: () => clientsApi.list(search), enabled: opts.enabled });
 }
-export function useClientsWithStats(search?: string) {
-  return useQuery({ queryKey: [...qk.clients.all(), 'stats', search ?? ''], queryFn: () => clientsApi.listWithStats(search) });
+export function useClientsWithStats(search?: string, opts: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: [...qk.clients.all(), 'stats', search ?? ''],
+    queryFn: () => clientsApi.listWithStats(search),
+    enabled: opts.enabled,
+  });
 }
-export function useClientStats(id: string | undefined) {
-  return useQuery({ queryKey: ['clients', id, 'stats'], queryFn: () => clientsApi.stats(id!), enabled: !!id });
+export function useClientStats(id: string | undefined, opts: { enabled?: boolean } = {}) {
+  return useQuery({ queryKey: ['clients', id, 'stats'], queryFn: () => clientsApi.stats(id!), enabled: !!id && opts.enabled !== false });
 }
-export function usePortalAccess(id: string | undefined) {
-  return useQuery({ queryKey: ['clients', id, 'portal'], queryFn: () => clientsApi.portal(id!), enabled: !!id });
+export function usePortalAccess(id: string | undefined, opts: { enabled?: boolean } = {}) {
+  return useQuery({ queryKey: ['clients', id, 'portal'], queryFn: () => clientsApi.portal(id!), enabled: !!id && opts.enabled !== false });
 }
 function usePortalMutation<V>(fn: (v: V) => Promise<unknown>, message: (r: unknown) => string) {
   const qc = useQueryClient();
@@ -147,11 +152,11 @@ export const useDisablePortalUser = () =>
 export const useEnablePortalUser = () =>
   usePortalMutation((v: { id: string; userId: string }) => clientsApi.enablePortalUser(v.id, v.userId), () => 'Portal access turned on');
 
-export function useClient(id: string | undefined) {
+export function useClient(id: string | undefined, opts: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: id ? qk.clients.byId(id) : ['clients', 'undefined'],
     queryFn: () => clientsApi.byId(id!),
-    enabled: !!id,
+    enabled: !!id && opts.enabled !== false,
   });
 }
 export function useCreateClient() {

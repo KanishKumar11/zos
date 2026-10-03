@@ -84,10 +84,12 @@ export interface InvoiceListTotals {
 
 /** Simple (unpaginated) filters accepted by `useInvoices`. */
 export type InvoiceListParams = Pick<ListInvoicesQuery, 'status' | 'clientId' | 'projectId' | 'contractId'>;
+/** Every filter the unpaginated list accepts (search and issue-date range included). */
+export type InvoiceListFilters = Omit<ListInvoicesQuery, 'page' | 'pageSize' | 'sort'>;
 
 export const invoicesApi = {
   /** Every match as an array — for summaries and per-client / per-project lists. */
-  list: (params: InvoiceListParams = {}) => unwrap<InvoiceRow[]>(api.get('/invoices', { params })),
+  list: (params: InvoiceListFilters = {}) => unwrap<InvoiceRow[]>(api.get('/invoices', { params })),
   /** Paginated table with totals for the whole filtered set. */
   page: async (q: ListInvoicesQuery) => {
     const res = await unwrapPaginated<InvoiceRow>(api.get('/invoices', { params: { page: 1, ...q } }));
@@ -151,11 +153,21 @@ export function useInvoices(params: InvoiceListParams = {}) {
     queryFn: () => invoicesApi.list(params),
   });
 }
-export function useInvoicePage(q: ListInvoicesQuery) {
+/** Every invoice matching the filters, unpaginated — for the status lanes and client-side filters. */
+export function useInvoiceList(filters: InvoiceListFilters, enabled = true) {
+  return useQuery({
+    queryKey: ['invoices', 'list', filters],
+    queryFn: () => invoicesApi.list(filters),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+export function useInvoicePage(q: ListInvoicesQuery, enabled = true) {
   return useQuery({
     queryKey: ['invoices', 'page', q],
     queryFn: () => invoicesApi.page(q),
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 export function useInvoice(id: string | undefined) {

@@ -1,25 +1,30 @@
-// Audit log (OWNER + ADMIN) — who did what, when, with a before/after view of each change.
+// Audit log (OWNER + ADMIN) — who did what, when, as a day-grouped timeline (default) or the table,
+// with a before/after view of each change. The API strips money fields for non-owners.
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, ScrollText } from 'lucide-react';
+import { ChevronDown, ChevronRight, LayoutList, Rows3 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { AUDIT_ACTION_LABEL, AuditAction, Role } from '@agency/shared';
 
 import { api, unwrap, unwrapPaginated } from '@/lib/api-client';
-import { formatDateTime } from '@/lib/formatters';
+import { toLocalDateInput } from '@/lib/form';
+import { formatDate, formatDateTime } from '@/lib/formatters';
+import { identityColor } from '@/lib/identity';
 import { useListState } from '@/lib/list-state';
 
 import { RoleGate } from '@/components/auth/role-gate';
 import { DataTable, type Column } from '@/components/data/data-table';
 import { DateRangeFilter, FilterBar, ResetFilters, SelectFilter } from '@/components/data/filter-bar';
-import { PageHeader } from '@/components/layout/page-header';
+import { ViewToggle } from '@/components/data/view-toggle';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Pagination } from '@/components/ui/pagination';
-import { EmptyState } from '@/components/ui/states';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState, ErrorState } from '@/components/ui/states';
+import { ActivityTimeline, Avatar, Hero, HeroFigure, type TimelineItem } from '@/components/viz';
 import { useStaffDirectory } from '@/features/team/team.hooks';
 
 interface AuditRow {
@@ -89,8 +94,9 @@ export default function AuditPage() {
 }
 
 function Inner() {
-  const list = useListState('audit', { action: '', actorId: '', entity: '', range: '', from: '', to: '' });
+  const list = useListState('audit', { action: '', actorId: '', entity: '', range: '', from: '', to: '', view: 'timeline' });
   const { params } = list;
+  const view = params.view === 'table' ? 'table' : 'timeline';
   const staff = useStaffDirectory();
   const [expanded, setExpanded] = useState<string>();
 
@@ -139,7 +145,8 @@ function Inner() {
       className: 'align-top',
       cell: (r) =>
         r.actorId ? (
-          <Link href={`/team/${r.actorId}`} className="whitespace-nowrap font-medium hover:underline">
+          <Link href={`/team/${r.actorId}`} className="inline-flex items-center gap-2 whitespace-nowrap font-medium hover:underline">
+            <Avatar id={r.actorId} name={r.actorName ?? 'Deleted user'} size="xs" />
             {r.actorName ?? 'Deleted user'}
           </Link>
         ) : (
@@ -196,11 +203,41 @@ function Inner() {
     },
   ];
 
-  const filtered = list.activeFilterCount > 0;
+  // `view` is remembered with the filters but isn't one.
+  const filterCount = list.activeFilterCount - (view === 'table' ? 1 : 0);
+  const filtered = filterCount > 0;
+  const resetFilters = () => list.set({ action: '', actorId: '', entity: '', range: '', from: '', to: '', view: params.view });
+  const total = entries.data?.meta.total ?? 0;
+
+  const empty = filtered ? (
+    <EmptyState
+      title="Nothing matches these filters"
+      action={
+        <Button variant="outline" size="sm" onClick={resetFilters}>
+          Clear filters
+        </Button>
+      }
+    />
+  ) : (
+    <EmptyState illustration="files" title="No activity yet" description="Changes to money, people and payroll show up here." />
+  );
 
   return (
-    <div className="space-y-5">
-      <PageHeader title="Audit log" description="Who changed what, and when. Entries can’t be edited or deleted." />
+    <div className="space-y-6">
+      <Hero pageTitle="Audit log" eyebrow="Admin" loading={entries.isLoading} lede="Entries can’t be edited or deleted.">
+        {entries.isError ? (
+          <>Who changed what, and when.</>
+        ) : total === 0 ? (
+          filtered ? <>No changes match these filters.</> : <>Nothing has been changed yet.</>
+        ) : (
+          <>
+            <HeroFigure>
+              {total.toLocaleString('en-IN')} {total === 1 ? 'change' : 'changes'}
+            </HeroFigure>{' '}
+            {filtered ? 'match these filters.' : 'recorded so far.'}
+          </>
+        )}
+      </Hero>
 
       <FilterBar>
         <SelectFilter value={params.action} onChange={(action) => list.set({ action })} allLabel="Any action" options={actionOptions} />
@@ -217,9 +254,29 @@ function Inner() {
         </div>
         <SelectFilter value={params.entity} onChange={(entity) => list.set({ entity })} allLabel="Any record type" options={entityOptions} />
         <DateRangeFilter preset={params.range} from={params.from} to={params.to} onChange={(r) => list.set(r)} />
-        <ResetFilters count={list.activeFilterCount} onReset={list.reset} />
+        <ResetFilters count={filterCount} onReset={resetFilters} />
+        <ViewToggle
+          className="sm:ml-auto"
+          value={view}
+          onChange={(v) => list.set({ view: v, page: String(list.page) })}
+          options={[
+            { value: 'timeline', label: 'Timeline', icon: LayoutList },
+            { value: 'table', label: 'Table', icon: Rows3 },
+          ]}
+        />
       </FilterBar>
 
+      {view === 'timeline' ? (
+        <AuditTimeline
+          rows={entries.data?.items}
+          loading={entries.isLoading}
+          error={entries.error}
+          onRetry={() => entries.refetch()}
+          empty={empty}
+          expanded={expanded}
+          onToggle={(id) => setExpanded((cur) => (cur === id ? undefined : id))}
+        />
+      ) : (
       <DataTable
         columns={columns}
         rows={entries.data?.items}
@@ -228,21 +285,9 @@ function Inner() {
         error={entries.error}
         onRetry={() => entries.refetch()}
         onRowClick={(r) => hasDiff(r) && setExpanded((cur) => (cur === r._id ? undefined : r._id))}
-        empty={
-          filtered ? (
-            <EmptyState
-              title="Nothing matches these filters"
-              action={
-                <Button variant="outline" size="sm" onClick={list.reset}>
-                  Clear filters
-                </Button>
-              }
-            />
-          ) : (
-            <EmptyState icon={ScrollText} title="No activity yet" description="Changes to money, people and payroll show up here." />
-          )
-        }
+        empty={empty}
       />
+      )}
       {entries.data && (
         <Pagination
           page={list.page}
@@ -252,6 +297,135 @@ function Inner() {
           onPage={list.setPage}
         />
       )}
+    </div>
+  );
+}
+
+function dayLabel(key: string): string {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (key === toLocalDateInput(today)) return 'Today';
+  if (key === toLocalDateInput(yesterday)) return 'Yesterday';
+  const d = new Date(`${key}T00:00:00`);
+  return formatDate(d, { weekday: 'long', day: 'numeric', month: 'long', ...(d.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) });
+}
+
+/** Day-grouped story of changes: actor avatar, action, summary and a link to the record. */
+function AuditTimeline({
+  rows,
+  loading,
+  error,
+  onRetry,
+  empty,
+  expanded,
+  onToggle,
+}: {
+  rows: AuditRow[] | undefined;
+  loading: boolean;
+  error: unknown;
+  onRetry: () => void;
+  empty: ReactNode;
+  expanded?: string;
+  onToggle: (id: string) => void;
+}) {
+  const days = useMemo(() => {
+    const map = new Map<string, AuditRow[]>();
+    for (const r of rows ?? []) {
+      const key = toLocalDateInput(new Date(r.createdAt));
+      const list = map.get(key) ?? [];
+      list.push(r);
+      map.set(key, list);
+    }
+    return [...map.entries()];
+  }, [rows]);
+
+  if (loading) {
+    return (
+      <div className="space-y-3 rounded-[var(--radius)] border bg-card p-5">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-10 w-full" />
+        ))}
+      </div>
+    );
+  }
+  if (error && !rows) return <ErrorState error={error} onRetry={onRetry} className="rounded-[var(--radius)] border bg-card" />;
+  if (!rows || rows.length === 0) return <div className="rounded-[var(--radius)] border bg-card">{empty}</div>;
+
+  return (
+    <div className="space-y-4">
+      {days.map(([key, items]) => {
+        const timeline: TimelineItem[] = items.map((r) => {
+          const ek = entityKey(r.entity);
+          const href = r.entityId && ENTITY_HREF[ek] ? ENTITY_HREF[ek](r.entityId) : undefined;
+          const record = r.entityName ? `${entityLabel(r.entity)} · ${r.entityName}` : entityLabel(r.entity);
+          const summary = summaryOf(r);
+          const detail = hasDiff(r);
+          const open = expanded === r._id;
+          const actor = r.actorId ? (r.actorName ?? 'Deleted user') : 'System';
+          return {
+            key: r._id,
+            date: r.createdAt,
+            color: r.actorId ? identityColor(r.actorId) : 'hsl(var(--muted-foreground))',
+            title: (
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {r.actorId ? (
+                  <Link href={`/team/${r.actorId}`} className="inline-flex items-center gap-1.5 hover:underline">
+                    <Avatar id={r.actorId} name={actor} size="xs" />
+                    {actor}
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">System</span>
+                )}
+                <span className="font-normal text-muted-foreground">·</span>
+                <span>{actionLabel(r.action)}</span>
+              </span>
+            ),
+            meta: (
+              <span className="flex flex-wrap items-center gap-x-2">
+                <span>{new Date(r.createdAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</span>
+                <span>·</span>
+                {href ? (
+                  <Link href={href} className="text-brand-ink hover:underline">
+                    {record}
+                  </Link>
+                ) : (
+                  <span>{record}</span>
+                )}
+              </span>
+            ),
+            body:
+              summary || detail ? (
+                <div>
+                  {summary && <p className="text-muted-foreground">{summary}</p>}
+                  {detail && (
+                    <button
+                      type="button"
+                      onClick={() => onToggle(r._id)}
+                      aria-expanded={open}
+                      className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      {open ? 'Hide changes' : 'Show changes'}
+                    </button>
+                  )}
+                  {open && detail && <DiffTable before={r.before} after={r.after} />}
+                </div>
+              ) : undefined,
+          };
+        });
+        return (
+          <section key={key} className="animate-rise rounded-[var(--radius)] border bg-card p-4 sm:p-5">
+            <h2 className="mb-4 flex items-baseline justify-between gap-2">
+              <span className="font-display text-lg font-bold">{dayLabel(key)}</span>
+              <span className="text-xs text-muted-foreground">
+                {items.length} {items.length === 1 ? 'change' : 'changes'}
+              </span>
+            </h2>
+            <ActivityTimeline items={timeline} />
+          </section>
+        );
+      })}
     </div>
   );
 }

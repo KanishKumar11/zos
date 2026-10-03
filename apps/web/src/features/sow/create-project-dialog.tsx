@@ -4,12 +4,12 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { ApiRequestError, getErrorMessage } from '@/lib/api-client';
-import { formatPaise } from '@/lib/formatters';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
+import { Price } from '@/components/viz';
 
 import { useCreateProjectFromSow, type SowRow } from './sow.hooks';
 
@@ -84,7 +84,7 @@ export function CreateProjectFromSowDialog({
         <DialogHeader>
           <DialogTitle>Create project from this SOW</DialogTitle>
           <DialogDescription>
-            The project gets {clientName} as its client, a budget of {formatPaise(sow.totalValuePaise, sow.currency)}
+            The project gets {clientName} as its client, a budget of <Price paise={sow.totalValuePaise} currency={sow.currency} />
             {sow.milestones.length
               ? ` and the ${sow.milestones.length} milestone${sow.milestones.length === 1 ? '' : 's'} below`
               : ''}
@@ -136,7 +136,7 @@ export function CreateProjectFromSowDialog({
               {sow.milestones.map((m, i) => (
                 <li key={i} className="flex items-center justify-between gap-3 px-3 py-2">
                   <span className="truncate">{m.title}</span>
-                  <span className="shrink-0 tabular-nums text-muted-foreground">{formatPaise(m.amountPaise, sow.currency)}</span>
+                  <Price paise={m.amountPaise} currency={sow.currency} className="shrink-0 text-muted-foreground" />
                 </li>
               ))}
             </ul>

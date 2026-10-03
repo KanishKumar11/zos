@@ -113,6 +113,7 @@ const projectsApi = {
   removeFreelancer: (id: string, freelancerId: string) =>
     unwrap<ProjectRow>(api.delete(`/projects/${id}/freelancers/${freelancerId}`)),
   balance: (id: string) => unwrap<ProjectBalance>(api.get(`/projects/${id}/balance`)),
+  balances: (ids: string[]) => unwrap<Record<string, ProjectBalance>>(api.get('/projects/health', { params: { ids: ids.join(',') } })),
   addMilestone: (id: string, body: { name: string; amountPaise: number; dueDate?: string; note?: string }) =>
     unwrap<ProjectRow>(api.post(`/projects/${id}/milestones`, body)),
   updateMilestone: (id: string, milestoneId: string, body: Record<string, unknown>) =>
@@ -234,11 +235,26 @@ export function useDeleteProject() {
     },
   });
 }
-export function useProjectBalance(id: string | undefined) {
+export function useProjectBalance(id: string | undefined, opts: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['projects', id, 'balance'],
     queryFn: () => projectsApi.balance(id!),
-    enabled: !!id,
+    enabled: !!id && (opts.enabled ?? true),
+  });
+}
+
+/** OWNER: balances for a page of projects in one request; also seeds each project's balance cache. */
+export function useProjectBalances(ids: string[], opts: { enabled?: boolean } = {}) {
+  const qc = useQueryClient();
+  const key = [...ids].sort().join(',');
+  return useQuery({
+    queryKey: ['projects', 'balances', key],
+    queryFn: async () => {
+      const map = await projectsApi.balances(ids);
+      for (const [id, b] of Object.entries(map)) qc.setQueryData(['projects', id, 'balance'], b);
+      return map;
+    },
+    enabled: ids.length > 0 && (opts.enabled ?? true),
   });
 }
 export function useAddMilestone() {

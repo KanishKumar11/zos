@@ -1,5 +1,5 @@
 // Attendance + Leaves API client + hooks.
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import {
@@ -70,10 +70,29 @@ export const leavesApi = {
 export function useMyAttendance(month: string) {
   return useQuery({ queryKey: qk.attendance.me(month), queryFn: () => attendanceApi.me(month) });
 }
-export function useTeamAttendance(date: string, departmentId?: string) {
+/** OWNER / ADMIN / LEAD only (API @Roles). Pass `enabled: false` for anyone else. */
+export function useTeamAttendance(date: string, departmentId?: string, opts: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: qk.attendance.team({ date, departmentId }),
     queryFn: () => attendanceApi.team(date, departmentId),
+    enabled: opts.enabled,
+  });
+}
+
+/**
+ * My attendance for the last `months` months (one request per month, sharing the per-month cache),
+ * flattened — feeds the attendance calendar heatmap.
+ */
+export function useMyAttendanceHistory(months: string[]) {
+  return useQueries({
+    queries: months.map((month) => ({ queryKey: qk.attendance.me(month), queryFn: () => attendanceApi.me(month) })),
+    combine: (results) => ({
+      entries: results.flatMap((r) => r.data ?? []),
+      isLoading: results.some((r) => r.isLoading),
+      isError: results.some((r) => r.isError),
+      error: results.find((r) => r.error)?.error,
+      refetch: () => results.forEach((r) => void r.refetch()),
+    }),
   });
 }
 export function useCheckIn() {

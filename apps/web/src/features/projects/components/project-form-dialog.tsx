@@ -73,7 +73,7 @@ export function ProjectFormDialog({
   onSaved?: (p: ProjectRow) => void;
 }) {
   const isOwner = useAuthStore((s) => s.user?.role) === Role.OWNER;
-  const clients = useClients(undefined);
+  const clients = useClients(undefined, { enabled: isOwner });
   const create = useCreateProject();
   const update = useUpdateProject();
   const [v, setV] = useState<Values>(() => fromProject(project, defaultClientId));

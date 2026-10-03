@@ -1,7 +1,7 @@
 // CRM pipeline — deals by stage, weighted forecast, and what to do when a deal is won (OWNER-only).
 'use client';
 
-import { CalendarClock, ChevronRight, FileSignature, FolderPlus, Handshake, Plus, Trash2, Trophy, UserPlus } from 'lucide-react';
+import { CalendarClock, ChevronRight, FileSignature, FolderPlus, GripVertical, Handshake, LayoutGrid, Plus, Rows3, Trash2, Trophy, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -10,13 +10,15 @@ import { CRM_OPEN_STAGES, CRM_STAGE_LABEL, CRM_STAGE_ORDER, CRM_STAGE_PROBABILIT
 
 import { ApiRequestError, getErrorMessage } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
+import { csvMoney } from '@/lib/csv';
 import { thisMonthLocal, toLocalDateInput, todayLocal } from '@/lib/form';
-import { formatDate, formatPaise } from '@/lib/formatters';
+import { formatDate } from '@/lib/formatters';
 import { useListState } from '@/lib/list-state';
 
 import { RoleGate } from '@/components/auth/role-gate';
-import { FilterBar, SearchFilter } from '@/components/data/filter-bar';
-import { PageHeader } from '@/components/layout/page-header';
+import { DataTable, exportColumnsCsv, sortRows, type Column } from '@/components/data/data-table';
+import { ExportButton, FilterBar, SearchFilter } from '@/components/data/filter-bar';
+import { ViewToggle } from '@/components/data/view-toggle';
 import { useNewParam } from '@/components/layout/quick-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,9 +30,9 @@ import { Input } from '@/components/ui/input';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { StatCard } from '@/components/ui/stat-card';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { Textarea } from '@/components/ui/textarea';
+import { BigNumber, Bento, Hero, HeroFigure, HeroMark, Legend, Price, PrivacyChip, SegmentBar, Tile, useCanSeePrices } from '@/components/viz';
 import {
   useClients,
   useConvertOpportunityToClient,
@@ -42,7 +44,8 @@ import {
   type OpportunityBody,
   type OpportunityRow,
 } from '@/features/clients/clients.hooks';
-import { formatTotals, totalsByCurrency } from '@/features/contracts/contract-utils';
+import { monthLabel, totalsByCurrency } from '@/features/contracts/contract-utils';
+import { ClientChip, PriceTotals } from '@/features/contracts/price-totals';
 
 export default function CrmPage() {
   return (
@@ -55,20 +58,26 @@ export default function CrmPage() {
 const isOpen = (s: CrmStage) => (CRM_OPEN_STAGES as readonly CrmStage[]).includes(s);
 const probabilityOf = (o: OpportunityRow) => o.probability ?? CRM_STAGE_PROBABILITY[o.stage];
 const isOverdue = (o: OpportunityRow) => isOpen(o.stage) && !!o.expectedCloseDate && o.expectedCloseDate.slice(0, 10) < todayLocal();
-const money = (m: Map<string, number>) => formatTotals(m, formatPaise);
+const weightedOf = (o: OpportunityRow) => Math.round((o.valuePaise * probabilityOf(o)) / 100);
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
-const STAGE_TONE: Record<CrmStage, string> = {
-  [CrmStage.LEAD]: 'bg-muted-foreground/40',
-  [CrmStage.QUALIFIED]: 'bg-sky-500',
-  [CrmStage.PROPOSAL]: 'bg-violet-500',
-  [CrmStage.NEGOTIATION]: 'bg-amber-500',
-  [CrmStage.WON]: 'bg-[hsl(var(--success))]',
-  [CrmStage.LOST]: 'bg-destructive/60',
+/** Stage colour (token-based, works in both themes). */
+const STAGE_COLOR: Record<CrmStage, string> = {
+  [CrmStage.LEAD]: 'hsl(var(--muted-foreground) / 0.55)',
+  [CrmStage.QUALIFIED]: 'hsl(var(--info))',
+  [CrmStage.PROPOSAL]: 'hsl(var(--p4))',
+  [CrmStage.NEGOTIATION]: 'hsl(var(--warning))',
+  [CrmStage.WON]: 'hsl(var(--success))',
+  [CrmStage.LOST]: 'hsl(var(--destructive) / 0.6)',
 };
+
+type Company = { label: string; clientId?: string; prospect: boolean; missing: boolean; loading: boolean };
 
 function Inner() {
   const confirm = useConfirm();
-  const list = useListState('crm', { q: '' });
+  const canSee = useCanSeePrices();
+  const list = useListState('crm', { q: '', view: 'board', sort: '' });
+  const view = list.params.view === 'table' ? 'table' : 'board';
   const pipeline = usePipeline();
   const clients = useClients();
   const move = useMoveOpportunity();
@@ -77,18 +86,26 @@ function Inner() {
   const [editing, setEditing] = useState<OpportunityRow | null>(null);
   const [wonId, setWonId] = useState<string | null>(null);
   const [losing, setLosing] = useState<OpportunityRow | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropStage, setDropStage] = useState<CrmStage | null>(null);
   useNewParam(() => {
     setEditing(null);
     setFormOpen(true);
   });
 
   const clientName = useMemo(() => new Map((clients.data ?? []).map((c) => [c._id, c.name])), [clients.data]);
-  const companyOf = (o: OpportunityRow): { label: string; prospect: boolean; missing: boolean } => {
+  const companyOf = (o: OpportunityRow): Company => {
     if (o.clientId) {
       const name = clientName.get(o.clientId);
-      return { label: name ?? (clients.isLoading ? '…' : 'Deleted client'), prospect: false, missing: !name && !clients.isLoading };
+      return {
+        label: name ?? (clients.isLoading ? '…' : 'Deleted client'),
+        clientId: o.clientId,
+        prospect: false,
+        missing: !name && !clients.isLoading,
+        loading: clients.isLoading,
+      };
     }
-    return { label: o.prospectName || 'No company', prospect: true, missing: false };
+    return { label: o.prospectName || 'No company', prospect: true, missing: false, loading: false };
   };
 
   const all = pipeline.data ?? [];
@@ -105,6 +122,9 @@ function Inner() {
   const month = thisMonthLocal();
   const wonThisMonth = all.filter((o) => o.stage === CrmStage.WON && toLocalDateInput(o.closedAt ?? o.updatedAt ?? o.createdAt ?? new Date()).slice(0, 7) === month);
   const overdue = open.filter(isOverdue);
+  const openTotals = totalsByCurrency(open, (o) => o.valuePaise, (o) => o.currency);
+  const weightedTotals = totalsByCurrency(open, weightedOf, (o) => o.currency);
+  const wonTotals = totalsByCurrency(wonThisMonth, (o) => o.valuePaise, (o) => o.currency);
 
   const changeStage = (o: OpportunityRow, stage: CrmStage) => {
     if (stage === o.stage) return;
@@ -121,104 +141,301 @@ function Inner() {
     if (ok) del.mutate(o._id, { onSuccess: () => setFormOpen(false) });
   };
 
+  const openDeal = (o: OpportunityRow) => {
+    setEditing(o);
+    setFormOpen(true);
+  };
+  const newDeal = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
   const wonDeal = wonId ? all.find((o) => o._id === wonId) : undefined;
 
-  return (
-    <div className="space-y-5">
-      <PageHeader
-        title="Pipeline"
-        description="Deals by stage — what’s likely to close and what to do when one is won."
-        action={
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-          >
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> New deal
-          </Button>
-        }
-      />
+  const columns: Column<OpportunityRow>[] = [
+    {
+      id: 'title',
+      header: 'Deal',
+      sortable: true,
+      sortValue: (o) => o.title.toLowerCase(),
+      cell: (o) => (
+        <button type="button" onClick={() => openDeal(o)} className="text-left font-medium hover:underline">
+          {o.title}
+        </button>
+      ),
+      csv: (o) => o.title,
+    },
+    {
+      id: 'company',
+      header: 'Company',
+      sortable: true,
+      sortValue: (o) => companyOf(o).label.toLowerCase(),
+      cell: (o) => <CompanyLabel company={companyOf(o)} />,
+      csv: (o) => companyOf(o).label,
+    },
+    {
+      id: 'stage',
+      header: 'Stage',
+      sortable: true,
+      sortValue: (o) => CRM_STAGE_ORDER.indexOf(o.stage),
+      cell: (o) => (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: STAGE_COLOR[o.stage] }} />
+          {CRM_STAGE_LABEL[o.stage]}
+        </span>
+      ),
+      csv: (o) => CRM_STAGE_LABEL[o.stage],
+    },
+    {
+      id: 'value',
+      header: 'Value',
+      align: 'right',
+      sortable: true,
+      sortValue: (o) => o.valuePaise,
+      cell: (o) => <Price paise={o.valuePaise} currency={o.currency} />,
+      csv: (o) => (canSee ? csvMoney(o.valuePaise) : ''),
+    },
+    { id: 'currency', header: 'Currency', cell: () => null, className: 'hidden', csv: (o) => o.currency },
+    {
+      id: 'chance',
+      header: 'Win chance',
+      align: 'right',
+      hideBelow: 'sm',
+      sortable: true,
+      sortValue: (o) => (isOpen(o.stage) ? probabilityOf(o) : -1),
+      cell: (o) => (isOpen(o.stage) ? <span className="font-figures">{probabilityOf(o)}%</span> : <span className="text-muted-foreground">—</span>),
+      csv: (o) => (isOpen(o.stage) ? probabilityOf(o) : ''),
+    },
+    {
+      id: 'close',
+      header: 'Expected close',
+      hideBelow: 'md',
+      sortable: true,
+      sortValue: (o) => o.expectedCloseDate ?? '',
+      cell: (o) =>
+        o.stage === CrmStage.WON && o.closedAt ? (
+          <span className="text-muted-foreground">Won {formatDate(o.closedAt)}</span>
+        ) : o.expectedCloseDate ? (
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <span className={isOverdue(o) ? 'text-destructive' : undefined}>{formatDate(o.expectedCloseDate)}</span>
+            {isOverdue(o) && <Badge variant="danger">Overdue</Badge>}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+      csv: (o) => o.expectedCloseDate?.slice(0, 10) ?? '',
+    },
+  ];
+  const visibleColumns = columns.filter((c) => c.className !== 'hidden');
+  const sortedDeals = sortRows(deals, columns, list.sort);
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Open pipeline" loading={pipeline.isLoading} value={money(totalsByCurrency(open, (o) => o.valuePaise, (o) => o.currency))} hint={`${open.length} open deal${open.length === 1 ? '' : 's'}`} />
-        <StatCard
-          label="Weighted forecast"
-          loading={pipeline.isLoading}
-          value={money(totalsByCurrency(open, (o) => Math.round((o.valuePaise * probabilityOf(o)) / 100), (o) => o.currency))}
-          hint="Value × win chance, open deals"
-        />
-        <StatCard
-          label="Won this month"
-          loading={pipeline.isLoading}
-          tone={wonThisMonth.length ? 'success' : 'default'}
-          value={money(totalsByCurrency(wonThisMonth, (o) => o.valuePaise, (o) => o.currency))}
-          hint={`${wonThisMonth.length} deal${wonThisMonth.length === 1 ? '' : 's'}`}
-        />
-        <StatCard
-          label="Past close date"
-          loading={pipeline.isLoading}
-          tone={overdue.length ? 'danger' : 'default'}
-          value={String(overdue.length)}
-          hint={overdue.length ? 'Open deals to follow up' : 'Nothing overdue'}
-        />
-      </div>
+  // Open-deal mix by stage — counts, so it reads the same whatever the currencies.
+  const stageMix = CRM_OPEN_STAGES.map((s) => ({ stage: s, count: open.filter((o) => o.stage === s).length }));
+
+  return (
+    <div className="space-y-6">
+      <Hero
+        pageTitle="Pipeline"
+        eyebrow={`Pipeline · ${monthLabel(month)}`}
+        loading={pipeline.isLoading}
+        aside={
+          <>
+            {all.length > 0 && <PrivacyChip>Only you see these figures</PrivacyChip>}
+            <Button size="sm" variant="brand" onClick={newDeal}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> New deal
+            </Button>
+          </>
+        }
+        lede={
+          pipeline.error ? undefined : all.length === 0 ? (
+            'Add leads as they come in and move them along as they progress.'
+          ) : (
+            <>
+              {open.length > 0 && (
+                <>
+                  Weighted by win chance, that’s about <PriceTotals totals={weightedTotals} compact className="font-medium text-foreground" />.{' '}
+                </>
+              )}
+              {wonThisMonth.length > 0 ? (
+                <>
+                  Won this month: <PriceTotals totals={wonTotals} compact className="font-medium text-foreground" /> from {wonThisMonth.length}{' '}
+                  {plural(wonThisMonth.length, 'deal', 'deals')}.
+                </>
+              ) : (
+                'Nothing won yet this month.'
+              )}
+            </>
+          )
+        }
+      >
+        {pipeline.error ? (
+          'Couldn’t load the pipeline.'
+        ) : all.length === 0 ? (
+          'No deals in the pipeline yet.'
+        ) : open.length === 0 ? (
+          'No open deals right now — a good moment to chase new leads.'
+        ) : (
+          <>
+            <HeroFigure>
+              <PriceTotals totals={openTotals} compact />
+            </HeroFigure>{' '}
+            in open deals across {open.length} {plural(open.length, 'opportunity', 'opportunities')}
+            {overdue.length > 0 ? (
+              <>
+                {' '}
+                — <HeroMark>{overdue.length} {plural(overdue.length, 'is', 'are')}</HeroMark> past {plural(overdue.length, 'its', 'their')} expected close date.
+              </>
+            ) : (
+              '. None are past their close date.'
+            )}
+          </>
+        )}
+      </Hero>
+
+      {!pipeline.isLoading && !pipeline.error && open.length > 0 && (
+        <Bento>
+          <Tile span={8} title="Open deals by stage" action={<span className="text-xs text-muted-foreground">{open.length} open</span>}>
+            <SegmentBar
+              height="h-8"
+              segments={stageMix.map((s) => ({
+                value: s.count,
+                color: STAGE_COLOR[s.stage],
+                label: CRM_STAGE_LABEL[s.stage],
+                display: String(s.count),
+              }))}
+            />
+            <Legend className="mt-3" items={stageMix.map((s) => ({ color: STAGE_COLOR[s.stage], label: `${CRM_STAGE_LABEL[s.stage]} · ${s.count}` }))} />
+          </Tile>
+          <Tile span={4} tone="ink" title="Weighted forecast">
+            <BigNumber caption="Deal value × win chance, open deals" className="[&>div]:text-brand">
+              <PriceTotals totals={weightedTotals} compact />
+            </BigNumber>
+          </Tile>
+        </Bento>
+      )}
 
       <FilterBar>
         <SearchFilter value={list.params.q} onChange={(v) => list.set({ q: v })} placeholder="Search deal or company" />
+        <div className="ml-auto flex items-center gap-2">
+          {view === 'table' && (
+            <ExportButton disabled={!sortedDeals.length || !canSee} onClick={() => exportColumnsCsv('pipeline', columns, sortedDeals)} />
+          )}
+          <ViewToggle
+            value={view}
+            onChange={(v) => list.set({ view: v, page: list.params.page })}
+            options={[
+              { value: 'board', label: 'Board', icon: LayoutGrid },
+              { value: 'table', label: 'Table', icon: Rows3 },
+            ]}
+          />
+        </div>
       </FilterBar>
 
       {pipeline.isLoading ? (
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid auto-cols-[minmax(240px,1fr)] grid-flow-col gap-3 overflow-x-auto pb-2 xl:grid-flow-row xl:grid-cols-6">
           {CRM_STAGE_ORDER.map((s) => (
-            <Skeleton key={s} className="h-48" />
+            <Skeleton key={s} className="h-56 rounded-[var(--radius)]" />
           ))}
         </div>
       ) : pipeline.error ? (
-        <ErrorState error={pipeline.error} onRetry={() => pipeline.refetch()} className="rounded-lg border" />
+        <ErrorState error={pipeline.error} onRetry={() => pipeline.refetch()} className="rounded-[var(--radius)] border bg-card" />
       ) : all.length === 0 ? (
         <EmptyState
-          icon={Handshake}
-          className="rounded-lg border"
+          illustration="money"
+          className="rounded-[var(--radius)] border bg-card"
           title="No deals yet"
           description="Add leads as they come in and move them along as they progress."
           action={
-            <Button size="sm" onClick={() => setFormOpen(true)}>
+            <Button size="sm" variant="brand" onClick={newDeal}>
               Add your first deal
             </Button>
           }
         />
+      ) : view === 'table' ? (
+        <DataTable
+          columns={visibleColumns}
+          rows={sortedDeals}
+          rowKey={(o) => o._id}
+          sort={list.sort}
+          onSortChange={list.setSort}
+          onRowClick={openDeal}
+          rowClassName={(o) => (isOverdue(o) ? 'bg-destructive/[0.03]' : undefined)}
+          empty={<EmptyState illustration="inbox" title="No deals match your search" />}
+        />
       ) : (
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="-mx-1 grid auto-cols-[minmax(240px,1fr)] grid-flow-col gap-3 overflow-x-auto px-1 pb-2 xl:grid-flow-row xl:grid-cols-6">
           {CRM_STAGE_ORDER.map((stage) => {
             const items = byStage.get(stage) ?? [];
             const totals = totalsByCurrency(items, (o) => o.valuePaise, (o) => o.currency);
-            const weighted = isOpen(stage) ? totalsByCurrency(items, (o) => Math.round((o.valuePaise * probabilityOf(o)) / 100), (o) => o.currency) : undefined;
+            const weighted = isOpen(stage) ? totalsByCurrency(items, weightedOf, (o) => o.currency) : undefined;
+            const late = items.filter(isOverdue).length;
+            const dropping = dropStage === stage && !!dragId;
             return (
-              <section key={stage} className="flex min-w-0 flex-col rounded-lg border bg-muted/20">
-                <header className="space-y-0.5 border-b px-3 py-2.5">
+              <section
+                key={stage}
+                aria-label={`${CRM_STAGE_LABEL[stage]} — ${items.length} ${plural(items.length, 'deal', 'deals')}`}
+                onDragOver={(e) => {
+                  if (!dragId) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dropStage !== stage) setDropStage(stage);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropStage((s) => (s === stage ? null : s));
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = e.dataTransfer.getData('text/plain') || dragId;
+                  const deal = all.find((o) => o._id === id);
+                  setDragId(null);
+                  setDropStage(null);
+                  if (deal) changeStage(deal, stage);
+                }}
+                className={cn(
+                  'flex min-w-0 flex-col rounded-[var(--radius)] border bg-muted/30 transition-colors',
+                  dropping && 'border-brand bg-brand-wash',
+                )}
+              >
+                <header className="space-y-1 px-3 pb-2 pt-3">
                   <div className="flex items-center gap-2">
-                    <span className={cn('h-2 w-2 shrink-0 rounded-full', STAGE_TONE[stage])} />
-                    <h2 className="text-sm font-medium">{CRM_STAGE_LABEL[stage]}</h2>
-                    <span className="text-xs text-muted-foreground">{items.length}</span>
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: STAGE_COLOR[stage] }} />
+                    <h2 className="text-sm font-semibold">{CRM_STAGE_LABEL[stage]}</h2>
+                    <span className="rounded-full bg-card px-1.5 font-figures text-[11px] text-muted-foreground">{items.length}</span>
+                    {late > 0 && (
+                      <Badge variant="danger" className="ml-auto">
+                        {late} late
+                      </Badge>
+                    )}
                   </div>
-                  <p className="truncate text-xs tabular-nums text-muted-foreground" title={money(totals)}>
-                    {items.length ? money(totals) : '—'}
-                    {weighted && items.length > 0 && <span className="block">≈ {money(weighted)} weighted</span>}
-                  </p>
+                  {items.length > 0 ? (
+                    <div className="text-xs text-muted-foreground">
+                      <PriceTotals totals={totals} className="font-medium text-foreground" />
+                      {weighted && (
+                        <span className="block">
+                          ≈ <PriceTotals totals={weighted} compact /> weighted
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Empty</p>
+                  )}
                 </header>
-                <div className="flex-1 space-y-2 p-2">
-                  {items.length === 0 && <p className="px-1 py-4 text-center text-xs text-muted-foreground">No deals</p>}
+                <div className="flex-1 space-y-2 p-2 pt-0">
+                  {items.length === 0 && (
+                    <p className="rounded-md border border-dashed px-2 py-5 text-center text-xs text-muted-foreground">{dragId ? 'Drop here' : 'No deals'}</p>
+                  )}
                   {items.map((o) => (
                     <DealCard
                       key={o._id}
                       deal={o}
                       company={companyOf(o)}
-                      onOpen={() => {
-                        setEditing(o);
-                        setFormOpen(true);
+                      dragging={dragId === o._id}
+                      onDragStart={() => setDragId(o._id)}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setDropStage(null);
                       }}
+                      onOpen={() => openDeal(o)}
                       onStage={(s) => changeStage(o, s)}
                       onWonActions={() => setWonId(o._id)}
                     />
@@ -250,15 +467,43 @@ function Inner() {
   );
 }
 
+function CompanyLabel({ company, className }: { company: Company; className?: string }) {
+  if (company.prospect) {
+    return (
+      <span className={cn('inline-flex min-w-0 items-center gap-1.5 text-muted-foreground', className)}>
+        <span className="h-2 w-2 shrink-0 rounded-full border border-dashed border-muted-foreground" />
+        <span className="truncate">
+          {company.label}
+          {company.label !== 'No company' && ' · prospect'}
+        </span>
+      </span>
+    );
+  }
+  return (
+    <ClientChip
+      clientId={company.clientId}
+      name={company.missing || company.loading ? undefined : company.label}
+      loading={company.loading}
+      className={className}
+    />
+  );
+}
+
 function DealCard({
   deal: o,
   company,
+  dragging,
+  onDragStart,
+  onDragEnd,
   onOpen,
   onStage,
   onWonActions,
 }: {
   deal: OpportunityRow;
-  company: { label: string; prospect: boolean; missing: boolean };
+  company: Company;
+  dragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
   onOpen: () => void;
   onStage: (s: CrmStage) => void;
   onWonActions: () => void;
@@ -267,38 +512,49 @@ function DealCard({
   const idx = CRM_STAGE_ORDER.indexOf(o.stage);
   const next = isOpen(o.stage) ? CRM_STAGE_ORDER[idx + 1] : undefined;
   return (
-    <article className="group rounded-md border bg-card p-2.5 text-xs shadow-sm transition-colors hover:border-foreground/25">
-      <button type="button" onClick={onOpen} className="block w-full text-left">
-        <p className="text-[13px] font-medium leading-snug group-hover:underline">{o.title}</p>
-        <p className={cn('mt-0.5 truncate', company.missing ? 'text-muted-foreground italic' : 'text-muted-foreground')}>
-          {company.label}
-          {company.prospect && ' · prospect'}
-        </p>
+    <article
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', o._id);
+        e.dataTransfer.effectAllowed = 'move';
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+      className={cn(
+        'group relative rounded-lg border bg-card p-3 text-xs shadow-sm transition-[border-color,opacity] hover:border-foreground/25',
+        overdue && 'border-destructive/40',
+        dragging && 'opacity-50',
+      )}
+    >
+      <GripVertical className="absolute right-1.5 top-2.5 h-3.5 w-3.5 cursor-grab text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+      <button type="button" onClick={onOpen} className="block w-full pr-4 text-left">
+        <p className="text-[13px] font-semibold leading-snug group-hover:underline">{o.title}</p>
+        <CompanyLabel company={company} className="mt-1 max-w-full" />
       </button>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="font-medium tabular-nums">{formatPaise(o.valuePaise, o.currency)}</span>
+      <div className="mt-2.5 flex items-end justify-between gap-2">
+        <Price paise={o.valuePaise} currency={o.currency} compact className="font-display text-base font-bold" />
         {isOpen(o.stage) && (
-          <span className="tabular-nums text-muted-foreground" title={o.probability === undefined ? 'Stage default' : 'Win chance'}>
+          <span className="font-figures text-muted-foreground" title={o.probability === undefined ? 'Stage default win chance' : 'Win chance'}>
             {probabilityOf(o)}%
           </span>
         )}
       </div>
       {o.expectedCloseDate && isOpen(o.stage) && (
-        <p className={cn('mt-1 flex items-center gap-1', overdue ? 'font-medium text-destructive' : 'text-muted-foreground')}>
+        <p className={cn('mt-1.5 flex flex-wrap items-center gap-1', overdue ? 'font-medium text-destructive' : 'text-muted-foreground')}>
           <CalendarClock className="h-3 w-3" />
           {overdue ? 'Was due ' : 'Close by '}
           {formatDate(o.expectedCloseDate)}
+          {overdue && (
+            <Badge variant="danger" className="ml-auto">
+              Overdue
+            </Badge>
+          )}
         </p>
       )}
-      {o.stage === CrmStage.LOST && o.lostReason && <p className="mt-1 line-clamp-2 text-muted-foreground">Lost: {o.lostReason}</p>}
-      {o.stage === CrmStage.WON && o.closedAt && <p className="mt-1 text-muted-foreground">Won {formatDate(o.closedAt)}</p>}
-      <div className="mt-2 flex items-center gap-1">
-        <Select
-          aria-label={`Stage of ${o.title}`}
-          className="h-7 flex-1 px-2 text-xs"
-          value={o.stage}
-          onChange={(e) => onStage(e.target.value as CrmStage)}
-        >
+      {o.stage === CrmStage.LOST && o.lostReason && <p className="mt-1.5 line-clamp-2 text-muted-foreground">Lost: {o.lostReason}</p>}
+      {o.stage === CrmStage.WON && o.closedAt && <p className="mt-1.5 text-muted-foreground">Won {formatDate(o.closedAt)}</p>}
+      <div className="mt-2.5 flex items-center gap-1">
+        <Select aria-label={`Stage of ${o.title}`} className="h-7 flex-1 px-2 text-xs" value={o.stage} onChange={(e) => onStage(e.target.value as CrmStage)}>
           {CRM_STAGE_ORDER.map((s) => (
             <option key={s} value={s}>
               {CRM_STAGE_LABEL[s]}
@@ -311,7 +567,7 @@ function DealCard({
             title={`Move to ${CRM_STAGE_LABEL[next]}`}
             aria-label={`Move to ${CRM_STAGE_LABEL[next]}`}
             onClick={() => onStage(next)}
-            className="rounded border p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="rounded-md border p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
@@ -322,7 +578,7 @@ function DealCard({
             title="Set up the work"
             aria-label="Set up the work"
             onClick={onWonActions}
-            className="rounded border p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="rounded-md border p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <Trophy className="h-3.5 w-3.5" />
           </button>
@@ -590,10 +846,10 @@ function WonDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-[hsl(var(--success))]" /> Deal won — what next?
+            <Trophy className="h-5 w-5 text-success" /> Deal won — what next?
           </DialogTitle>
           <DialogDescription>
-            {deal.title} · {formatPaise(deal.valuePaise, deal.currency)}
+            {deal.title} · <Price paise={deal.valuePaise} currency={deal.currency} />
             {companyName && ` · ${companyName}`}
           </DialogDescription>
         </DialogHeader>

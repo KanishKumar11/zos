@@ -1,9 +1,11 @@
 // Expenses — business costs with gross / net (after team contributions), project links, repeats.
+// Opens on a visual overview (where the money went, monthly trend, recurring costs); the table is
+// one toggle away and keeps filters, sorting, CSV export and footer totals.
 'use client';
 
-import { MoreHorizontal, Pencil, Plus, Repeat, Trash2, TrendingDown } from 'lucide-react';
+import { LayoutGrid, MoreHorizontal, Pencil, Plus, Repeat, Rows3, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { Role } from '@agency/shared';
 
@@ -14,12 +16,13 @@ import { csvMoney } from '@/lib/csv';
 import { describeRange } from '@/lib/date-range';
 import { todayLocal } from '@/lib/form';
 import { formatDate, formatPaise } from '@/lib/formatters';
+import { identityColor } from '@/lib/identity';
 import { useListState } from '@/lib/list-state';
 
 import { RoleGate } from '@/components/auth/role-gate';
 import { DataTable, exportColumnsCsv, type Column } from '@/components/data/data-table';
 import { DateRangeFilter, ExportButton, FilterBar, ResetFilters, SearchFilter, SelectFilter } from '@/components/data/filter-bar';
-import { PageHeader } from '@/components/layout/page-header';
+import { ViewToggle } from '@/components/data/view-toggle';
 import { useNewParam } from '@/components/layout/quick-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,8 +37,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Pagination } from '@/components/ui/pagination';
-import { StatCard } from '@/components/ui/stat-card';
 import { EmptyState } from '@/components/ui/states';
+import { Price, PrivacyChip, useCanSeePrices } from '@/components/viz';
 import { ExpenseFormDialog } from '@/features/expenses/expense-form-dialog';
 import {
   EXPENSE_CATEGORIES,
@@ -50,17 +53,28 @@ import {
   expensesApi,
   useDeleteExpense,
   useExpenseSummary,
+  useExpenseWindow,
   useExpenses,
   useRepeatExpense,
   type ExpenseFilters,
   type ExpenseRow,
   type ExpenseSort,
 } from '@/features/expenses/expenses.hooks';
+import { ExpensesHero } from '@/features/expenses/expenses-hero';
+import { ExpensesOverview } from '@/features/expenses/expenses-overview';
+import { monthStartYmd } from '@/features/expenses/money-time';
 import { ViewReceiptButton } from '@/features/expenses/receipt-field';
 import { useAllProjects } from '@/features/projects/projects.hooks';
 
 const PAGE_SIZE = 25;
 const SORT_IDS = new Set(['date', 'amount']);
+
+type View = 'visual' | 'table';
+const VIEW_OPTIONS = [
+  { value: 'visual' as const, label: 'Overview', icon: LayoutGrid },
+  { value: 'table' as const, label: 'Table', icon: Rows3 },
+];
+const FILTER_DEFAULTS = { q: '', category: '', projectId: '', range: '', from: '', to: '', sort: 'date:desc' };
 
 /** yyyy-mm-dd → "3 Nov 2026" (parsed as local noon so it never slips a day). */
 const fmtYmd = (ymd: string) => formatDate(`${ymd}T12:00:00`);
@@ -74,16 +88,10 @@ export default function ExpensesPage() {
 }
 
 function Inner() {
-  const list = useListState('expenses', {
-    q: '',
-    category: '',
-    projectId: '',
-    range: '',
-    from: '',
-    to: '',
-    sort: 'date:desc',
-  });
+  const list = useListState('expenses', { ...FILTER_DEFAULTS, view: 'visual' });
   const { params } = list;
+  const view: View = params.view === 'table' ? 'table' : 'visual';
+  const canSee = useCanSeePrices();
   const confirm = useConfirm();
   const projects = useAllProjects();
   const repeat = useRepeatExpense();
@@ -112,10 +120,18 @@ function Inner() {
     to: params.to || undefined,
   };
   const sort = (SORT_IDS.has(list.sort?.by ?? '') ? `${list.sort!.by}:${list.sort!.dir}` : 'date:desc') as ExpenseSort;
-  const expenses = useExpenses({ ...filters, page: list.page, limit: PAGE_SIZE, sort });
+  // The table's page only loads in the table view; the overview works from the summary + a 13-month window.
+  const expenses = useExpenses({ ...filters, page: list.page, limit: PAGE_SIZE, sort }, view === 'table');
   const summary = useExpenseSummary(filters);
+  const windowRows = useExpenseWindow(
+    { q: filters.q, category: filters.category, projectId: filters.projectId, from: monthStartYmd(-12) },
+    view === 'visual',
+  );
   const totals = expenses.data?.totals;
-  const filtered = list.activeFilterCount > 0;
+  // The remembered view isn't a filter: leave it out of the count and keep it when filters are cleared.
+  const filterCount = list.activeFilterCount - (params.view && params.view !== 'visual' ? 1 : 0);
+  const filtered = filterCount > 0;
+  const resetFilters = () => list.set(FILTER_DEFAULTS);
 
   const projectOptions: ComboboxOption[] = useMemo(() => {
     const opts: ComboboxOption[] = (projects.data?.items ?? []).map((p) => ({ value: p._id, label: p.name, keywords: p.code }));
@@ -132,7 +148,7 @@ function Inner() {
     const next = nextPeriodYmd(storedYmd(r.date), r.recurring);
     const ok = await confirm({
       title: `Add ${r.title} for ${fmtYmd(next)}?`,
-      description: `This adds a copy dated ${fmtYmd(next)} for ${formatPaise(r.amountPaise, r.currency)}${
+      description: `This adds a copy dated ${fmtYmd(next)}${canSee ? ` for ${formatPaise(r.amountPaise, r.currency)}` : ''}${
         r.contributions.length ? ', with the same team contributions' : ''
       }. The receipt isn't copied. If this period's bill is different, edit the copy afterwards.`,
       confirmText: 'Add copy',
@@ -143,7 +159,7 @@ function Inner() {
   const askDelete = async (r: ExpenseRow) => {
     const ok = await confirm({
       title: `Delete "${r.title}"?`,
-      description: `${formatPaise(r.amountPaise, r.currency)} on ${formatDate(r.date)} will be taken out of expense totals, the dashboard and profit figures${
+      description: `${canSee ? formatPaise(r.amountPaise, r.currency) : 'This expense'} on ${formatDate(r.date)} will be taken out of expense totals, the dashboard and profit figures${
         r.projectId ? `, and no longer count toward ${r.projectName ?? 'its project'}'s costs` : ''
       }. This can't be undone.`,
       destructive: true,
@@ -222,9 +238,11 @@ function Inner() {
       sortable: true,
       cell: (r) => (
         <div>
-          <span className="font-medium">{formatPaise(r.amountPaise, r.currency)}</span>
+          <Price paise={r.amountPaise} currency={r.currency} className="font-medium" />
           {r.contributions.length > 0 && (
-            <span className="block text-xs text-muted-foreground">net {formatPaise(r.netPaise ?? r.amountPaise, r.currency)}</span>
+            <span className="block text-xs text-muted-foreground">
+              net <Price paise={r.netPaise ?? r.amountPaise} currency={r.currency} />
+            </span>
           )}
         </div>
       ),
@@ -232,9 +250,11 @@ function Inner() {
       csvHeader: 'Amount (₹)',
       footer: totals ? (
         <div>
-          <span>{formatPaise(totals.grossPaise)}</span>
+          <Price paise={totals.grossPaise} />
           {totals.netPaise !== totals.grossPaise && (
-            <span className="block text-xs font-normal text-muted-foreground">net {formatPaise(totals.netPaise)}</span>
+            <span className="block text-xs font-normal text-muted-foreground">
+              net <Price paise={totals.netPaise} />
+            </span>
           )}
         </div>
       ) : null,
@@ -302,47 +322,22 @@ function Inner() {
     }
   };
 
-  const recovered = totals ? totals.grossPaise - totals.netPaise : 0;
-  const rangeHint = params.from || params.to ? describeRange(params.from, params.to) : 'All time';
+  const rangeLabel = params.from || params.to ? describeRange(params.from, params.to) : 'All time';
+  const toggleCategory = (c: string) => list.set({ category: params.category === c ? '' : c });
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="Expenses"
-        description="Business costs like tools, hosting and marketing. Team pay lives in Payroll and Payments out."
-        action={
-          <>
-            <ExportButton onClick={() => void exportAll()} disabled={exporting || !totals?.count} />
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add expense
-            </Button>
-          </>
-        }
-      />
+      <ExpensesHero aside={<PrivacyChip>Only you see these figures</PrivacyChip>} />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label={filtered ? 'Spent (filtered)' : 'Spent'} loading={expenses.isLoading} value={formatPaise(totals?.grossPaise ?? 0)} hint={rangeHint} />
-        <StatCard label="Net cost" loading={expenses.isLoading} value={formatPaise(totals?.netPaise ?? 0)} hint="After team contributions" />
-        <StatCard label="Covered by team" loading={expenses.isLoading} value={formatPaise(recovered)} hint="Recovered through pay" />
-        <StatCard label="Entries" loading={expenses.isLoading} value={String(totals?.count ?? 0)} />
-      </div>
-
-      {summary.data && summary.data.byCategory.length > 1 && (
-        <div className="flex flex-wrap gap-2" aria-label="By category">
-          {summary.data.byCategory.map((c) => (
-            <button
-              key={c._id}
-              type="button"
-              onClick={() => list.set({ category: params.category === c._id ? '' : c._id })}
-              className="rounded-lg border bg-card px-3 py-1.5 text-left text-xs transition-colors hover:border-foreground/25 hover:bg-accent/40"
-            >
-              <span className="text-muted-foreground">{categoryLabel(c._id)}</span>{' '}
-              <span className="font-medium tabular-nums">{formatPaise(c.totalPaise)}</span>
-              {c.netPaise !== c.totalPaise && <span className="text-muted-foreground"> · net {formatPaise(c.netPaise)}</span>}
-            </button>
-          ))}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ViewToggle<View> value={view} onChange={(v) => list.set({ view: v })} options={VIEW_OPTIONS} />
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportButton onClick={() => void exportAll()} disabled={!canSee || exporting || !summary.data?.count} />
+          <Button size="sm" variant="brand" onClick={openCreate}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add expense
+          </Button>
         </div>
-      )}
+      </div>
 
       <FilterBar>
         <SearchFilter value={params.q} onChange={(q) => list.set({ q })} placeholder="Search title, vendor, notes, project" />
@@ -364,52 +359,94 @@ function Inner() {
           />
         </div>
         <DateRangeFilter preset={params.range} from={params.from} to={params.to} onChange={(r) => list.set(r)} />
-        <ResetFilters count={list.activeFilterCount} onReset={list.reset} />
+        <ResetFilters count={filterCount} onReset={resetFilters} />
       </FilterBar>
 
-      <DataTable
-        columns={columns}
-        rows={expenses.data?.items}
-        rowKey={(r) => r._id}
-        loading={expenses.isLoading}
-        error={expenses.error}
-        onRetry={() => void expenses.refetch()}
-        sort={list.sort && SORT_IDS.has(list.sort.by) ? list.sort : { by: 'date', dir: 'desc' }}
-        onSortChange={(s) => list.set({ sort: s ? `${s.by}:${s.dir}` : 'date:desc' })}
-        onRowClick={(r) => setViewing(r)}
-        showFooter
-        empty={
-          filtered ? (
-            <EmptyState
-              title="No expenses match these filters"
-              action={
-                <Button variant="outline" size="sm" onClick={list.reset}>
-                  Clear filters
-                </Button>
-              }
-            />
-          ) : (
-            <EmptyState
-              icon={TrendingDown}
-              title="No expenses yet"
-              description="Log tools, hosting, marketing and other running costs to see your real profit."
-              action={
-                <Button size="sm" onClick={openCreate}>
-                  Add your first expense
-                </Button>
-              }
-            />
-          )
-        }
-      />
-      {expenses.data && (
-        <Pagination
-          page={list.page}
-          totalPages={expenses.data.meta.totalPages}
-          total={expenses.data.meta.total}
-          pageSize={PAGE_SIZE}
-          onPage={list.setPage}
+      {view === 'visual' ? (
+        <ExpensesOverview
+          summary={summary}
+          window={windowRows}
+          rangeLabel={rangeLabel}
+          dateFiltered={!!(params.from || params.to)}
+          filtered={filtered}
+          selectedCategory={params.category || undefined}
+          onSelectCategory={toggleCategory}
+          onRepeat={(r) => void askRepeat(r)}
+          repeatPending={repeat.isPending}
+          onCreate={openCreate}
+          onClearFilters={resetFilters}
         />
+      ) : (
+        <>
+          {summary.data && summary.data.byCategory.length > 1 && (
+            <div className="flex flex-wrap gap-2" aria-label="By category">
+              {summary.data.byCategory.map((c) => (
+                <button
+                  key={c._id}
+                  type="button"
+                  onClick={() => toggleCategory(c._id)}
+                  aria-pressed={params.category === c._id}
+                  className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-left text-xs transition-colors hover:border-foreground/25 hover:bg-accent/40"
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: identityColor(c._id) }} aria-hidden />
+                  <span className="text-muted-foreground">{categoryLabel(c._id)}</span>
+                  <Price paise={c.totalPaise} className="font-medium" />
+                  {c.netPaise !== c.totalPaise && (
+                    <span className="text-muted-foreground">
+                      · net <Price paise={c.netPaise} />
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <DataTable
+            columns={columns}
+            rows={expenses.data?.items}
+            rowKey={(r) => r._id}
+            loading={expenses.isLoading}
+            error={expenses.error}
+            onRetry={() => void expenses.refetch()}
+            sort={list.sort && SORT_IDS.has(list.sort.by) ? list.sort : { by: 'date', dir: 'desc' }}
+            onSortChange={(s) => list.set({ sort: s ? `${s.by}:${s.dir}` : 'date:desc' })}
+            onRowClick={(r) => setViewing(r)}
+            showFooter
+            empty={
+              filtered ? (
+                <EmptyState
+                  illustration="money"
+                  title="No expenses match these filters"
+                  action={
+                    <Button variant="outline" size="sm" onClick={resetFilters}>
+                      Clear filters
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  illustration="money"
+                  title="No expenses yet"
+                  description="Log tools, hosting, marketing and other running costs to see your real profit."
+                  action={
+                    <Button size="sm" onClick={openCreate}>
+                      Add your first expense
+                    </Button>
+                  }
+                />
+              )
+            }
+          />
+          {expenses.data && (
+            <Pagination
+              page={list.page}
+              totalPages={expenses.data.meta.totalPages}
+              total={expenses.data.meta.total}
+              pageSize={PAGE_SIZE}
+              onPage={list.setPage}
+            />
+          )}
+        </>
       )}
 
       <ExpenseFormDialog
@@ -460,7 +497,7 @@ function ExpenseDetailDialog({
             </DialogHeader>
             <div className="grid gap-4 text-sm">
               <div className="grid grid-cols-2 gap-3">
-                <Detail label={e.contributions.length ? 'Gross amount' : 'Amount'} value={formatPaise(e.amountPaise, e.currency)} />
+                <Detail label={e.contributions.length ? 'Gross amount' : 'Amount'} value={<Price paise={e.amountPaise} currency={e.currency} />} />
                 <Detail label="Vendor" value={e.vendor || '—'} />
                 <Detail
                   label="Project"
@@ -499,12 +536,14 @@ function ExpenseDetailDialog({
                           )}
                           {c.note && <span className="text-muted-foreground"> · {c.note}</span>}
                         </span>
-                        <span className="tabular-nums text-[hsl(var(--success))]">−{formatPaise(c.amountPaise, e.currency)}</span>
+                        <span className="text-success">
+                          −<Price paise={c.amountPaise} currency={e.currency} />
+                        </span>
                       </div>
                     ))}
                     <div className="flex justify-between border-t pt-1 font-medium">
                       <span>Net cost to the agency</span>
-                      <span className="tabular-nums">{formatPaise(e.netPaise ?? e.amountPaise, e.currency)}</span>
+                      <Price paise={e.netPaise ?? e.amountPaise} currency={e.currency} />
                     </div>
                   </div>
                 </div>
@@ -545,7 +584,7 @@ function ExpenseDetailDialog({
   );
 }
 
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+function Detail({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>

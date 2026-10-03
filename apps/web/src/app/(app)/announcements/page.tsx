@@ -1,4 +1,5 @@
-// Announcements — company posts targeted at everyone, roles, departments or specific people.
+// Announcements — company posts targeted at everyone, roles, departments or specific people,
+// told as a story feed: pinned posts first, then newest first along a dated rail.
 'use client';
 
 import { Megaphone, Pin, PinOff, Trash2 } from 'lucide-react';
@@ -6,11 +7,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { AudienceType, Role, STAFF_ROLES } from '@agency/shared';
 
-import { formatDateTime } from '@/lib/formatters';
+import { cn } from '@/lib/cn';
+import { formatDate, formatDateTime } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
 
 import { RoleGate } from '@/components/auth/role-gate';
-import { PageHeader } from '@/components/layout/page-header';
 import { RichTextEditor, RichTextView } from '@/components/rich-text-editor';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/states';
+import { Avatar, Hero, HeroFigure } from '@/components/viz';
 import { useDepartments } from '@/features/org/org.hooks';
 import {
   useAnnouncements,
@@ -32,11 +34,24 @@ import { useStaffDirectory } from '@/features/team/team.hooks';
 
 const roleLabel = (r: string) => r.charAt(0) + r.slice(1).toLowerCase();
 
+const WEEK_MS = 7 * 86_400_000;
+
 export default function AnnouncementsPage() {
   const list = useAnnouncements();
   const markRead = useMarkAnnouncementRead();
   const me = useAuthStore((s) => s.user);
+  const canBrowsePeople = !!me?.role && [Role.OWNER, Role.ADMIN, Role.LEAD].includes(me.role);
+  // Author names come from the staff directory, which only OWNER/ADMIN/LEAD may read.
+  const staff = useStaffDirectory({ enabled: canBrowsePeople });
+  const authors = useMemo(() => new Map((staff.data ?? []).map((u) => [u._id, u.name])), [staff.data]);
   const marked = useRef<Set<string>>(new Set());
+  // Which posts were unread when the page opened — they keep a "New" tag while you're here.
+  const [freshIds, setFreshIds] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    if (!me?.id || !list.data || freshIds) return;
+    setFreshIds(new Set(list.data.filter((a) => !(a.readBy ?? []).some((r) => r.userId === me.id)).map((a) => a._id)));
+  }, [list.data, me?.id, freshIds]);
 
   // Viewing the feed marks announcements as read (once each).
   useEffect(() => {
@@ -50,9 +65,34 @@ export default function AnnouncementsPage() {
     }
   }, [list.data, me?.id, markRead]);
 
+  const rows = list.data ?? [];
+  const pinned = rows.filter((a) => a.pinned);
+  const rest = rows.filter((a) => !a.pinned);
+  const freshCount = freshIds?.size ?? 0;
+  const thisWeek = rows.filter((a) => Date.now() - new Date(a.publishedAt ?? a.createdAt).getTime() < WEEK_MS).length;
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Announcements" description="Company-wide news and updates." />
+      <Hero pageTitle="Announcements" eyebrow="Company news" loading={list.isLoading} lede={list.isError ? undefined : 'Company-wide news and updates.'}>
+        {list.isError ? (
+          <>Company-wide news and updates.</>
+        ) : rows.length === 0 ? (
+          <>Nothing has been announced yet.</>
+        ) : freshCount > 0 ? (
+          <>
+            <HeroFigure>
+              {freshCount} new {freshCount === 1 ? 'announcement' : 'announcements'}
+            </HeroFigure>{' '}
+            since you last looked.
+          </>
+        ) : thisWeek > 0 ? (
+          <>
+            <HeroFigure>{thisWeek}</HeroFigure> {thisWeek === 1 ? 'post' : 'posts'} this week. You&apos;re up to date.
+          </>
+        ) : (
+          <>You&apos;re up to date.</>
+        )}
+      </Hero>
       <RoleGate allow={[Role.OWNER, Role.ADMIN]}>
         <ComposeCard />
       </RoleGate>
@@ -62,15 +102,38 @@ export default function AnnouncementsPage() {
         </Card>
       ) : list.isError ? (
         <ErrorState error={list.error} onRetry={() => list.refetch()} />
-      ) : (list.data ?? []).length === 0 ? (
+      ) : rows.length === 0 ? (
         <Card>
-          <EmptyState icon={Megaphone} title="No announcements yet" />
+          <EmptyState icon={Megaphone} title="No announcements yet" description="Company news will show up here." />
         </Card>
       ) : (
-        <div className="space-y-3">
-          {list.data!.map((a) => (
-            <AnnouncementCard key={a._id} a={a} />
-          ))}
+        <div className="space-y-6">
+          {pinned.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="flex items-center gap-1.5 px-1 text-[13px] font-semibold text-muted-foreground">
+                <Pin className="h-3.5 w-3.5 text-brand" /> Pinned
+              </h2>
+              {pinned.map((a) => (
+                <AnnouncementCard key={a._id} a={a} author={authors.get(a.createdBy)} fresh={!!freshIds?.has(a._id)} />
+              ))}
+            </section>
+          )}
+          {rest.length > 0 && (
+            <ol className="relative space-y-4 pl-7 before:absolute before:bottom-2 before:left-[9px] before:top-2 before:w-0.5 before:rounded before:bg-border">
+              {rest.map((a) => (
+                <li key={a._id} className="relative">
+                  <span
+                    className={cn(
+                      'absolute -left-7 top-5 h-[20px] w-[20px] rounded-full border-4 border-background',
+                      freshIds?.has(a._id) ? 'bg-brand' : 'bg-muted-foreground/40',
+                    )}
+                    aria-hidden
+                  />
+                  <AnnouncementCard a={a} author={authors.get(a.createdBy)} fresh={!!freshIds?.has(a._id)} />
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
       )}
     </div>
@@ -88,52 +151,76 @@ function AudienceLabel({ a }: { a: AnnouncementRow }) {
   return <>{a.audienceIds.length} people</>;
 }
 
-function AnnouncementCard({ a }: { a: AnnouncementRow }) {
+function AnnouncementCard({ a, author, fresh }: { a: AnnouncementRow; author?: string; fresh?: boolean }) {
   const isManager = useAuthStore((s) => s.user?.role === Role.OWNER || s.user?.role === Role.ADMIN);
   const update = useUpdateAnnouncement();
   const remove = useDeleteAnnouncement();
   const confirm = useConfirm();
+  const when = a.publishedAt ?? a.createdAt;
   return (
-    <Card className={a.pinned ? 'border-primary/30' : undefined}>
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-        <div className="min-w-0">
-          <CardTitle className="flex items-center gap-2 text-base">
-            {a.pinned && <Pin className="h-3.5 w-3.5 text-primary" aria-label="Pinned" />}
-            {a.title}
-          </CardTitle>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {formatDateTime(a.publishedAt ?? a.createdAt)}
-            {isManager && (
-              <>
-                {' '}· To <AudienceLabel a={a} />
-                {a.readCount !== undefined && ` · seen by ${a.readCount}`}
-              </>
-            )}
-          </p>
-        </div>
-        {isManager && (
-          <div className="flex shrink-0 items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={a.pinned ? 'Unpin' : 'Pin to top'} onClick={() => update.mutate({ id: a._id, body: { pinned: !a.pinned } })}>
-              {a.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              aria-label="Delete announcement"
-              onClick={async () => {
-                if (await confirm({ title: `Delete “${a.title}”?`, description: 'It disappears for everyone.', destructive: true })) remove.mutate(a._id);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+    <article
+      className={cn(
+        'animate-rise rounded-[var(--radius)] border bg-card p-4 sm:p-6',
+        a.pinned && 'border-brand/25 bg-brand-wash/50',
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          {author ? (
+            <Avatar id={a.createdBy} name={author} size="md" />
+          ) : (
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-wash text-brand-ink" aria-hidden>
+              <Megaphone className="h-4 w-4" />
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{author ?? 'Team announcement'}</p>
+            <p className="text-xs text-muted-foreground" title={formatDateTime(when)}>
+              {formatDate(when, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+              {isManager && (
+                <>
+                  {' '}· To <AudienceLabel a={a} />
+                  {a.readCount !== undefined && ` · seen by ${a.readCount}`}
+                </>
+              )}
+            </p>
           </div>
-        )}
-      </CardHeader>
-      <CardContent>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {fresh && <Badge variant="default" className="bg-brand text-primary-foreground">New</Badge>}
+          {isManager && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label={a.pinned ? 'Unpin' : 'Pin to top'}
+                disabled={update.isPending}
+                onClick={() => update.mutate({ id: a._id, body: { pinned: !a.pinned } })}
+              >
+                {a.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                aria-label="Delete announcement"
+                disabled={remove.isPending}
+                onClick={async () => {
+                  if (await confirm({ title: `Delete “${a.title}”?`, description: 'It disappears for everyone.', destructive: true })) remove.mutate(a._id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+      <h3 className="mt-4 font-display text-xl font-bold leading-snug sm:text-2xl">{a.title}</h3>
+      <div className="mt-2 text-[15px] leading-relaxed">
         <RichTextView html={a.body} />
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }
 
@@ -166,14 +253,18 @@ function ComposeCard() {
       e.audience = audienceType === AudienceType.USERS ? 'Choose at least one person' : 'Choose at least one department';
     setErrors(e);
     if (Object.keys(e).length) return;
-    await create.mutateAsync({
-      title: title.trim(),
-      body,
-      audienceType,
-      pinned,
-      ...(audienceType === AudienceType.ROLE ? { audienceRoles: roles as Role[] } : {}),
-      ...(audienceType === AudienceType.DEPARTMENT || audienceType === AudienceType.USERS ? { audienceIds: ids } : {}),
-    });
+    try {
+      await create.mutateAsync({
+        title: title.trim(),
+        body,
+        audienceType,
+        pinned,
+        ...(audienceType === AudienceType.ROLE ? { audienceRoles: roles as Role[] } : {}),
+        ...(audienceType === AudienceType.DEPARTMENT || audienceType === AudienceType.USERS ? { audienceIds: ids } : {}),
+      });
+    } catch {
+      return; // the hook already showed the server's reason; keep the draft so nothing is lost
+    }
     setTitle('');
     setBody('');
     setAudienceType(AudienceType.ALL);
@@ -185,8 +276,8 @@ function ComposeCard() {
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="w-full rounded-lg border border-dashed bg-card px-4 py-3 text-left text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground">
-        Write an announcement…
+      <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-3 rounded-[var(--radius)] border border-dashed bg-card px-4 py-3.5 text-left text-sm text-muted-foreground hover:border-brand/40 hover:text-foreground">
+        <Megaphone className="h-4 w-4 text-brand" /> Write an announcement…
       </button>
     );
   }

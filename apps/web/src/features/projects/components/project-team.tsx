@@ -8,7 +8,6 @@ import { useState } from 'react';
 
 import { ProjectMemberRole, Role } from '@agency/shared';
 
-import { initials } from '@/lib/formatters';
 import { useAuthStore } from '@/store/auth.store';
 
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +17,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Select } from '@/components/ui/select';
 import { EmptyState } from '@/components/ui/states';
+import { Avatar, AvatarStack } from '@/components/viz';
 import { useStaffDirectory } from '@/features/team/team.hooks';
 
 import { useAddProjectMember, useRemoveProjectMember, type ProjectRow } from '../projects.hooks';
@@ -40,7 +40,10 @@ export function ProjectTeam({ project }: { project: ProjectRow }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle>Team ({project.members.length})</CardTitle>
+        <div className="flex items-center gap-3">
+          <CardTitle>Team ({project.members.length})</CardTitle>
+          <AvatarStack people={project.members.map((m) => ({ id: m.userId, name: m.name ?? nameOf.get(m.userId)?.name ?? (m.userId === me?.id ? me.name : undefined) }))} max={6} />
+        </div>
         {canManage && !adding && (
           <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" /> Add member
@@ -86,7 +89,7 @@ export function ProjectTeam({ project }: { project: ProjectRow }) {
       )}
       <CardContent className="p-0">
         {project.members.length === 0 ? (
-          <EmptyState title="No one on this project yet" />
+          <EmptyState illustration="people" title="No one on this project yet" description={canManage ? 'Add the people who will work on it.' : undefined} />
         ) : (
           <ul className="divide-y">
             {project.members.map((m) => {
@@ -94,9 +97,7 @@ export function ProjectTeam({ project }: { project: ProjectRow }) {
               const name = m.name ?? u?.name ?? (m.userId === me?.id ? me.name : 'Team member');
               return (
                 <li key={m.userId} className="flex items-center gap-3 px-5 py-2.5">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-[11px] font-semibold">
-                    {initials(name)}
-                  </span>
+                  <Avatar id={m.userId} name={name} />
                   <div className="min-w-0 flex-1">
                     {canBrowsePeople ? (
                       <Link href={`/team/${m.userId}`} className="text-sm font-medium hover:underline">

@@ -1,19 +1,20 @@
-// Payslips of one person (OWNER/ADMIN view on the team member page), expandable breakdown.
+// Payslips of one person (OWNER view on the team member page), expandable breakdown. Pass `own` when
+// the viewer is the payslip owner (their own pay) so amounts show whatever their role.
 'use client';
 
 import { ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { useState } from 'react';
 
 import { env } from '@/lib/env';
-import { formatPaise } from '@/lib/formatters';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorState } from '@/components/ui/states';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Price } from '@/components/viz';
 
 import { monthTitle, useUserPayslips, type PayslipRow } from './payroll.hooks';
 
-export function MemberPayslips({ userId }: { userId: string }) {
+export function MemberPayslips({ userId, own = false }: { userId: string; own?: boolean }) {
   const payslips = useUserPayslips(userId);
   const [open, setOpen] = useState<string | null>(null);
   const rows = payslips.data ?? [];
@@ -47,15 +48,25 @@ export function MemberPayslips({ userId }: { userId: string }) {
                   >
                     <span className="font-medium">{monthTitle(s.month)}</span>
                     <span className="flex items-center gap-4 text-xs tabular-nums">
-                      <span className="hidden text-muted-foreground sm:inline">Gross {formatPaise(s.grossPaise, s.currency)}</span>
-                      <span className="hidden text-destructive sm:inline">
-                        {s.deductionsPaise > 0 ? `−${formatPaise(s.deductionsPaise, s.currency)}` : '—'}
+                      <span className="hidden text-muted-foreground sm:inline">
+                        Gross <Price paise={s.grossPaise} currency={s.currency} own={own} />
                       </span>
-                      <span className="font-semibold">Net {formatPaise(s.netPaise, s.currency)}</span>
+                      <span className="hidden text-destructive sm:inline">
+                        {s.deductionsPaise > 0 ? (
+                          <>
+                            −<Price paise={s.deductionsPaise} currency={s.currency} own={own} />
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">No deductions</span>
+                        )}
+                      </span>
+                      <span className="font-semibold">
+                        Net <Price paise={s.netPaise} currency={s.currency} own={own} />
+                      </span>
                       {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                     </span>
                   </button>
-                  {isOpen && <PayslipBreakdown slip={s} />}
+                  {isOpen && <PayslipBreakdown slip={s} own={own} />}
                 </div>
               );
             })}
@@ -66,7 +77,7 @@ export function MemberPayslips({ userId }: { userId: string }) {
   );
 }
 
-export function PayslipBreakdown({ slip }: { slip: PayslipRow }) {
+export function PayslipBreakdown({ slip, own = false }: { slip: PayslipRow; own?: boolean }) {
   const b = slip.breakdown;
   const earnings = [
     { label: 'Base', value: b.baseAmount },
@@ -93,7 +104,7 @@ export function PayslipBreakdown({ slip }: { slip: PayslipRow }) {
           earnings.map((r) => (
             <div key={r.label} className="flex justify-between py-0.5">
               <span className="text-muted-foreground">{r.label}</span>
-              <span className="tabular-nums">{formatPaise(r.value, slip.currency)}</span>
+              <Price paise={r.value} currency={slip.currency} own={own} />
             </div>
           ))
         )}
@@ -106,7 +117,9 @@ export function PayslipBreakdown({ slip }: { slip: PayslipRow }) {
           deductions.map((r) => (
             <div key={r.label} className="flex justify-between py-0.5">
               <span className="text-muted-foreground">{r.label}</span>
-              <span className="tabular-nums text-destructive">−{formatPaise(r.value, slip.currency)}</span>
+              <span className="text-destructive">
+                −<Price paise={r.value} currency={slip.currency} own={own} />
+              </span>
             </div>
           ))
         )}
@@ -115,9 +128,9 @@ export function PayslipBreakdown({ slip }: { slip: PayslipRow }) {
             {slip.adjustments.map((a, i) => (
               <div key={i} className="flex justify-between py-0.5">
                 <span className="text-muted-foreground">{a.reason || (a.kind === 'BONUS' ? 'Bonus' : 'Deduction')}</span>
-                <span className={a.kind === 'DEDUCTION' ? 'tabular-nums text-destructive' : 'tabular-nums text-emerald-600'}>
+                <span className={a.kind === 'DEDUCTION' ? 'text-destructive' : 'text-success'}>
                   {a.kind === 'DEDUCTION' ? '−' : '+'}
-                  {formatPaise(a.amountPaise, slip.currency)}
+                  <Price paise={a.amountPaise} currency={slip.currency} own={own} />
                 </span>
               </div>
             ))}
@@ -139,7 +152,7 @@ export function PayslipBreakdown({ slip }: { slip: PayslipRow }) {
           href={`${env.apiBaseUrl}/payroll/payslips/${slip._id}/pdf`}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-primary hover:underline"
+          className="inline-flex items-center gap-1 font-medium text-brand-ink hover:underline"
         >
           <Download className="h-3.5 w-3.5" /> Download PDF
         </a>

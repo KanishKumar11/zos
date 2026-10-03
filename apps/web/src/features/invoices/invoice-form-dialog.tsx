@@ -19,6 +19,7 @@ import { ApiRequestError, getErrorMessage } from '@/lib/api-client';
 import { todayLocal, toLocalDateInput } from '@/lib/form';
 import { formatPaise } from '@/lib/formatters';
 
+import { Price, useCanSeePrices } from '@/components/viz';
 import { useClients } from '@/features/clients/clients.hooks';
 import { useContracts } from '@/features/contracts/contracts.hooks';
 import { useAllProjects } from '@/features/projects/projects.hooks';
@@ -68,6 +69,8 @@ export function InvoiceFormDialog({ open, onOpenChange, invoice, defaultClientId
   const nextNumber = useNextInvoiceNumber(open && !editing);
   const create = useCreateInvoice();
   const update = useUpdateInvoice();
+  // Combobox descriptions are plain strings — only build the amount for viewers allowed to see it.
+  const canSeePrices = useCanSeePrices();
 
   const [clientId, setClientId] = useState('');
   const [contractId, setContractId] = useState('');
@@ -141,9 +144,14 @@ export function InvoiceFormDialog({ open, onOpenChange, invoice, defaultClientId
       .map((c) => ({
         value: c._id,
         label: c.name,
-        description: `${formatPaise(c.monthlyAmountPaise, c.currency)} / month${clientId ? '' : ` · ${names.get(c.clientId) ?? 'Deleted client'}`}`,
+        description: [
+          canSeePrices ? `${formatPaise(c.monthlyAmountPaise, c.currency)} / month` : 'Monthly retainer',
+          clientId ? '' : (names.get(c.clientId) ?? 'Deleted client'),
+        ]
+          .filter(Boolean)
+          .join(' · '),
       }));
-  }, [contracts.data, clientList, clientId, contractId]);
+  }, [contracts.data, clientList, clientId, contractId, canSeePrices]);
 
   const clientProjects = (projects.data?.items ?? []).filter((p) => !clientId || p.clientId === clientId);
 
@@ -336,7 +344,15 @@ export function InvoiceFormDialog({ open, onOpenChange, invoice, defaultClientId
 
           <div className="grid gap-4 sm:grid-cols-3">
             {!locked && (
-              <FormField label="GST %" error={errors.gstPercent} hint={gstPaise ? `${formatPaise(gstPaise, currency)} GST` : 'Leave blank for no GST'}>
+              <FormField label="GST %" error={errors.gstPercent} hint={
+                  gstPaise ? (
+                    <>
+                      <Price paise={gstPaise} currency={currency} /> GST
+                    </>
+                  ) : (
+                    'Leave blank for no GST'
+                  )
+                }>
                 <Input
                   type="number"
                   inputMode="decimal"
@@ -386,7 +402,7 @@ export function InvoiceFormDialog({ open, onOpenChange, invoice, defaultClientId
           {!locked && (
             <div className="flex justify-end text-sm tabular-nums">
               <span className="text-muted-foreground">Total&nbsp;</span>
-              <span className="font-semibold">{formatPaise(subTotal + gstPaise, currency)}</span>
+              <Price paise={subTotal + gstPaise} currency={currency} className="font-semibold" />
             </div>
           )}
 

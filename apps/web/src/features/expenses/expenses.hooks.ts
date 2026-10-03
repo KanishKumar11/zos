@@ -126,7 +126,28 @@ export const expensesApi = {
   remove: (id: string) => unwrap<{ ok: boolean }>(api.delete(`/expenses/${id}`)),
 };
 
+/** Rows for the overview charts — every match for the filters, newest first, capped so it stays quick. */
+export interface ExpenseWindow {
+  items: ExpenseRow[];
+  /** True when there were more rows than the cap (the charts then cover the newest ones only). */
+  truncated: boolean;
+}
+
+const WINDOW_PAGE_SIZE = 500;
+const WINDOW_MAX_PAGES = 10;
+
+async function listWindow(filters: ExpenseFilters): Promise<ExpenseWindow> {
+  const items: ExpenseRow[] = [];
+  for (let page = 1; ; page++) {
+    const res = await expensesApi.list({ ...filters, sort: 'date:desc', page, limit: WINDOW_PAGE_SIZE });
+    items.push(...res.items);
+    if (page >= res.meta.totalPages) return { items, truncated: false };
+    if (page >= WINDOW_MAX_PAGES) return { items, truncated: true };
+  }
+}
+
 const QK = {
+  window: (f: ExpenseFilters) => ['expenses', 'window', clean(f)] as const,
   list: (p: ExpenseListParams) => ['expenses', 'list', clean(p)] as const,
   summary: (f: ExpenseFilters) => ['expenses', 'summary', clean(f)] as const,
   byId: (id: string) => ['expenses', 'detail', id] as const,
@@ -143,6 +164,16 @@ export function useExpenses(params: ExpenseListParams = {}, enabled = true) {
   return useQuery({
     queryKey: QK.list(params),
     queryFn: () => expensesApi.list(params),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Every expense matching `filters` (usually a 12–13 month window) for the overview charts. */
+export function useExpenseWindow(filters: ExpenseFilters, enabled = true) {
+  return useQuery({
+    queryKey: QK.window(filters),
+    queryFn: () => listWindow(filters),
     enabled,
     placeholderData: keepPreviousData,
   });

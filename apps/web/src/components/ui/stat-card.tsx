@@ -25,28 +25,40 @@ export function StatCard({
 }) {
   const body = (
     <>
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        {tone !== 'default' && (
+          <span
+            className={cn(
+              'h-1.5 w-1.5 rounded-full',
+              tone === 'success' && 'bg-success',
+              tone === 'warning' && 'bg-warning',
+              tone === 'danger' && 'bg-destructive',
+            )}
+          />
+        )}
+        {label}
+      </p>
       {loading ? (
-        <Skeleton className="mt-2 h-6 w-24" />
+        <Skeleton className="mt-2 h-7 w-24" />
       ) : (
         <p
           className={cn(
-            'mt-1 text-xl font-semibold tabular-nums tracking-tight',
-            tone === 'success' && 'text-[hsl(var(--success))]',
-            tone === 'warning' && 'text-amber-600',
+            'font-display mt-1.5 text-[1.6rem] font-bold leading-none tabular-nums',
+            tone === 'success' && 'text-success',
+            tone === 'warning' && 'text-warning',
             tone === 'danger' && 'text-destructive',
           )}
         >
           {value}
         </p>
       )}
-      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
     </>
   );
-  const base = cn('block rounded-lg border bg-card px-4 py-3', className);
+  const base = cn('block animate-rise rounded-[var(--radius)] border bg-card px-4 py-3.5', className);
   if (!href) return <div className={base}>{body}</div>;
   return (
-    <Link href={href} className={cn(base, 'transition-colors hover:border-foreground/25 hover:bg-accent/40')}>
+    <Link href={href} className={cn(base, 'transition-[border-color,transform] hover:-translate-y-px hover:border-foreground/25')}>
       {body}
     </Link>
   );

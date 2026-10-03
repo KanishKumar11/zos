@@ -1,7 +1,8 @@
 // Other income — money in that isn't a client invoice (affiliate payouts, referrals, interest, refunds).
+// Opens on a visual overview (categories, monthly trend, top sources); the table is one toggle away.
 'use client';
 
-import { MoreHorizontal, Pencil, Plus, Trash2, TrendingUp } from 'lucide-react';
+import { LayoutGrid, MoreHorizontal, Pencil, Plus, Rows3, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -12,12 +13,13 @@ import { csvMoney } from '@/lib/csv';
 import { describeRange } from '@/lib/date-range';
 import { todayLocal } from '@/lib/form';
 import { formatDate, formatPaise } from '@/lib/formatters';
+import { identityColor } from '@/lib/identity';
 import { useListState } from '@/lib/list-state';
 
 import { RoleGate } from '@/components/auth/role-gate';
 import { DataTable, exportColumnsCsv, type Column } from '@/components/data/data-table';
 import { DateRangeFilter, ExportButton, FilterBar, ResetFilters, SearchFilter, SelectFilter } from '@/components/data/filter-bar';
-import { PageHeader } from '@/components/layout/page-header';
+import { ViewToggle } from '@/components/data/view-toggle';
 import { useNewParam } from '@/components/layout/quick-actions';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -29,16 +31,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Pagination } from '@/components/ui/pagination';
-import { StatCard } from '@/components/ui/stat-card';
 import { EmptyState } from '@/components/ui/states';
+import { Price, PrivacyChip, useCanSeePrices } from '@/components/viz';
+import { monthStartYmd } from '@/features/expenses/money-time';
 import { ViewReceiptButton } from '@/features/expenses/receipt-field';
 import { IncomeFormDialog } from '@/features/income/income-form-dialog';
+import { IncomeHero } from '@/features/income/income-hero';
+import { IncomeOverview } from '@/features/income/income-overview';
 import { INCOME_CATEGORIES, incomeCategoryLabel } from '@/features/income/income-meta';
 import {
   incomeApi,
   useDeleteIncome,
   useIncome,
   useIncomeSummary,
+  useIncomeWindow,
   type IncomeFilters,
   type IncomeRow,
   type IncomeSort,
@@ -46,6 +52,13 @@ import {
 
 const PAGE_SIZE = 25;
 const SORT_IDS = new Set(['date', 'amount']);
+
+type View = 'visual' | 'table';
+const VIEW_OPTIONS = [
+  { value: 'visual' as const, label: 'Overview', icon: LayoutGrid },
+  { value: 'table' as const, label: 'Table', icon: Rows3 },
+];
+const FILTER_DEFAULTS = { q: '', category: '', range: '', from: '', to: '', sort: 'date:desc' };
 
 export default function IncomePage() {
   return (
@@ -56,8 +69,10 @@ export default function IncomePage() {
 }
 
 function Inner() {
-  const list = useListState('income', { q: '', category: '', range: '', from: '', to: '', sort: 'date:desc' });
+  const list = useListState('income', { ...FILTER_DEFAULTS, view: 'visual' });
   const { params } = list;
+  const view: View = params.view === 'table' ? 'table' : 'visual';
+  const canSee = useCanSeePrices();
   const confirm = useConfirm();
   const del = useDeleteIncome();
 
@@ -80,15 +95,21 @@ function Inner() {
     to: params.to || undefined,
   };
   const sort = (SORT_IDS.has(list.sort?.by ?? '') ? `${list.sort!.by}:${list.sort!.dir}` : 'date:desc') as IncomeSort;
-  const income = useIncome({ ...filters, page: list.page, limit: PAGE_SIZE, sort });
+  // The table's page only loads in the table view; the overview works from the summary + a 12-month window.
+  const income = useIncome({ ...filters, page: list.page, limit: PAGE_SIZE, sort }, view === 'table');
   const summary = useIncomeSummary(filters);
+  const windowRows = useIncomeWindow({ q: filters.q, category: filters.category, from: monthStartYmd(-11) }, view === 'visual');
   const totals = income.data?.totals;
-  const filtered = list.activeFilterCount > 0;
+  // The remembered view isn't a filter: leave it out of the count and keep it when filters are cleared.
+  const filterCount = list.activeFilterCount - (params.view && params.view !== 'visual' ? 1 : 0);
+  const filtered = filterCount > 0;
+  const resetFilters = () => list.set(FILTER_DEFAULTS);
+  const toggleCategory = (c: string) => list.set({ category: params.category === c ? '' : c });
 
   const askDelete = async (r: IncomeRow) => {
     const ok = await confirm({
       title: `Delete "${r.title}"?`,
-      description: `${formatPaise(r.amountPaise, r.currency)} received on ${formatDate(r.date)} will be taken out of income totals and the dashboard's profit figures. This can't be undone.`,
+      description: `${canSee ? formatPaise(r.amountPaise, r.currency) : 'This income'} received on ${formatDate(r.date)} will be taken out of income totals and the dashboard's profit figures. This can't be undone.`,
       destructive: true,
     });
     if (ok) del.mutate(r._id);
@@ -139,10 +160,10 @@ function Inner() {
       header: 'Amount',
       align: 'right',
       sortable: true,
-      cell: (r) => <span className="font-medium">{formatPaise(r.amountPaise, r.currency)}</span>,
+      cell: (r) => <Price paise={r.amountPaise} currency={r.currency} className="font-medium" />,
       csv: (r) => csvMoney(r.amountPaise),
       csvHeader: 'Amount (₹)',
-      footer: totals ? formatPaise(totals.amountPaise) : null,
+      footer: totals ? <Price paise={totals.amountPaise} /> : null,
     },
     {
       id: 'actions',
@@ -191,54 +212,21 @@ function Inner() {
     }
   };
 
-  const top = summary.data?.byCategory[0];
+  const rangeLabel = params.from || params.to ? describeRange(params.from, params.to) : 'All time';
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="Other income"
-        description="Money in that isn't a client invoice — affiliate payouts, referrals, interest and refunds."
-        action={
-          <>
-            <ExportButton onClick={() => void exportAll()} disabled={exporting || !totals?.count} />
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add income
-            </Button>
-          </>
-        }
-      />
+      <IncomeHero aside={<PrivacyChip>Only you see these figures</PrivacyChip>} />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard
-          label={filtered ? 'Received (filtered)' : 'Received'}
-          loading={income.isLoading}
-          value={formatPaise(totals?.amountPaise ?? 0)}
-          hint={params.from || params.to ? describeRange(params.from, params.to) : 'All time'}
-        />
-        <StatCard label="Entries" loading={income.isLoading} value={String(totals?.count ?? 0)} />
-        <StatCard
-          label="Biggest category"
-          loading={summary.isLoading}
-          value={top ? incomeCategoryLabel(top._id) : '—'}
-          hint={top ? formatPaise(top.totalPaise) : undefined}
-        />
-      </div>
-
-      {summary.data && summary.data.byCategory.length > 1 && (
-        <div className="flex flex-wrap gap-2" aria-label="By category">
-          {summary.data.byCategory.map((c) => (
-            <button
-              key={c._id}
-              type="button"
-              onClick={() => list.set({ category: params.category === c._id ? '' : c._id })}
-              className="rounded-lg border bg-card px-3 py-1.5 text-xs transition-colors hover:border-foreground/25 hover:bg-accent/40"
-            >
-              <span className="text-muted-foreground">{incomeCategoryLabel(c._id)}</span>{' '}
-              <span className="font-medium tabular-nums">{formatPaise(c.totalPaise)}</span>
-            </button>
-          ))}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ViewToggle<View> value={view} onChange={(v) => list.set({ view: v })} options={VIEW_OPTIONS} />
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportButton onClick={() => void exportAll()} disabled={!canSee || exporting || !summary.data?.count} />
+          <Button size="sm" variant="brand" onClick={openCreate}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add income
+          </Button>
         </div>
-      )}
+      </div>
 
       <FilterBar>
         <SearchFilter value={params.q} onChange={(q) => list.set({ q })} placeholder="Search title, source, notes" />
@@ -249,52 +237,87 @@ function Inner() {
           options={INCOME_CATEGORIES.map((c) => ({ value: c, label: incomeCategoryLabel(c) }))}
         />
         <DateRangeFilter preset={params.range} from={params.from} to={params.to} onChange={(r) => list.set(r)} />
-        <ResetFilters count={list.activeFilterCount} onReset={list.reset} />
+        <ResetFilters count={filterCount} onReset={resetFilters} />
       </FilterBar>
 
-      <DataTable
-        columns={columns}
-        rows={income.data?.items}
-        rowKey={(r) => r._id}
-        loading={income.isLoading}
-        error={income.error}
-        onRetry={() => void income.refetch()}
-        sort={list.sort && SORT_IDS.has(list.sort.by) ? list.sort : { by: 'date', dir: 'desc' }}
-        onSortChange={(s) => list.set({ sort: s ? `${s.by}:${s.dir}` : 'date:desc' })}
-        onRowClick={openEdit}
-        showFooter
-        empty={
-          filtered ? (
-            <EmptyState
-              title="No income matches these filters"
-              action={
-                <Button variant="outline" size="sm" onClick={list.reset}>
-                  Clear filters
-                </Button>
-              }
-            />
-          ) : (
-            <EmptyState
-              icon={TrendingUp}
-              title="No other income yet"
-              description="Record affiliate payouts, referral fees, interest and refunds so profit figures include them."
-              action={
-                <Button size="sm" onClick={openCreate}>
-                  Add income
-                </Button>
-              }
-            />
-          )
-        }
-      />
-      {income.data && (
-        <Pagination
-          page={list.page}
-          totalPages={income.data.meta.totalPages}
-          total={income.data.meta.total}
-          pageSize={PAGE_SIZE}
-          onPage={list.setPage}
+      {view === 'visual' ? (
+        <IncomeOverview
+          summary={summary}
+          window={windowRows}
+          rangeLabel={rangeLabel}
+          dateFiltered={!!(params.from || params.to)}
+          filtered={filtered}
+          selectedCategory={params.category || undefined}
+          onSelectCategory={toggleCategory}
+          onCreate={openCreate}
+          onClearFilters={resetFilters}
         />
+      ) : (
+        <>
+          {summary.data && summary.data.byCategory.length > 1 && (
+            <div className="flex flex-wrap gap-2" aria-label="By category">
+              {summary.data.byCategory.map((c) => (
+                <button
+                  key={c._id}
+                  type="button"
+                  onClick={() => toggleCategory(c._id)}
+                  aria-pressed={params.category === c._id}
+                  className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-xs transition-colors hover:border-foreground/25 hover:bg-accent/40"
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: identityColor(c._id) }} aria-hidden />
+                  <span className="text-muted-foreground">{incomeCategoryLabel(c._id)}</span>
+                  <Price paise={c.totalPaise} className="font-medium" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <DataTable
+            columns={columns}
+            rows={income.data?.items}
+            rowKey={(r) => r._id}
+            loading={income.isLoading}
+            error={income.error}
+            onRetry={() => void income.refetch()}
+            sort={list.sort && SORT_IDS.has(list.sort.by) ? list.sort : { by: 'date', dir: 'desc' }}
+            onSortChange={(s) => list.set({ sort: s ? `${s.by}:${s.dir}` : 'date:desc' })}
+            onRowClick={openEdit}
+            showFooter
+            empty={
+              filtered ? (
+                <EmptyState
+                  illustration="money"
+                  title="No income matches these filters"
+                  action={
+                    <Button variant="outline" size="sm" onClick={resetFilters}>
+                      Clear filters
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  illustration="money"
+                  title="No other income yet"
+                  description="Record affiliate payouts, referral fees, interest and refunds so profit figures include them."
+                  action={
+                    <Button size="sm" onClick={openCreate}>
+                      Add income
+                    </Button>
+                  }
+                />
+              )
+            }
+          />
+          {income.data && (
+            <Pagination
+              page={list.page}
+              totalPages={income.data.meta.totalPages}
+              total={income.data.meta.total}
+              pageSize={PAGE_SIZE}
+              onPage={list.setPage}
+            />
+          )}
+        </>
       )}
 
       <IncomeFormDialog open={formOpen} onOpenChange={setFormOpen} income={editing} />

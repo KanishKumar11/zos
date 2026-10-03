@@ -1,7 +1,7 @@
 // SOW detail — scope, milestones, signature status, signed copy and "create project" (OWNER-only).
 'use client';
 
-import { AlertTriangle, ExternalLink, FileSignature, FolderPlus, Pencil, Send, Trash2 } from 'lucide-react';
+import { AlertTriangle, ExternalLink, FolderPlus, Pencil, Send, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
@@ -11,7 +11,7 @@ import { Role } from '@agency/shared';
 
 import { ApiRequestError, getErrorMessage } from '@/lib/api-client';
 import { todayLocal } from '@/lib/form';
-import { formatDate, formatDateTime, formatPaise } from '@/lib/formatters';
+import { formatDate, formatDateTime } from '@/lib/formatters';
 import { getDownloadUrl } from '@/lib/upload';
 
 import { RoleGate } from '@/components/auth/role-gate';
@@ -20,15 +20,15 @@ import { DataTable, type Column } from '@/components/data/data-table';
 import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
-import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
 import { Textarea } from '@/components/ui/textarea';
+import { Bento, BigNumber, Legend, Price, PrivacyChip, ProjectChip, SegmentBar, Tile, formatCompact, useCanSeePrices } from '@/components/viz';
 import { useClients } from '@/features/clients/clients.hooks';
+import { ClientChip } from '@/features/contracts/price-totals';
 import { useProject } from '@/features/projects/projects.hooks';
 import { CreateProjectFromSowDialog } from '@/features/sow/create-project-dialog';
 import { SowFormDialog } from '@/features/sow/sow-form-dialog';
@@ -43,6 +43,7 @@ import {
   type SowBriefRow,
   type SowMilestoneRow,
 } from '@/features/sow/sow.hooks';
+import { MILESTONE_COLOR, MILESTONE_LABEL, milestoneProgress, SowJourney } from '@/features/sow/sow-visuals';
 
 export default function SowDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -56,6 +57,7 @@ export default function SowDetailPage({ params }: { params: Promise<{ id: string
 function SowDetailInner({ id }: { id: string }) {
   const router = useRouter();
   const confirm = useConfirm();
+  const canSee = useCanSeePrices();
   const sow = useSow(id);
   const clients = useClients();
   const project = useProject(sow.data?.projectId);
@@ -75,7 +77,7 @@ function SowDetailInner({ id }: { id: string }) {
         <PageHeader title={notFound ? 'SOW not found' : 'Statement of work'} crumbs={[{ label: 'Statements of work', href: '/sows' }]} />
         {notFound ? (
           <EmptyState
-            icon={FileSignature}
+            illustration="files"
             title="This SOW doesn’t exist or was deleted"
             action={
               <Button size="sm" variant="outline" asChild>
@@ -98,6 +100,8 @@ function SowDetailInner({ id }: { id: string }) {
   const mismatch = s.milestones.length > 0 && msTotal !== s.totalValuePaise;
   const projectMissing = !!s.projectId && !project.isLoading && !project.data;
   const hasProject = !!s.projectId && !!project.data;
+  const progress = milestoneProgress(s.milestones);
+  const money = (p: number) => (canSee ? formatCompact(p, s.currency) : '');
 
   const remove = async () => {
     const ok = await confirm({
@@ -144,7 +148,16 @@ function SowDetailInner({ id }: { id: string }) {
   };
 
   const milestoneColumns: Column<SowMilestoneRow>[] = [
-    { id: 'title', header: 'Milestone', cell: (m) => <span className="font-medium">{m.title}</span> },
+    {
+      id: 'title',
+      header: 'Milestone',
+      cell: (m) => (
+        <span className="inline-flex items-center gap-2 font-medium">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: MILESTONE_COLOR[m.status] }} />
+          {m.title}
+        </span>
+      ),
+    },
     {
       id: 'due',
       header: 'Due',
@@ -155,8 +168,8 @@ function SowDetailInner({ id }: { id: string }) {
       id: 'amount',
       header: 'Amount',
       align: 'right',
-      cell: (m) => formatPaise(m.amountPaise, s.currency),
-      footer: formatPaise(msTotal, s.currency),
+      cell: (m) => <Price paise={m.amountPaise} currency={s.currency} />,
+      footer: <Price paise={msTotal} currency={s.currency} />,
     },
   ];
 
@@ -164,11 +177,17 @@ function SowDetailInner({ id }: { id: string }) {
     <div className="space-y-6">
       <PageHeader
         title={s.title}
+        eyebrow={<ClientChip clientId={s.clientId} name={client?.name} loading={clients.isLoading} href={client ? `/clients/${client._id}` : undefined} />}
         crumbs={[
           { label: 'Statements of work', href: '/sows' },
           ...(client ? [{ label: client.name, href: `/sows?clientId=${client._id}` }] : []),
         ]}
-        meta={<Badge variant={status === 'SIGNED' ? 'success' : status === 'SENT' ? 'info' : 'muted'}>{SOW_STATUS_LABEL[status]}</Badge>}
+        meta={
+          <>
+            <Badge variant={status === 'SIGNED' ? 'success' : status === 'SENT' ? 'info' : 'muted'}>{SOW_STATUS_LABEL[status]}</Badge>
+            {status !== 'SIGNED' && <Badge variant="outline">Unsigned</Badge>}
+          </>
+        }
         action={
           <>
             {status === 'DRAFT' && (
@@ -186,151 +205,176 @@ function SowDetailInner({ id }: { id: string }) {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total value" value={formatPaise(s.totalValuePaise, s.currency)} hint="Before GST" />
-        <StatCard
-          label="Milestones"
-          value={formatPaise(msTotal, s.currency)}
-          tone={mismatch ? 'warning' : 'default'}
-          hint={
-            s.milestones.length === 0
-              ? 'None yet'
-              : mismatch
-                ? `${formatPaise(Math.abs(s.totalValuePaise - msTotal), s.currency)} ${msTotal > s.totalValuePaise ? 'over' : 'short of'} the total`
-                : `${s.milestones.length} stage${s.milestones.length === 1 ? '' : 's'}, matches the total`
-          }
-        />
-        <StatCard label="Client" value={client ? <Link href={`/clients/${client._id}`} className="hover:underline">{client.name}</Link> : <span className="text-muted-foreground">{clientLabel}</span>} />
-        <StatCard
-          label="Signature"
-          value={SOW_STATUS_LABEL[status]}
-          tone={status === 'SIGNED' ? 'success' : status === 'SENT' ? 'warning' : 'default'}
-          hint={s.signedAt ? `Signed ${formatDate(s.signedAt)}` : s.sentAt ? `Sent ${formatDate(s.sentAt)}` : 'Not sent yet'}
-        />
+      <div className="flex justify-end">
+        <PrivacyChip>Only you see these figures</PrivacyChip>
       </div>
 
-      {/* Project */}
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-          {hasProject ? (
-            <>
-              <div>
-                <p className="text-xs text-muted-foreground">Project</p>
-                <Link href={`/projects/${project.data!._id}`} className="font-medium hover:underline">
-                  {project.data!.name}
-                </Link>
-              </div>
-              <Button size="sm" variant="outline" asChild>
-                <Link href={`/projects/${project.data!._id}`}>Open project</Link>
-              </Button>
-            </>
-          ) : (
-            <>
-              <div>
-                <p className="text-sm font-medium">{projectMissing ? 'The linked project was deleted' : 'No project yet'}</p>
-                <p className="text-xs text-muted-foreground">
-                  Start the project with this SOW’s client, budget and milestones already filled in.
-                </p>
-              </div>
-              <Button size="sm" onClick={() => setProjectOpen(true)} disabled={!client || (!!s.projectId && project.isLoading)}>
-                <FolderPlus className="mr-1.5 h-3.5 w-3.5" /> Create project from SOW
-              </Button>
-            </>
+      <Bento>
+        <Tile span={4} tone="ink" title="Total value">
+          <BigNumber
+            className="[&>div]:text-brand"
+            caption={
+              s.milestones.length === 0 ? (
+                'Before GST · no milestones yet'
+              ) : mismatch ? (
+                <>
+                  Before GST · milestones are <Price paise={Math.abs(s.totalValuePaise - msTotal)} currency={s.currency} />{' '}
+                  {msTotal > s.totalValuePaise ? 'over' : 'short of'} the total
+                </>
+              ) : (
+                `Before GST · ${s.milestones.length} milestone${s.milestones.length === 1 ? '' : 's'}, matching the total`
+              )
+            }
+          >
+            <Price paise={s.totalValuePaise} currency={s.currency} />
+          </BigNumber>
+        </Tile>
+
+        <Tile span={4} title="Signature">
+          <BigNumber caption={s.signedAt ? `Signed ${formatDate(s.signedAt)}` : s.sentAt ? `Sent ${formatDate(s.sentAt)} — not signed yet` : 'Not sent to the client yet'}>
+            <span className={status === 'SIGNED' ? 'text-success' : status === 'SENT' ? 'text-info' : undefined}>
+              {status === 'SIGNED' ? 'Signed' : status === 'SENT' ? 'Awaiting' : 'Draft'}
+            </span>
+          </BigNumber>
+          {status === 'DRAFT' && (
+            <Button size="sm" variant="outline" className="mt-3" onClick={markSent} disabled={updateSow.isPending}>
+              <Send className="mr-1.5 h-3.5 w-3.5" /> Mark as sent
+            </Button>
           )}
-        </CardContent>
-      </Card>
+        </Tile>
 
-      {/* Milestones */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold">Milestones</h2>
-          <Button size="sm" variant="ghost" onClick={() => setEditOpen(true)}>
-            Edit milestones
-          </Button>
-        </div>
-        {mismatch && (
-          <p className="flex items-center gap-2 rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            Milestones add up to {formatPaise(msTotal, s.currency)}, but the SOW is worth {formatPaise(s.totalValuePaise, s.currency)}.
-          </p>
-        )}
-        <DataTable
-          columns={milestoneColumns}
-          rows={s.milestones}
-          rowKey={(m) => `${m.title}-${m.dueDate ?? ''}-${m.amountPaise}`}
-          showFooter
-          empty={
-            <EmptyState
-              title="No milestones"
-              description="Add the payment stages agreed with the client."
-              action={
-                <Button size="sm" onClick={() => setEditOpen(true)}>
-                  Add milestones
+        <Tile span={4} title="Project">
+          {hasProject ? (
+            <div className="space-y-3">
+              <ProjectChip id={project.data!._id} name={project.data!.name} href={`/projects/${project.data!._id}`} className="font-display text-xl font-bold" />
+              <div>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href={`/projects/${project.data!._id}`}>Open project</Link>
                 </Button>
-              }
-            />
-          }
-        />
-      </div>
-
-      {s.description && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Scope</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-line text-sm">{s.description}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Signed copy */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Signed copy</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {s.documentKey ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2.5">
-              <div className="text-sm">
-                <p className="font-medium">{s.documentKey.split('/').pop()}</p>
-                <p className="text-xs text-muted-foreground">{s.signedAt ? `Signed ${formatDate(s.signedAt)}` : 'Attached'}</p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => void openSignedCopy()} disabled={opening}>
-                <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> {opening ? 'Opening…' : 'View signed copy'}
-              </Button>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No signed copy attached yet.</p>
+            <div className="space-y-3">
+              <p className="text-sm font-medium">{projectMissing ? 'The linked project was deleted' : 'No project yet'}</p>
+              <p className="text-xs text-muted-foreground">Start the project with this SOW’s client, budget and milestones already filled in.</p>
+              <Button size="sm" variant="brand" onClick={() => setProjectOpen(true)} disabled={!client || (!!s.projectId && project.isLoading)}>
+                <FolderPlus className="mr-1.5 h-3.5 w-3.5" /> Create project from SOW
+              </Button>
+              {!client && !clients.isLoading && <p className="text-xs text-warning">The client was deleted, so a project can’t be created.</p>}
+            </div>
           )}
-          <div className="flex flex-wrap items-end gap-3">
-            <FormField label="Signed on" className="w-44">
-              <Input type="date" value={signedOn} max={todayLocal()} onChange={(e) => setSignedOn(e.target.value)} />
-            </FormField>
-            <FileUploader
-              prefix={`sows/${id}`}
-              accept="application/pdf,image/*"
-              label={s.documentKey ? 'Replace signed copy' : 'Upload signed copy'}
-              onUploaded={async (res) => {
-                await setDocument.mutateAsync({
-                  id,
-                  body: { key: res.key, contentType: res.file.type || undefined, signedAt: signedOn || todayLocal() },
-                });
-              }}
-            />
-            {!s.signedAt && (
-              <Button size="sm" variant="ghost" onClick={markSigned} disabled={updateSow.isPending}>
-                Mark signed without a file
-              </Button>
+        </Tile>
+
+        <Tile
+          span={12}
+          title="Milestones"
+          action={
+            <Button size="sm" variant="ghost" onClick={() => setEditOpen(true)}>
+              Edit milestones
+            </Button>
+          }
+        >
+          {s.milestones.length > 0 ? (
+            <div className="space-y-5">
+              <SowJourney milestones={s.milestones} currency={s.currency} />
+              {msTotal > 0 && (
+                <div className="space-y-2">
+                  <SegmentBar
+                    height="h-7"
+                    segments={[
+                      { value: progress.collected, color: MILESTONE_COLOR.COLLECTED, label: MILESTONE_LABEL.COLLECTED, display: money(progress.collected) },
+                      { value: progress.invoiced, color: MILESTONE_COLOR.INVOICED, label: MILESTONE_LABEL.INVOICED, display: money(progress.invoiced) },
+                      { value: progress.pending, color: 'hsl(var(--muted-foreground) / 0.45)', label: MILESTONE_LABEL.PENDING, display: money(progress.pending) },
+                    ]}
+                  />
+                  <Legend
+                    items={[
+                      { color: MILESTONE_COLOR.COLLECTED, label: 'Collected' },
+                      { color: MILESTONE_COLOR.INVOICED, label: 'Invoiced, not paid' },
+                      { color: 'hsl(var(--muted-foreground) / 0.45)', label: 'Not billed yet' },
+                    ]}
+                  />
+                </div>
+              )}
+              {mismatch && (
+                <p className="flex flex-wrap items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  Milestones add up to <Price paise={msTotal} currency={s.currency} />, but the SOW is worth <Price paise={s.totalValuePaise} currency={s.currency} />.
+                </p>
+              )}
+            </div>
+          ) : null}
+          <DataTable
+            className={s.milestones.length > 0 ? 'mt-5' : undefined}
+            columns={milestoneColumns}
+            rows={s.milestones}
+            rowKey={(m) => `${m.title}-${m.dueDate ?? ''}-${m.amountPaise}`}
+            showFooter
+            empty={
+              <EmptyState
+                illustration="calendar"
+                title="No milestones"
+                description="Add the payment stages agreed with the client."
+                action={
+                  <Button size="sm" onClick={() => setEditOpen(true)}>
+                    Add milestones
+                  </Button>
+                }
+              />
+            }
+          />
+        </Tile>
+
+        {s.description && (
+          <Tile span={12} title="Scope">
+            <p className="max-w-[75ch] whitespace-pre-line text-sm">{s.description}</p>
+          </Tile>
+        )}
+
+        <Tile span={12} title="Signed copy">
+          <div className="space-y-4">
+            {s.documentKey ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2.5">
+                <div className="min-w-0 text-sm">
+                  <p className="truncate font-medium">{s.documentKey.split('/').pop()}</p>
+                  <p className="text-xs text-muted-foreground">{s.signedAt ? `Signed ${formatDate(s.signedAt)}` : 'Attached'}</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => void openSignedCopy()} disabled={opening}>
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> {opening ? 'Opening…' : 'View signed copy'}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No signed copy attached yet.</p>
             )}
-            {s.signedAt && (
-              <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => void unsign()} disabled={updateSow.isPending}>
-                Mark not signed
-              </Button>
-            )}
+            <div className="flex flex-wrap items-end gap-3">
+              <FormField label="Signed on" className="w-44">
+                <Input type="date" value={signedOn} max={todayLocal()} onChange={(e) => setSignedOn(e.target.value)} />
+              </FormField>
+              <FileUploader
+                prefix={`sows/${id}`}
+                accept="application/pdf,image/*"
+                label={s.documentKey ? 'Replace signed copy' : 'Upload signed copy'}
+                onUploaded={async (res) => {
+                  await setDocument.mutateAsync({
+                    id,
+                    body: { key: res.key, contentType: res.file.type || undefined, signedAt: signedOn || todayLocal() },
+                  });
+                }}
+              />
+              {!s.signedAt && (
+                <Button size="sm" variant="ghost" onClick={markSigned} disabled={updateSow.isPending}>
+                  Mark signed without a file
+                </Button>
+              )}
+              {s.signedAt && (
+                <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => void unsign()} disabled={updateSow.isPending}>
+                  Mark not signed
+                </Button>
+              )}
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </Tile>
+      </Bento>
 
       <BriefCard sowId={id} brief={s.brief} />
 
@@ -345,6 +389,7 @@ function SowDetailInner({ id }: { id: string }) {
     </div>
   );
 }
+
 
 /** The team-facing brief (scope summary, deliverables, timeline) — project members can read it. */
 function BriefCard({ sowId, brief }: { sowId: string; brief?: SowBriefRow }) {
@@ -388,15 +433,12 @@ function BriefCard({ sowId, brief }: { sowId: string; brief?: SowBriefRow }) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Team brief</CardTitle>
-        <p className="text-xs text-muted-foreground">
+    <Tile title="Team brief">
+      <div className="space-y-3">
+        <p className="-mt-2 text-xs text-muted-foreground">
           What the project team sees — no prices.
           {brief?.publishedAt && ` Last published ${formatDateTime(brief.publishedAt)}.`}
         </p>
-      </CardHeader>
-      <CardContent className="space-y-3">
         <FormField label="Scope summary" required error={errors.scopeSummary}>
           <Textarea value={scopeSummary} onChange={(e) => setScopeSummary(e.target.value)} rows={4} />
         </FormField>
@@ -417,7 +459,7 @@ function BriefCard({ sowId, brief }: { sowId: string; brief?: SowBriefRow }) {
         <Button onClick={publish} disabled={publishBrief.isPending}>
           {publishBrief.isPending ? 'Publishing…' : brief?.publishedAt ? 'Update brief' : 'Publish brief'}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </Tile>
   );
 }

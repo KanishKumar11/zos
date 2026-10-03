@@ -1,70 +1,102 @@
-/* Tailwind base + CSS variable design tokens (light & dark) + shadcn animation defaults. */
+/* ZOS "Studio" design tokens — Zlaark brand. Ink rail + paper canvas, signal orange (#f85f00) as the
+   brand accent, ink for primary actions (white-on-orange is too low-contrast for body-size text).
+   Every colour is an HSL triplet consumed as hsl(var(--token)) by Tailwind. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Warm Editorial Light — cream paper + terracotta accent */
-    --background: 30 25% 97%; /* Warm cream, like aged paper */
-    --foreground: 20 12% 10%; /* Warm near-black ink */
+    --background: 48 21% 95%; /* paper */
+    --foreground: 40 17% 7%; /* ink */
 
-    --card: 30 25% 97%;
-    --card-foreground: 20 12% 10%;
-    --popover: 30 25% 97%;
-    --popover-foreground: 20 12% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 40 17% 7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 40 17% 7%;
 
-    --primary: 18 58% 42%; /* Terracotta accent — used by buttons, active nav, links, focus rings */
-    --primary-foreground: 30 30% 98%;
+    /* Brand signal orange — accents, active states, focus, highlights. */
+    --primary: 23 100% 49%;
+    --primary-foreground: 0 0% 100%;
+    --brand-wash: 23 100% 95%;
+    --brand-ink: 23 100% 35%;
 
-    --secondary: 30 16% 91%;
-    --secondary-foreground: 20 12% 10%;
-    --muted: 30 16% 91%;
-    --muted-foreground: 25 10% 40%;
-    --accent: 30 16% 91%;
-    --accent-foreground: 20 12% 10%;
+    --secondary: 45 20% 92%;
+    --secondary-foreground: 40 17% 7%;
+    --muted: 45 20% 92%;
+    --muted-foreground: 39 7% 40%;
+    --accent: 45 20% 92%;
+    --accent-foreground: 40 17% 7%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 5 64% 50%;
     --destructive-foreground: 0 0% 100%;
-    --success: 142 45% 38%;
-    --warning: 38 92% 50%;
+    --success: 153 65% 33%;
+    --warning: 41 100% 36%;
+    --info: 218 72% 53%;
 
-    /* Strong thin lines */
-    --border: 30 14% 85%;
-    --input: 30 14% 85%;
-    --ring: 18 58% 42%;
-    --radius: 0.5rem;
+    --border: 44 17% 87%;
+    --input: 44 17% 85%;
+    --ring: 23 100% 49%;
+
+    /* Navigation rail (dark in both themes). */
+    --rail: 40 17% 7%;
+    --rail-foreground: 48 21% 95%;
+
+    /* Categorical palette for projects/people (deterministic, see lib/identity.ts). */
+    --p1: 23 100% 49%;
+    --p2: 218 72% 53%;
+    --p3: 153 65% 33%;
+    --p4: 276 54% 55%;
+    --p5: 41 100% 40%;
+    --p6: 340 70% 52%;
+    --p7: 190 80% 36%;
+    --p8: 95 45% 38%;
+
+    --radius: 0.875rem;
   }
 
   .dark {
-    /* Warm charcoal — not pure black — + brighter terracotta accent */
-    --background: 20 12% 7%;
-    --foreground: 30 18% 96%;
+    --background: 40 11% 5%;
+    --foreground: 40 26% 93%;
 
-    --card: 20 12% 7%;
-    --card-foreground: 30 18% 96%;
-    --popover: 20 12% 7%;
-    --popover-foreground: 30 18% 96%;
+    --card: 36 11% 9%;
+    --card-foreground: 40 26% 93%;
+    --popover: 36 11% 10%;
+    --popover-foreground: 40 26% 93%;
 
-    --primary: 20 68% 56%;
-    --primary-foreground: 20 20% 9%;
+    --primary: 22 100% 57%;
+    --primary-foreground: 25 60% 6%;
+    --brand-wash: 23 45% 12%;
+    --brand-ink: 22 100% 68%;
 
-    --secondary: 20 10% 14%;
-    --secondary-foreground: 30 18% 96%;
-    --muted: 20 10% 14%;
-    --muted-foreground: 25 10% 62%;
-    --accent: 20 10% 14%;
-    --accent-foreground: 30 18% 96%;
+    --secondary: 34 11% 13%;
+    --secondary-foreground: 40 26% 93%;
+    --muted: 34 11% 13%;
+    --muted-foreground: 40 7% 61%;
+    --accent: 34 11% 14%;
+    --accent-foreground: 40 26% 93%;
 
-    --destructive: 0 63% 55%;
-    --destructive-foreground: 0 0% 98%;
-    --success: 142 50% 50%;
-    --warning: 38 92% 50%;
+    --destructive: 5 100% 68%;
+    --destructive-foreground: 0 0% 8%;
+    --success: 153 53% 50%;
+    --warning: 42 77% 53%;
+    --info: 220 100% 71%;
 
-    /* Subtle hairlines for dark mode */
-    --border: 20 10% 18%;
-    --input: 20 10% 18%;
-    --ring: 20 68% 56%;
+    --border: 38 10% 16%;
+    --input: 38 10% 19%;
+    --ring: 22 100% 57%;
+
+    --rail: 30 17% 3%;
+    --rail-foreground: 40 26% 93%;
+
+    --p1: 22 100% 57%;
+    --p2: 220 100% 71%;
+    --p3: 153 53% 50%;
+    --p4: 276 76% 74%;
+    --p5: 42 77% 53%;
+    --p6: 340 85% 68%;
+    --p7: 190 70% 52%;
+    --p8: 95 45% 55%;
   }
 
   * {
@@ -72,7 +104,47 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased selection:bg-foreground selection:text-background;
+    @apply bg-background text-foreground antialiased;
     font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
+  }
+
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+}
+
+@layer utilities {
+  /* Money and counts: mono, tabular, never jumping as digits change. */
+  .font-figures {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Editorial display face, slightly condensed for big headlines and hero numbers. */
+  .font-display {
+    font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+    font-variation-settings: 'wdth' 84, 'opsz' 96;
+    letter-spacing: -0.02em;
+  }
+  .text-brand {
+    color: hsl(var(--primary));
+  }
+  .bg-brand-wash {
+    background-color: hsl(var(--brand-wash));
+  }
+  /* Highlighter mark used in narrative heroes. */
+  .mark-wash {
+    background: linear-gradient(transparent 62%, hsl(var(--brand-wash)) 62%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

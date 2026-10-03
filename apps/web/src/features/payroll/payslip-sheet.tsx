@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Select } from '@/components/ui/select';
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Avatar, Price, useCanSeePrices } from '@/components/viz';
 
 import { PayslipBreakdown } from './member-payslips';
 import { monthTitle, useAddPayslipAdjustment, useRemovePayslipAdjustment, type PayslipRow } from './payroll.hooks';
@@ -22,13 +23,17 @@ import { monthTitle, useAddPayslipAdjustment, useRemovePayslipAdjustment, type P
 export function PayslipSheet({
   slip,
   editable,
+  own = false,
   onOpenChange,
 }: {
   slip: PayslipRow | undefined;
   editable: boolean;
+  /** The viewer is the payslip owner (their own pay). */
+  own?: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
   const confirm = useConfirm();
+  const canSee = useCanSeePrices(own);
   const add = useAddPayslipAdjustment();
   const remove = useRemovePayslipAdjustment();
   const [kind, setKind] = useState<'BONUS' | 'DEDUCTION'>('BONUS');
@@ -51,7 +56,7 @@ export function PayslipSheet({
     const e: Record<string, string> = {};
     if (reason.trim().length < 2) e.reason = 'Say what it is for, e.g. Diwali bonus';
     if (!amount || amount <= 0) e.amountPaise = 'Enter an amount';
-    if (kind === 'DEDUCTION' && amount && amount > slip.netPaise) e.amountPaise = `More than their net pay (${formatPaise(slip.netPaise, slip.currency)})`;
+    if (kind === 'DEDUCTION' && amount && amount > slip.netPaise) e.amountPaise = canSee ? `More than their net pay (${formatPaise(slip.netPaise, slip.currency)})` : 'More than their net pay';
     setErrors(e);
     if (Object.keys(e).length) return;
     setServerError(undefined);
@@ -70,7 +75,7 @@ export function PayslipSheet({
     if (!a) return;
     const ok = await confirm({
       title: `Remove “${a.reason}”?`,
-      description: `${a.kind === 'BONUS' ? 'The bonus' : 'The deduction'} of ${formatPaise(a.amountPaise, slip.currency)} is taken off this payslip.`,
+      description: `${a.kind === 'BONUS' ? 'The bonus' : 'The deduction'}${canSee ? ` of ${formatPaise(a.amountPaise, slip.currency)}` : ''} is taken off this payslip.`,
       confirmText: 'Remove',
       destructive: true,
     });
@@ -81,16 +86,19 @@ export function PayslipSheet({
     <Sheet open={!!slip} onOpenChange={(o) => !add.isPending && onOpenChange(o)}>
       <SheetContent className="sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>{slip.userName ?? 'Payslip'}</SheetTitle>
+          <SheetTitle className="flex items-center gap-2.5">
+            <Avatar id={slip.userId} name={slip.userName ?? 'Deleted member'} size="sm" />
+            {slip.userName ?? 'Deleted member'}
+          </SheetTitle>
           <SheetDescription>
-            {monthTitle(slip.month)} · net {formatPaise(slip.netPaise, slip.currency)} ·{' '}
-            <Link href={`/team/${slip.userId}`} className="text-primary hover:underline">
+            {monthTitle(slip.month)} · net <Price paise={slip.netPaise} currency={slip.currency} own={own} /> ·{' '}
+            <Link href={`/team/${slip.userId}`} className="font-medium text-brand-ink hover:underline">
               Open profile
             </Link>
           </SheetDescription>
         </SheetHeader>
         <SheetBody>
-          <PayslipBreakdown slip={slip} />
+          <PayslipBreakdown slip={slip} own={own} />
 
           <div className="space-y-2">
             <p className="text-sm font-medium">Bonuses and deductions</p>
@@ -104,9 +112,9 @@ export function PayslipSheet({
                       {a.reason}
                       <span className="block text-xs text-muted-foreground">{a.kind === 'BONUS' ? 'Bonus' : 'Deduction'}</span>
                     </span>
-                    <span className={a.kind === 'BONUS' ? 'tabular-nums text-emerald-600' : 'tabular-nums text-destructive'}>
+                    <span className={a.kind === 'BONUS' ? 'text-success' : 'text-destructive'}>
                       {a.kind === 'BONUS' ? '+' : '−'}
-                      {formatPaise(a.amountPaise, slip.currency)}
+                      <Price paise={a.amountPaise} currency={slip.currency} own={own} />
                     </span>
                     {editable && (
                       <button

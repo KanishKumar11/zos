@@ -6,17 +6,22 @@ import type { ReactNode } from 'react';
 import { getErrorMessage } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 
+import { SpotIllustration } from '@/components/viz/illustrations';
+
 import { Button } from './button';
 import { Skeleton } from './skeleton';
 
 export function EmptyState({
   icon: Icon = Inbox,
+  illustration,
   title,
   description,
   action,
   className,
 }: {
   icon?: LucideIcon;
+  /** A warm spot illustration instead of the icon. */
+  illustration?: 'inbox' | 'money' | 'projects' | 'people' | 'calendar' | 'done' | 'files';
   title: string;
   description?: ReactNode;
   action?: ReactNode;
@@ -24,10 +29,14 @@ export function EmptyState({
 }) {
   return (
     <div className={cn('flex flex-col items-center justify-center px-6 py-12 text-center', className)}>
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-        <Icon className="h-5 w-5 text-muted-foreground" />
-      </div>
-      <p className="text-sm font-medium">{title}</p>
+      {illustration ? (
+        <SpotIllustration kind={illustration} className="mb-3" />
+      ) : (
+        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-brand-wash">
+          <Icon className="h-5 w-5 text-brand-ink" />
+        </div>
+      )}
+      <p className="font-display text-lg font-bold">{title}</p>
       {description && <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -78,16 +87,17 @@ export function TableSkeleton({ rows = 6, columns = 5 }: { rows?: number; column
 export function PageSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <Skeleton className="h-7 w-48" />
+      <div className="space-y-2.5">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-10 w-full max-w-xl" />
         <Skeleton className="h-4 w-72" />
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-20" />
+          <Skeleton key={i} className="h-24 rounded-[var(--radius)]" />
         ))}
       </div>
-      <Skeleton className="h-64" />
+      <Skeleton className="h-64 rounded-[var(--radius)]" />
     </div>
   );
 }

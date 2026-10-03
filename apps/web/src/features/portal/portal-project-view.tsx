@@ -1,185 +1,204 @@
 // The client's view of one project — used by the portal and by the owner's "Preview as client".
+// Shows the journey, the team's story feed with files, milestones with their amounts (the client's
+// own prices) and who's on the team. Never any team pay.
 'use client';
 
-import { CalendarDays, Download, FileText, Mail } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import Link from 'next/link';
-import { toast } from 'sonner';
 
-import { getErrorMessage } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
-import { formatDate, formatDateTime, formatPaise } from '@/lib/formatters';
+import { identityColor } from '@/lib/identity';
+import { formatDateTime } from '@/lib/formatters';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ProgressBar } from '@/components/ui/progress-bar';
-import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/states';
-import { formatBytes } from '@/features/collab/collab.hooks';
+import { ActivityTimeline, Avatar, AvatarStack, Bento, Legend, MilestoneJourney, Price, SegmentBar, Tile, formatCompact, useCanSeePrices } from '@/components/viz';
 
-import { portalApi, type PortalProject } from './portal.hooks';
+import { type PortalProject } from './portal.hooks';
+import { ContactList, FileCards, journeyOf, plainProjectStatus, progressOf, shortDate, useOpenPortalFile } from './portal-ui';
+
+const MILESTONE_WORD: Record<string, string> = { PENDING: 'Coming up', INVOICED: 'Done · invoiced', COLLECTED: 'Done · paid' };
 
 export function PortalProjectView({ project: p, preview = false }: { project: PortalProject; preview?: boolean }) {
-  const billed = p.milestones.filter((m) => m.status !== 'PENDING').reduce((s, m) => s + m.amountPaise, 0);
-  const total = p.milestones.reduce((s, m) => s + m.amountPaise, 0);
-
-  const openFile = async (fileId: string) => {
-    if (preview) {
-      toast.info('In the client portal this downloads the file.');
-      return;
-    }
-    try {
-      const { url } = await portalApi.fileUrl(p._id, fileId);
-      window.open(url, '_blank', 'noopener');
-    } catch (err) {
-      toast.error(getErrorMessage(err));
-    }
-  };
+  const open = useOpenPortalFile(preview);
+  const canSee = useCanSeePrices();
+  const { pct } = progressOf(p.milestones);
+  const { steps, next } = journeyOf(p.milestones, p._id);
+  const sum = (status: string) => p.milestones.filter((m) => m.status === status).reduce((s, m) => s + m.amountPaise, 0);
+  const paid = sum('COLLECTED');
+  const invoiced = sum('INVOICED');
+  const upcoming = sum('PENDING');
+  const total = paid + invoiced + upcoming;
+  const team = p.team ?? (p.lead ? [{ name: p.lead.name, lead: true }] : []);
+  const Heading = preview ? 'h2' : 'h1';
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{p.name}</h1>
-          <StatusBadge status={p.status} />
-        </div>
-        {p.description && <p className="text-sm text-muted-foreground">{p.description}</p>}
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
+      <header className="space-y-3">
+        <p className="text-[13px] text-muted-foreground">
+          {plainProjectStatus(p.status)}
           {(p.startDate || p.endDate) && (
-            <span className="flex items-center gap-1.5">
+            <span className="ml-2 inline-flex items-center gap-1">
               <CalendarDays className="h-3.5 w-3.5" />
-              {p.startDate ? formatDate(p.startDate) : '—'} → {p.endDate ? formatDate(p.endDate) : 'Ongoing'}
+              {p.startDate ? shortDate(p.startDate) : 'Started'} → {p.endDate ? shortDate(p.endDate) : 'ongoing'}
             </span>
           )}
-          {p.lead && (
-            <a href={`mailto:${p.lead.email}`} className="flex items-center gap-1.5 hover:text-foreground">
-              <Mail className="h-3.5 w-3.5" /> Your contact: {p.lead.name}
-            </a>
+        </p>
+        <Heading className="font-display max-w-[24ch] text-[clamp(1.75rem,3.6vw,2.75rem)] font-bold leading-[1.05]">
+          {p.milestones.length === 0 ? (
+            p.name
+          ) : next ? (
+            <>
+              {p.name} is <span className="text-brand">{pct}%</span> there.
+            </>
+          ) : (
+            <>
+              {p.name} has reached <span className="text-brand">every step</span>.
+            </>
           )}
-        </div>
-      </div>
+        </Heading>
+        {next && (
+          <p className="text-[15px] text-muted-foreground">
+            Next up: <span className="font-medium text-foreground">{next.name}</span>
+            {next.dueDate ? ` on ${shortDate(next.dueDate)}` : ''}.
+          </p>
+        )}
+        {p.description && <p className="max-w-[62ch] text-sm text-muted-foreground">{p.description}</p>}
+      </header>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <section aria-labelledby="updates-h" className="space-y-3">
-            <h2 id="updates-h" className="text-base font-semibold">Updates</h2>
-            {p.updates.length === 0 ? (
-              <Card>
-                <EmptyState title="No updates yet" description="Progress updates from the team will appear here." />
-              </Card>
-            ) : (
-              <ol className="space-y-3">
-                {p.updates.map((u) => (
-                  <li key={u._id}>
-                    <Card>
-                      <CardContent className="space-y-2 p-4">
-                        <div>
-                          <p className="font-medium">{u.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {u.authorName} · {formatDateTime(u.createdAt)}
-                          </p>
-                        </div>
-                        <p className="whitespace-pre-line text-sm leading-relaxed">{u.body}</p>
-                        {u.files.length > 0 && (
-                          <ul className="flex flex-wrap gap-2 pt-1">
-                            {u.files.map((f) => (
-                              <li key={f._id}>
-                                <button type="button" onClick={() => void openFile(f._id)} className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs hover:bg-accent">
-                                  <FileText className="h-3.5 w-3.5" /> {f.name}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
+      <Bento>
+        <Tile span={12} title="Project journey">
+          {steps.length === 0 ? (
+            <p className="text-sm text-muted-foreground">We&rsquo;ll map out the steps for this project here soon.</p>
+          ) : (
+            <MilestoneJourney steps={steps} />
+          )}
+        </Tile>
+
+        <Tile span={7} title="Updates from the team" className="lg:row-span-2">
+          <ActivityTimeline
+            items={p.updates.map((u) => ({
+              key: u._id,
+              date: u.createdAt,
+              color: identityColor(u.authorName),
+              title: <span className="font-display text-base font-bold">{u.title}</span>,
+              meta: (
+                <>
+                  {u.authorName} · {formatDateTime(u.createdAt)}
+                  {u.editedAt ? ' · edited' : ''}
+                </>
+              ),
+              body: (
+                <div className="space-y-2.5">
+                  <p className="whitespace-pre-line text-muted-foreground">{u.body}</p>
+                  <FileCards files={u.files} compact onOpen={(fileId) => void open(p._id, fileId)} />
+                </div>
+              ),
+            }))}
+            empty={<EmptyState illustration="inbox" title="No updates yet" description="Progress updates from the team will appear here." className="py-8" />}
+          />
+        </Tile>
+
+        <Tile span={5} title="Milestones">
+          {p.milestones.length === 0 ? (
+            <EmptyState illustration="calendar" title="No milestones yet" className="py-6" />
+          ) : (
+            <div className="space-y-4">
+              {total > 0 && (
+                <div className="space-y-2">
+                  <SegmentBar
+                    height="h-3"
+                    showLabels={false}
+                    segments={[
+                      { value: paid, color: 'hsl(var(--success))', label: 'Paid', display: canSee ? formatCompact(paid, p.currency) : '' },
+                      { value: invoiced, color: 'hsl(var(--primary))', label: 'Invoiced', display: canSee ? formatCompact(invoiced, p.currency) : '' },
+                      { value: upcoming, color: 'hsl(var(--muted-foreground) / 0.35)', label: 'Not billed yet', display: canSee ? formatCompact(upcoming, p.currency) : '' },
+                    ]}
+                  />
+                  <Legend
+                    items={[
+                      { color: 'hsl(var(--success))', label: <>Paid <Price paise={paid} currency={p.currency} compact /></> },
+                      { color: 'hsl(var(--primary))', label: <>Invoiced <Price paise={invoiced} currency={p.currency} compact /></> },
+                      { color: 'hsl(var(--muted-foreground) / 0.35)', label: <>Not billed yet <Price paise={upcoming} currency={p.currency} compact /></> },
+                    ]}
+                  />
+                </div>
+              )}
+              <ol className="divide-y">
+                {p.milestones.map((m, i) => (
+                  <li key={m._id} className="flex gap-3 py-2.5 first:pt-0 last:pb-0">
+                    <span
+                      className={cn(
+                        'mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 font-figures text-[10px] font-semibold',
+                        m.status === 'COLLECTED' && 'border-success bg-success text-background',
+                        m.status === 'INVOICED' && 'border-brand text-brand',
+                        m.status === 'PENDING' && 'text-muted-foreground',
+                      )}
+                      aria-hidden
+                    >
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium">{m.name}</p>
+                        <Price paise={m.amountPaise} currency={p.currency} className="shrink-0" />
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {MILESTONE_WORD[m.status] ?? 'Coming up'}
+                        {m.dueDate ? ` · ${m.status === 'PENDING' ? 'planned for' : 'due'} ${shortDate(m.dueDate)}` : ''}
+                        {m.invoice && (
+                          <>
+                            {' · '}
+                            {preview ? (
+                              <span className="font-figures">{m.invoice.number}</span>
+                            ) : (
+                              <Link href={`/portal/invoices/${m.invoice._id}`} className="font-figures text-brand hover:underline">
+                                {m.invoice.number}
+                              </Link>
+                            )}
+                          </>
                         )}
-                      </CardContent>
-                    </Card>
+                      </p>
+                    </div>
                   </li>
                 ))}
               </ol>
-            )}
-          </section>
-        </div>
+            </div>
+          )}
+        </Tile>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Milestones</CardTitle>
-              {total > 0 && (
-                <div className="pt-1">
-                  <ProgressBar value={billed} max={total} />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {formatPaise(billed, p.currency)} of {formatPaise(total, p.currency)} billed
-                  </p>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent className="p-0">
-              {p.milestones.length === 0 ? (
-                <EmptyState title="No milestones yet" className="py-8" />
-              ) : (
-                <ol className="divide-y">
-                  {p.milestones.map((m, i) => (
-                    <li key={m._id} className="flex gap-3 px-5 py-3">
-                      <span
-                        className={cn(
-                          'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold',
-                          m.status === 'COLLECTED' ? 'border-transparent bg-[hsl(var(--success))] text-white' : m.status === 'INVOICED' ? 'border-sky-600 text-sky-700' : 'text-muted-foreground',
-                        )}
-                      >
-                        {i + 1}
-                      </span>
-                      <div className="min-w-0 flex-1 text-sm">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium">{m.name}</p>
-                          <span className="tabular-nums">{formatPaise(m.amountPaise, p.currency)}</span>
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <StatusBadge status={m.status} />
-                          {m.dueDate && <span>Due {formatDate(m.dueDate)}</span>}
-                          {m.invoice &&
-                            (preview ? (
-                              <span>{m.invoice.number}</span>
-                            ) : (
-                              <Link href={`/portal/invoices/${m.invoice._id}`} className="text-primary hover:underline">
-                                {m.invoice.number}
-                              </Link>
-                            ))}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Files</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {p.files.length === 0 ? (
-                <EmptyState title="No shared files yet" className="py-8" />
-              ) : (
-                <ul className="divide-y">
-                  {p.files.map((f) => (
-                    <li key={f._id}>
-                      <button type="button" onClick={() => void openFile(f._id)} className="flex w-full items-center gap-3 px-5 py-2.5 text-left hover:bg-muted/30">
-                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm">{f.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {[formatBytes(f.sizeBytes), formatDate(f.createdAt)].filter(Boolean).join(' · ')}
-                          </span>
+        <Tile span={5} title="Your team" action={team.length > 1 ? <AvatarStack people={team.map((t) => ({ name: t.name }))} max={5} /> : undefined}>
+          {team.length === 0 ? (
+            <p className="text-sm text-muted-foreground">We&rsquo;ll introduce the team here once the project starts.</p>
+          ) : (
+            <div className="space-y-4">
+              {p.lead && <ContactList people={[{ name: p.lead.name, email: p.lead.email, note: 'Your main contact' }]} />}
+              {team.filter((t) => !t.lead).length > 0 && (
+                <ul className="flex flex-wrap gap-x-4 gap-y-2.5">
+                  {team
+                    .filter((t) => !t.lead)
+                    .map((t, i) => (
+                      <li key={`${t.name}-${i}`} className="flex min-w-0 items-center gap-2 text-[13px]">
+                        <Avatar name={t.name} size="sm" />
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{t.name}</span>
+                          {t.title && <span className="block truncate text-xs text-muted-foreground">{t.title}</span>}
                         </span>
-                        <Download className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                    </li>
-                  ))}
+                      </li>
+                    ))}
                 </ul>
               )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            </div>
+          )}
+        </Tile>
+
+        <Tile span={12} title="Shared files">
+          {p.files.length === 0 ? (
+            <EmptyState illustration="files" title="No shared files yet" description="Designs, documents and handovers the team shares will be here to download." className="py-6" />
+          ) : (
+            <FileCards files={p.files} onOpen={(fileId) => void open(p._id, fileId)} />
+          )}
+        </Tile>
+      </Bento>
     </div>
   );
 }

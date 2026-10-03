@@ -25,6 +25,13 @@ export class DashboardController {
     return this.svc.ownerCharts();
   }
 
+  /** Command centre: money flow (month + FY), receivables aging, daily cash, project health. */
+  @Get('owner/cockpit')
+  @Roles(Role.OWNER)
+  ownerCockpit() {
+    return this.svc.ownerCockpit();
+  }
+
   @Get('owner/team-earnings')
   @Roles(Role.OWNER)
   teamEarnings(@Query('month') month?: string) {
