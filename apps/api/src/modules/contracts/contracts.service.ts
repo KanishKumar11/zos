@@ -19,8 +19,10 @@ import { ErrorCodes } from '@/common/constants/error-codes';
 import { emitAudit, snapshot } from '@/common/utils/audit.util';
 
 import { Client, type ClientDocument } from '../clients/schemas/client.schema';
+import { Freelancer, type FreelancerDocument } from '../freelancers/schemas/freelancer.schema';
 import { InvoicesService } from '../invoices/invoices.service';
 import { Invoice, type InvoiceDocument } from '../invoices/schemas/invoice.schema';
+import { User, type UserDocument } from '../users/schemas/user.schema';
 import { Contract, type ContractDocument } from './schemas/contract.schema';
 
 /** What a contract has been billed so far (drafts and written-off invoices don't count as billed). */
@@ -57,6 +59,8 @@ export class ContractsService {
     @InjectModel(Contract.name) private readonly model: Model<ContractDocument>,
     @InjectModel(Invoice.name) private readonly invoices: Model<InvoiceDocument>,
     @InjectModel(Client.name) private readonly clients: Model<ClientDocument>,
+    @InjectModel(User.name) private readonly users: Model<UserDocument>,
+    @InjectModel(Freelancer.name) private readonly freelancers: Model<FreelancerDocument>,
     private readonly invoicesSvc: InvoicesService,
     private readonly events: EventEmitter2,
   ) {}
@@ -68,13 +72,58 @@ export class ContractsService {
     return this.model.find(filter).sort({ createdAt: -1 }).exec();
   }
 
-  /** Contracts as JSON with their billing summary attached. */
+  /** Contracts as JSON with their billing summary, populated contractors & margin attached. */
   async withBilling(docs: ContractDocument[]): Promise<Record<string, unknown>[]> {
     const billing = await this.billing(docs);
-    return docs.map((d) => ({
-      ...(d.toJSON() as Record<string, unknown>),
-      billing: billing.get(d.id as string) ?? { billedPaise: 0, paidPaise: 0, invoiceCount: 0, billedMonths: [] },
-    }));
+    const userIds = [...new Set(docs.flatMap((d) => (d.members ?? []).map((m) => m.userId.toString())))];
+    const freelancerIds = [...new Set(docs.flatMap((d) => (d.freelancers ?? []).map((f) => f.freelancerId.toString())))];
+    const [users, fls] = await Promise.all([
+      userIds.length ? this.users.find({ _id: { $in: userIds.map((id) => new Types.ObjectId(id)) } }).select('name email avatarUrl role').exec() : [],
+      freelancerIds.length ? this.freelancers.find({ _id: { $in: freelancerIds.map((id) => new Types.ObjectId(id)) } }).select('name email skill').exec() : [],
+    ]);
+    const userMap = new Map(users.map((u) => [u.id as string, u]));
+    const flMap = new Map(fls.map((f) => [f.id as string, f]));
+
+    return docs.map((d) => {
+      const json = d.toJSON() as Record<string, unknown>;
+      const populatedMembers = (d.members ?? []).map((m) => {
+        const u = userMap.get(m.userId.toString());
+        return {
+          userId: m.userId.toString(),
+          monthlyAmountPaise: m.monthlyAmountPaise ?? 0,
+          role: m.role || '',
+          addedAt: m.addedAt,
+          name: u?.name ?? 'Deleted member',
+          email: u?.email,
+          avatarUrl: u?.avatarUrl,
+        };
+      });
+      const populatedFreelancers = (d.freelancers ?? []).map((f) => {
+        const fl = flMap.get(f.freelancerId.toString());
+        return {
+          freelancerId: f.freelancerId.toString(),
+          monthlyAmountPaise: f.monthlyAmountPaise ?? 0,
+          scope: f.scope || '',
+          addedAt: f.addedAt,
+          name: fl?.name ?? 'Deleted freelancer',
+          email: fl?.email,
+          skill: fl?.skill,
+        };
+      });
+      const totalMonthlyPayPaise =
+        populatedMembers.reduce((s, m) => s + (m.monthlyAmountPaise ?? 0), 0) +
+        populatedFreelancers.reduce((s, f) => s + (f.monthlyAmountPaise ?? 0), 0);
+      const netMonthlyMarginPaise = Math.max(0, (d.monthlyAmountPaise ?? 0) - totalMonthlyPayPaise);
+
+      return {
+        ...json,
+        members: populatedMembers,
+        freelancers: populatedFreelancers,
+        totalMonthlyPayPaise,
+        netMonthlyMarginPaise,
+        billing: billing.get(d.id as string) ?? { billedPaise: 0, paidPaise: 0, invoiceCount: 0, billedMonths: [] },
+      };
+    });
   }
 
   async byId(id: string): Promise<ContractDocument> {
@@ -89,10 +138,23 @@ export class ContractsService {
 
   async create(input: CreateContractInput, actorId?: string): Promise<ContractDocument> {
     await this.assertClient(input.clientId);
+    const { members, freelancers, ...rest } = input;
     const doc = new this.model({
-      ...this.withoutNulls(input),
+      ...this.withoutNulls(rest),
       clientId: new Types.ObjectId(input.clientId),
       currency: input.currency ?? 'INR',
+      members: (members ?? []).map((m) => ({
+        userId: new Types.ObjectId(m.userId),
+        monthlyAmountPaise: m.monthlyAmountPaise ?? 0,
+        role: m.role?.trim() ?? '',
+        addedAt: new Date(),
+      })),
+      freelancers: (freelancers ?? []).map((f) => ({
+        freelancerId: new Types.ObjectId(f.freelancerId),
+        monthlyAmountPaise: f.monthlyAmountPaise ?? 0,
+        scope: f.scope?.trim() ?? '',
+        addedAt: new Date(),
+      })),
     });
     await doc.save();
     emitAudit(this.events, { actorId, action: AuditAction.CONTRACT_CREATED, entity: 'contract', entityId: doc.id, summary: doc.name });
@@ -103,13 +165,29 @@ export class ContractsService {
     const doc = await this.byId(id);
     const before = snapshot(doc);
     if (input.clientId && input.clientId !== doc.clientId.toString()) await this.assertClient(input.clientId);
-    const { clientId, ...rest } = input;
+    const { clientId, members, freelancers, ...rest } = input;
     for (const [k, v] of Object.entries(rest)) {
       if (v === undefined) continue;
       if (v === null && (CLEARABLE as readonly string[]).includes(k)) doc.set(k, undefined);
       else doc.set(k, v);
     }
     if (clientId) doc.clientId = new Types.ObjectId(clientId);
+    if (members !== undefined) {
+      doc.members = members.map((m) => ({
+        userId: new Types.ObjectId(m.userId),
+        monthlyAmountPaise: m.monthlyAmountPaise ?? 0,
+        role: m.role?.trim() ?? '',
+        addedAt: new Date(),
+      })) as never;
+    }
+    if (freelancers !== undefined) {
+      doc.freelancers = freelancers.map((f) => ({
+        freelancerId: new Types.ObjectId(f.freelancerId),
+        monthlyAmountPaise: f.monthlyAmountPaise ?? 0,
+        scope: f.scope?.trim() ?? '',
+        addedAt: new Date(),
+      })) as never;
+    }
     if (doc.startDate && doc.endDate && doc.endDate < doc.startDate) {
       throw new BadRequestException({
         code: ErrorCodes.VALIDATION_FAILED,

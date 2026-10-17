@@ -23,6 +23,7 @@ import {
 import { ErrorCodes } from '@/common/constants/error-codes';
 import { emitAudit, snapshot } from '@/common/utils/audit.util';
 
+import { Contract, type ContractDocument } from '../contracts/schemas/contract.schema';
 import { FreelancerPayment, type FreelancerPaymentDocument } from '../freelancer-payments/schemas/freelancer-payment.schema';
 import { Freelancer, type FreelancerDocument } from '../freelancers/schemas/freelancer.schema';
 import { Project, type ProjectDocument } from '../projects/schemas/project.schema';
@@ -46,6 +47,8 @@ export interface PayoutView {
   projectId?: string;
   projectName?: string;
   projectCode?: string;
+  contractId?: string;
+  contractName?: string;
   amountPaise: number;
   currency: string;
   paidAt: Date;
@@ -64,6 +67,8 @@ export interface BalanceRow {
   projectName: string;
   projectCode?: string;
   projectStatus?: string;
+  contractId?: string | null;
+  contractName?: string;
   agreedPaise: number;
   paidPaise: number;
   pendingPaise: number;
@@ -84,6 +89,7 @@ export class PayoutsService implements OnApplicationBootstrap {
   constructor(
     @InjectModel(Payout.name) private readonly model: Model<PayoutDocument>,
     @InjectModel(Project.name) private readonly projects: Model<ProjectDocument>,
+    @InjectModel(Contract.name) private readonly contracts: Model<ContractDocument>,
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
     @InjectModel(Freelancer.name) private readonly freelancers: Model<FreelancerDocument>,
     @InjectModel(FreelancerPayment.name) private readonly legacyFreelancer: Model<FreelancerPaymentDocument>,
@@ -95,6 +101,7 @@ export class PayoutsService implements OnApplicationBootstrap {
   async create(input: CreatePayoutParsed, actor: Actor): Promise<PayoutView & { overAgreed: boolean; agreedPaise: number; paidPaise: number }> {
     const payee = await this.resolvePayee(input.payeeType, input.userId, input.freelancerId);
     let project: ProjectDocument | null = null;
+    let contract: ContractDocument | null = null;
     if (input.projectId) {
       project = await this.projects.findOne({ _id: input.projectId, deletedAt: { $exists: false } }).exec();
       if (!project) throw new NotFoundException({ code: ErrorCodes.PROJECT_NOT_FOUND, message: 'Project not found' });
@@ -104,6 +111,15 @@ export class PayoutsService implements OnApplicationBootstrap {
           message: `${payee.name} isn't on ${project.name} yet. Add them to the project first.`,
         });
       }
+    } else if (input.contractId) {
+      contract = await this.contracts.findOne({ _id: input.contractId, deletedAt: { $exists: false } }).exec();
+      if (!contract) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Contract not found' });
+      if (!this.isOnContract(contract, input.payeeType, payee.id)) {
+        throw new BadRequestException({
+          code: 'NOT_ON_CONTRACT',
+          message: `${payee.name} isn't linked to contract ${contract.name} yet. Add them to the contract first.`,
+        });
+      }
     }
 
     const doc = await this.model.create({
@@ -111,6 +127,7 @@ export class PayoutsService implements OnApplicationBootstrap {
       userId: input.payeeType === PayeeType.MEMBER ? new Types.ObjectId(payee.id) : undefined,
       freelancerId: input.payeeType === PayeeType.FREELANCER ? new Types.ObjectId(payee.id) : undefined,
       projectId: project?._id,
+      contractId: contract?._id,
       amountPaise: input.amountPaise,
       currency: input.currency ?? 'INR',
       paidAt: dayToDate(input.paidAt),
@@ -121,7 +138,7 @@ export class PayoutsService implements OnApplicationBootstrap {
       createdBy: new Types.ObjectId(actor.sub),
     });
 
-    const summary = `${inr(doc.amountPaise)} to ${payee.name}${project ? ` for ${project.name}` : ''}`;
+    const summary = `${inr(doc.amountPaise)} to ${payee.name}${project ? ` for ${project.name}` : contract ? ` for contract ${contract.name}` : ''}`;
     emitAudit(this.events, {
       actorId: actor.sub,
       action: AuditAction.PAYMENT_LOGGED,
@@ -135,14 +152,22 @@ export class PayoutsService implements OnApplicationBootstrap {
         userId: payee.id,
         type: NotificationType.PAYMENT_RECEIVED,
         title: `Payment of ${inr(doc.amountPaise)} sent`,
-        body: project ? `For ${project.name}.${doc.reference ? ` Ref: ${doc.reference}` : ''}` : doc.note || undefined,
+        body: project
+          ? `For ${project.name}.${doc.reference ? ` Ref: ${doc.reference}` : ''}`
+          : contract
+            ? `For contract ${contract.name}.${doc.reference ? ` Ref: ${doc.reference}` : ''}`
+            : doc.note || undefined,
         linkPath: '/earnings',
-        data: { payoutId: doc.id, projectId: project?.id },
+        data: { payoutId: doc.id, projectId: project?.id, contractId: contract?.id },
       });
     }
 
     const [view] = await this.present([doc]);
-    const balance = project ? await this.balanceFor(project, input.payeeType, payee.id) : { agreedPaise: 0, paidPaise: 0 };
+    const balance = project
+      ? await this.balanceFor(project, input.payeeType, payee.id)
+      : contract
+        ? await this.contractBalanceFor(contract, input.payeeType, payee.id)
+        : { agreedPaise: 0, paidPaise: 0 };
     return {
       ...view!,
       ...balance,
@@ -164,6 +189,21 @@ export class PayoutsService implements OnApplicationBootstrap {
           throw new BadRequestException({ code: 'NOT_ON_PROJECT', message: `This person isn't on ${project.name}.` });
         }
         doc.projectId = project._id;
+        doc.contractId = undefined;
+      }
+    }
+    if (input.contractId !== undefined) {
+      if (!input.contractId) {
+        doc.contractId = undefined;
+      } else {
+        const contract = await this.contracts.findOne({ _id: input.contractId, deletedAt: { $exists: false } }).exec();
+        if (!contract) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Contract not found' });
+        const payeeId = (doc.userId ?? doc.freelancerId)!.toString();
+        if (!this.isOnContract(contract, doc.payeeType, payeeId)) {
+          throw new BadRequestException({ code: 'NOT_ON_CONTRACT', message: `This person isn't on ${contract.name}.` });
+        }
+        doc.contractId = contract._id;
+        doc.projectId = undefined;
       }
     }
     if (input.amountPaise !== undefined) doc.amountPaise = input.amountPaise;
@@ -249,9 +289,13 @@ export class PayoutsService implements OnApplicationBootstrap {
     if (q.method) filter.method = q.method;
     if (q.category) filter.category = q.category;
     if (q.projectId) filter.projectId = new Types.ObjectId(q.projectId);
+    if (q.contractId) filter.contractId = new Types.ObjectId(q.contractId);
     else if (q.clientId) {
-      const ids = await this.projects.find({ clientId: new Types.ObjectId(q.clientId) }).distinct('_id').exec();
-      filter.projectId = { $in: ids };
+      const [pIds, cIds] = await Promise.all([
+        this.projects.find({ clientId: new Types.ObjectId(q.clientId) }).distinct('_id').exec(),
+        this.contracts.find({ clientId: new Types.ObjectId(q.clientId) }).distinct('_id').exec(),
+      ]);
+      filter.$or = [{ projectId: { $in: pIds } }, { contractId: { $in: cIds } }];
     }
     if (q.from || q.to) {
       filter.paidAt = {};
@@ -260,10 +304,11 @@ export class PayoutsService implements OnApplicationBootstrap {
     }
     if (q.q?.trim()) {
       const re = new RegExp(escapeRe(q.q.trim()), 'i');
-      const [userIds, freelancerIds, projectIds] = await Promise.all([
+      const [userIds, freelancerIds, projectIds, contractIds] = await Promise.all([
         this.users.find({ name: re }).distinct('_id').exec(),
         this.freelancers.find({ name: re }).distinct('_id').exec(),
         this.projects.find({ $or: [{ name: re }, { code: re }] }).distinct('_id').exec(),
+        this.contracts.find({ name: re }).distinct('_id').exec(),
       ]);
       filter.$or = [
         { note: re },
@@ -271,6 +316,7 @@ export class PayoutsService implements OnApplicationBootstrap {
         { userId: { $in: userIds } },
         { freelancerId: { $in: freelancerIds } },
         { projectId: { $in: projectIds } },
+        { contractId: { $in: contractIds } },
       ];
     }
     return filter;
@@ -305,16 +351,46 @@ export class PayoutsService implements OnApplicationBootstrap {
     return this.withNames(rows);
   }
 
-  /** One person's deals across projects (team member or freelancer), plus general payments. */
+  /** Everyone on a contract — team and freelancers — with monthly agreed / paid / pending. */
+  async contractBalances(contractId: string): Promise<BalanceRow[]> {
+    const contract = await this.contracts.findOne({ _id: contractId, deletedAt: { $exists: false } }).exec();
+    if (!contract) throw new NotFoundException({ code: ErrorCodes.NOT_FOUND, message: 'Contract not found' });
+    const paid = await this.sumBy({ contractId: contract._id }, ['payeeType', 'userId', 'freelancerId']);
+
+    const rows: BalanceRow[] = [];
+    const seen = new Set<string>();
+    for (const m of contract.members ?? []) {
+      const key = `${PayeeType.MEMBER}:${m.userId}`;
+      seen.add(key);
+      rows.push(this.contractRow(PayeeType.MEMBER, m.userId.toString(), contract, m.monthlyAmountPaise ?? 0, paid.get(key)));
+    }
+    for (const f of contract.freelancers ?? []) {
+      const key = `${PayeeType.FREELANCER}:${f.freelancerId}`;
+      seen.add(key);
+      rows.push(this.contractRow(PayeeType.FREELANCER, f.freelancerId.toString(), contract, f.monthlyAmountPaise ?? 0, paid.get(key)));
+    }
+    for (const [key, p] of paid) {
+      if (seen.has(key)) continue;
+      const [type, id] = key.split(':') as [PayeeType, string];
+      rows.push(this.contractRow(type, id, contract, 0, p));
+    }
+    return this.withNames(rows);
+  }
+
+  /** One person's deals across projects and contracts (team member or freelancer), plus general payments. */
   async payeeBalances(payeeType: PayeeType, payeeId: string): Promise<BalanceRow[]> {
     await this.ensureLegacyImported();
     const oid = new Types.ObjectId(payeeId);
     const projectFilter =
       payeeType === PayeeType.MEMBER ? { 'members.userId': oid } : { 'freelancers.freelancerId': oid };
+    const contractFilter =
+      payeeType === PayeeType.MEMBER ? { 'members.userId': oid } : { 'freelancers.freelancerId': oid };
     const payeeFilter = payeeType === PayeeType.MEMBER ? { userId: oid } : { freelancerId: oid };
-    const [projects, paid] = await Promise.all([
+    const [projects, contracts, paid, paidContract] = await Promise.all([
       this.projects.find({ ...projectFilter, deletedAt: { $exists: false } }).exec(),
+      this.contracts.find({ ...contractFilter, deletedAt: { $exists: false } }).exec(),
       this.sumBy(payeeFilter, ['projectId']),
+      this.sumBy(payeeFilter, ['contractId']),
     ]);
 
     const rows: BalanceRow[] = [];
@@ -332,6 +408,22 @@ export class PayoutsService implements OnApplicationBootstrap {
       const extra = await this.projects.find({ _id: { $in: missing.map((id) => new Types.ObjectId(id)) } }).exec();
       for (const p of extra) rows.push(this.row(payeeType, payeeId, p, 0, paid.get(p.id)));
     }
+
+    const seenContracts = new Set<string>();
+    for (const c of contracts) {
+      const agreed =
+        payeeType === PayeeType.MEMBER
+          ? (c.members?.find((m) => m.userId.equals(oid))?.monthlyAmountPaise ?? 0)
+          : (c.freelancers?.find((f) => f.freelancerId.equals(oid))?.monthlyAmountPaise ?? 0);
+      seenContracts.add(c.id);
+      rows.push(this.contractRow(payeeType, payeeId, c, agreed, paidContract.get(c.id)));
+    }
+    const missingContracts = [...paidContract.keys()].filter((k) => k !== 'null' && !seenContracts.has(k));
+    if (missingContracts.length) {
+      const extraContracts = await this.contracts.find({ _id: { $in: missingContracts.map((id) => new Types.ObjectId(id)) } }).exec();
+      for (const c of extraContracts) rows.push(this.contractRow(payeeType, payeeId, c, 0, paidContract.get(c.id)));
+    }
+
     const general = paid.get('null');
     if (general) rows.push(this.row(payeeType, payeeId, null, 0, general));
     return this.withNames(rows);
@@ -641,6 +733,12 @@ export class PayoutsService implements OnApplicationBootstrap {
       : (project.freelancers ?? []).some((f) => f.freelancerId.toString() === payeeId);
   }
 
+  isOnContract(contract: ContractDocument, type: PayeeType, payeeId: string): boolean {
+    return type === PayeeType.MEMBER
+      ? (contract.members ?? []).some((m) => m.userId.toString() === payeeId)
+      : (contract.freelancers ?? []).some((f) => f.freelancerId.toString() === payeeId);
+  }
+
   private async balanceFor(project: ProjectDocument, type: PayeeType, payeeId: string) {
     const agreedPaise =
       type === PayeeType.MEMBER
@@ -648,6 +746,19 @@ export class PayoutsService implements OnApplicationBootstrap {
         : (project.freelancers.find((f) => f.freelancerId.toString() === payeeId)?.agreedPaise ?? 0);
     const paidPaise = await this.total({
       projectId: project._id,
+      ...(type === PayeeType.MEMBER ? { userId: new Types.ObjectId(payeeId) } : { freelancerId: new Types.ObjectId(payeeId) }),
+    });
+    return { agreedPaise, paidPaise };
+  }
+
+  private async contractBalanceFor(contract: ContractDocument, type: PayeeType, payeeId: string) {
+    const oid = new Types.ObjectId(payeeId);
+    const agreedPaise =
+      type === PayeeType.MEMBER
+        ? (contract.members?.find((m) => m.userId.equals(oid))?.monthlyAmountPaise ?? 0)
+        : (contract.freelancers?.find((f) => f.freelancerId.equals(oid))?.monthlyAmountPaise ?? 0);
+    const paidPaise = await this.total({
+      contractId: contract._id,
       ...(type === PayeeType.MEMBER ? { userId: new Types.ObjectId(payeeId) } : { freelancerId: new Types.ObjectId(payeeId) }),
     });
     return { agreedPaise, paidPaise };
@@ -661,8 +772,8 @@ export class PayoutsService implements OnApplicationBootstrap {
     return r?.amountPaise ?? 0;
   }
 
-  /** Sum payouts grouped by the given keys; map key is the joined key values (payeeType:id or projectId). */
-  private async sumBy(match: FilterQuery<PayoutDocument>, keys: ('payeeType' | 'userId' | 'freelancerId' | 'projectId')[]) {
+  /** Sum payouts grouped by the given keys; map key is the joined key values (payeeType:id or projectId or contractId). */
+  private async sumBy(match: FilterQuery<PayoutDocument>, keys: ('payeeType' | 'userId' | 'freelancerId' | 'projectId' | 'contractId')[]) {
     const id = Object.fromEntries(keys.map((k) => [k, `$${k}`]));
     const rows = await this.model.aggregate<{ _id: Record<string, unknown>; amountPaise: number; count: number; last: Date }>([
       { $match: { ...match, deletedAt: { $exists: false } } },
@@ -671,8 +782,10 @@ export class PayoutsService implements OnApplicationBootstrap {
     const map = new Map<string, { amountPaise: number; count: number; last: Date }>();
     for (const r of rows) {
       const key = keys.includes('payeeType')
-        ? `${r._id.payeeType}:${String(r._id.userId ?? r._id.freelancerId)}${keys.includes('projectId') ? `:${String(r._id.projectId ?? null)}` : ''}`
-        : String(r._id.projectId ?? null);
+        ? `${r._id.payeeType}:${String(r._id.userId ?? r._id.freelancerId)}${keys.includes('projectId') ? `:${String(r._id.projectId ?? null)}` : ''}${keys.includes('contractId') ? `:${String(r._id.contractId ?? null)}` : ''}`
+        : keys.includes('contractId')
+          ? String(r._id.contractId ?? null)
+          : String(r._id.projectId ?? null);
       map.set(key, { amountPaise: r.amountPaise, count: r.count, last: r.last });
     }
     return map;
@@ -702,6 +815,32 @@ export class PayoutsService implements OnApplicationBootstrap {
     };
   }
 
+  private contractRow(
+    payeeType: PayeeType,
+    payeeId: string,
+    contract: ContractDocument | null,
+    agreedPaise: number,
+    paid?: { amountPaise: number; count: number; last: Date },
+  ): BalanceRow {
+    const paidPaise = paid?.amountPaise ?? 0;
+    return {
+      payeeType,
+      payeeId,
+      payeeName: '',
+      projectId: null,
+      projectName: contract ? `[Contract] ${contract.name}` : 'Contract retainer',
+      projectCode: undefined,
+      projectStatus: contract?.status,
+      contractId: contract?.id ?? null,
+      contractName: contract?.name,
+      agreedPaise,
+      paidPaise,
+      pendingPaise: Math.max(0, agreedPaise - paidPaise),
+      lastPaidAt: paid?.last,
+      payoutCount: paid?.count ?? 0,
+    };
+  }
+
   private async withNames(rows: BalanceRow[]): Promise<BalanceRow[]> {
     const userIds = rows.filter((r) => r.payeeType === PayeeType.MEMBER).map((r) => r.payeeId);
     const flIds = rows.filter((r) => r.payeeType === PayeeType.FREELANCER).map((r) => r.payeeId);
@@ -717,16 +856,20 @@ export class PayoutsService implements OnApplicationBootstrap {
     const userIds = [...new Set(docs.filter((d) => d.userId).map((d) => d.userId!.toString()))];
     const flIds = [...new Set(docs.filter((d) => d.freelancerId).map((d) => d.freelancerId!.toString()))];
     const projectIds = [...new Set(docs.filter((d) => d.projectId).map((d) => d.projectId!.toString()))];
-    const [users, fls, projects] = await Promise.all([
+    const contractIds = [...new Set(docs.filter((d) => d.contractId).map((d) => d.contractId!.toString()))];
+    const [users, fls, projects, contracts] = await Promise.all([
       userIds.length ? this.users.find({ _id: { $in: userIds } }).select('name').exec() : [],
       flIds.length ? this.freelancers.find({ _id: { $in: flIds } }).select('name').exec() : [],
       projectIds.length ? this.projects.find({ _id: { $in: projectIds } }).select('name code').exec() : [],
+      contractIds.length ? this.contracts.find({ _id: { $in: contractIds } }).select('name').exec() : [],
     ]);
     const names = new Map<string, string>([...users, ...fls].map((d) => [d.id as string, (d as { name: string }).name]));
     const projMap = new Map(projects.map((p) => [p.id as string, p]));
+    const contractMap = new Map(contracts.map((c) => [c.id as string, c]));
     return docs.map((d) => {
       const payeeId = (d.userId ?? d.freelancerId)?.toString() ?? '';
       const proj = d.projectId ? projMap.get(d.projectId.toString()) : undefined;
+      const contract = d.contractId ? contractMap.get(d.contractId.toString()) : undefined;
       return {
         _id: d.id,
         payeeType: d.payeeType,
@@ -736,6 +879,8 @@ export class PayoutsService implements OnApplicationBootstrap {
         projectId: d.projectId?.toString(),
         projectName: proj?.name,
         projectCode: proj?.code,
+        contractId: d.contractId?.toString(),
+        contractName: contract?.name,
         amountPaise: d.amountPaise,
         currency: d.currency,
         paidAt: d.paidAt,

@@ -1,16 +1,25 @@
-// Contract — terms, billing history and one-click monthly invoices (OWNER).
+// Contract — terms, billing history, contractors & monthly payouts, and one-click monthly invoices (OWNER).
 'use client';
 
-import { AlertTriangle, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Pencil, Plus, Send, Trash2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
-import { ContractStatus, InvoiceStatus, Role } from '@agency/shared';
+import {
+  ContractStatus,
+  InvoiceStatus,
+  PAYOUT_METHOD_LABEL,
+  PayeeType,
+  PayoutCategory,
+  Role,
+} from '@agency/shared';
 
 import { ApiRequestError } from '@/lib/api-client';
+import { cn } from '@/lib/cn';
 import { thisMonthLocal } from '@/lib/form';
 import { formatDate } from '@/lib/formatters';
+import { useQuickActions } from '@/store/quick-actions.store';
 
 import { RoleGate } from '@/components/auth/role-gate';
 import { DataTable, type Column } from '@/components/data/data-table';
@@ -21,7 +30,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState, ErrorState, PageSkeleton } from '@/components/ui/states';
-import { Bento, BigNumber, FillJar, Price, PrivacyChip, Tile } from '@/components/viz';
+import { Avatar, Bento, BigNumber, FillJar, Price, PrivacyChip, Tile } from '@/components/viz';
 import { useClients } from '@/features/clients/clients.hooks';
 import {
   CONTRACT_STATUS_TONE,
@@ -41,6 +50,12 @@ import { useContract, useDeleteContract } from '@/features/contracts/contracts.h
 import { GenerateInvoiceDialog } from '@/features/contracts/generate-invoice-dialog';
 import { ClientChip } from '@/features/contracts/price-totals';
 import { useInvoices, type InvoiceRow } from '@/features/invoices/invoices.hooks';
+import {
+  useContractPayoutBalances,
+  usePayouts,
+  type BalanceRow,
+  type PayoutRow,
+} from '@/features/payouts/payouts.hooks';
 
 export default function ContractDetailPage() {
   const params = useParams();
@@ -78,6 +93,10 @@ function Inner({ contractId }: { contractId: string }) {
   const contract = useContract(contractId);
   const clients = useClients();
   const invoices = useInvoices({ contractId });
+  const contractBalances = useContractPayoutBalances(contractId);
+  const contractPayouts = usePayouts({ contractId, pageSize: 100 });
+  const openLogPayment = useQuickActions((s) => s.openLogPayment);
+
   const del = useDeleteContract();
   const [editOpen, setEditOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
@@ -124,6 +143,27 @@ function Inner({ contractId }: { contractId: string }) {
   const billedFy = fyRows.reduce((s, inv) => s + inv.billedPaise, 0);
   const paidFy = fyRows.reduce((s, inv) => s + inv.sharePaidPaise, 0);
 
+  const balancesMap = useMemo(() => {
+    const map = new Map<string, BalanceRow>();
+    for (const b of contractBalances.data ?? []) {
+      map.set(`${b.payeeType}:${b.payeeId}`, b);
+    }
+    return map;
+  }, [contractBalances.data]);
+
+  const members = c.members ?? [];
+  const freelancers = c.freelancers ?? [];
+  const totalContractors = members.length + freelancers.length;
+
+  const totalMonthlyContractorPay =
+    c.totalMonthlyPayPaise ??
+    (members.reduce((s, m) => s + m.monthlyAmountPaise, 0) +
+      freelancers.reduce((s, f) => s + f.monthlyAmountPaise, 0));
+  const netMarginPaise = c.monthlyAmountPaise - totalMonthlyContractorPay;
+  const marginPercent =
+    c.monthlyAmountPaise > 0 ? Math.round((netMarginPaise / c.monthlyAmountPaise) * 100) : 0;
+  const totalContractPaidPaise = (contractBalances.data ?? []).reduce((s, b) => s + b.paidPaise, 0);
+
   const remove = async () => {
     const ok = await confirm({
       title: `Delete ${c.name}?`,
@@ -134,7 +174,7 @@ function Inner({ contractId }: { contractId: string }) {
     if (ok) del.mutate(contractId, { onSuccess: () => router.push('/contracts') });
   };
 
-  const columns: Column<HistoryRow>[] = [
+  const invoiceColumns: Column<HistoryRow>[] = [
     {
       id: 'number',
       header: 'Invoice',
@@ -172,6 +212,71 @@ function Inner({ contractId }: { contractId: string }) {
       hideBelow: 'sm',
       cell: (inv) => <Price paise={inv.sharePaidPaise} currency={inv.currency || c.currency} />,
       footer: <Price paise={paid} currency={c.currency} />,
+    },
+  ];
+
+  const payoutColumns: Column<PayoutRow>[] = [
+    {
+      id: 'date',
+      header: 'Date',
+      cell: (p) => <span className="text-xs text-muted-foreground">{formatDate(p.paidAt)}</span>,
+    },
+    {
+      id: 'payee',
+      header: 'Payee',
+      cell: (p) => {
+        const href = p.payeeType === PayeeType.MEMBER ? `/team/${p.userId}` : `/freelancers/${p.freelancerId}`;
+        return (
+          <div className="flex items-center gap-2">
+            <Avatar id={p.userId ?? p.freelancerId} name={p.payeeName} size="xs" />
+            <Link href={href} className="font-semibold text-xs hover:underline">
+              {p.payeeName}
+            </Link>
+            <Badge variant={p.payeeType === PayeeType.MEMBER ? 'outline' : 'info'} className="text-[10px] px-1.5 py-0 font-normal">
+              {p.payeeType === PayeeType.MEMBER ? 'Team' : 'Freelancer'}
+            </Badge>
+          </div>
+        );
+      },
+    },
+    {
+      id: 'method',
+      header: 'Method',
+      hideBelow: 'md',
+      cell: (p) => (
+        <span className="text-xs text-muted-foreground">
+          {PAYOUT_METHOD_LABEL[p.method]}
+          {p.reference && <span className="block text-[11px]">{p.reference}</span>}
+        </span>
+      ),
+    },
+    {
+      id: 'note',
+      header: 'Note',
+      hideBelow: 'lg',
+      cell: (p) => <span className="line-clamp-1 max-w-[200px] text-xs text-muted-foreground">{p.note || '—'}</span>,
+    },
+    {
+      id: 'amount',
+      header: 'Amount',
+      align: 'right',
+      cell: (p) => <Price paise={p.amountPaise} currency={p.currency} className="font-semibold text-sm" />,
+    },
+    {
+      id: 'actions',
+      header: '',
+      align: 'right',
+      cell: (p) => (
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          onClick={() => openLogPayment({}, p._id)}
+          aria-label={`Edit payment to ${p.payeeName}`}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      ),
     },
   ];
 
@@ -277,6 +382,185 @@ function Inner({ contractId }: { contractId: string }) {
           )}
         </Tile>
 
+        {/* Contractors & Monthly Payouts Tile */}
+        <Tile
+          span={12}
+          title="Contractors & Monthly Pay"
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                <Users className="mr-1.5 h-3.5 w-3.5" /> Manage contractors
+              </Button>
+              {totalContractors > 0 && (
+                <Button size="sm" onClick={() => openLogPayment({ contractId: c._id, category: PayoutCategory.CONTRACT_FEE })}>
+                  <Send className="mr-1.5 h-3.5 w-3.5" /> Log payment
+                </Button>
+              )}
+            </div>
+          }
+        >
+          {totalContractors > 0 ? (
+            <div className="space-y-4">
+              {/* Margin & Payout Metrics Bar */}
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-3 rounded-lg border bg-muted/20 p-3.5">
+                <div>
+                  <span className="block text-xs text-muted-foreground">Monthly Retainer</span>
+                  <Price paise={c.monthlyAmountPaise} currency={c.currency} className="font-figures text-lg font-bold" />
+                </div>
+                <div>
+                  <span className="block text-xs text-muted-foreground">Contractor Cost</span>
+                  <Price paise={totalMonthlyContractorPay} currency={c.currency} className="font-figures text-lg font-bold text-warning" />
+                </div>
+                <div>
+                  <span className="block text-xs text-muted-foreground">Net Monthly Margin</span>
+                  <div className="flex items-baseline gap-1.5">
+                    <Price
+                      paise={netMarginPaise}
+                      currency={c.currency}
+                      className={cn('font-figures text-lg font-bold', netMarginPaise >= 0 ? 'text-success' : 'text-destructive')}
+                    />
+                    <span className={cn('text-xs font-semibold', netMarginPaise >= 0 ? 'text-success' : 'text-destructive')}>
+                      ({marginPercent}%)
+                    </span>
+                  </div>
+                </div>
+                <div className="border-l pl-4">
+                  <span className="block text-xs text-muted-foreground">Total Paid to Date</span>
+                  <Price paise={totalContractPaidPaise} currency={c.currency} className="font-figures text-lg font-bold" />
+                </div>
+              </div>
+
+              {/* Contractors list */}
+              <div className="divide-y rounded-lg border">
+                {members.map((m) => {
+                  const b = balancesMap.get(`${PayeeType.MEMBER}:${m.userId}`);
+                  const paidAmount = b?.paidPaise ?? 0;
+                  const pending = Math.max(0, m.monthlyAmountPaise - paidAmount);
+                  return (
+                    <div key={m.userId} className="flex flex-wrap items-center justify-between gap-4 p-3.5 hover:bg-muted/10 transition-colors">
+                      <div className="flex items-center gap-3 min-w-[200px]">
+                        <Avatar id={m.userId} name={m.name ?? 'Team Member'} size="md" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Link href={`/team/${m.userId}`} className="font-semibold text-sm hover:underline">
+                              {m.name ?? 'Team Member'}
+                            </Link>
+                            <Badge variant="outline" className="text-[10px] font-normal">Team</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{m.role || m.email || 'Contractor'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-6">
+                        <div className="text-right">
+                          <span className="block text-[11px] text-muted-foreground">Monthly Pay</span>
+                          <Price paise={m.monthlyAmountPaise} currency={c.currency} className="font-semibold text-sm" />
+                        </div>
+                        <div className="text-right">
+                          <span className="block text-[11px] text-muted-foreground">Paid on Contract</span>
+                          <Price paise={paidAmount} currency={c.currency} className="text-sm font-medium text-success" />
+                        </div>
+                        <div className="text-right min-w-[80px]">
+                          <span className="block text-[11px] text-muted-foreground">This Month</span>
+                          {pending > 0 ? (
+                            <span className="text-xs font-semibold text-warning"><Price paise={pending} currency={c.currency} /> pending</span>
+                          ) : (
+                            <span className="text-xs font-medium text-muted-foreground">Settled</span>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            openLogPayment({
+                              payeeType: PayeeType.MEMBER,
+                              userId: m.userId,
+                              contractId: c._id,
+                              amountPaise: pending > 0 ? pending : m.monthlyAmountPaise,
+                              category: PayoutCategory.CONTRACT_FEE,
+                            })
+                          }
+                        >
+                          <Send className="mr-1 h-3 w-3" /> Pay
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {freelancers.map((f) => {
+                  const b = balancesMap.get(`${PayeeType.FREELANCER}:${f.freelancerId}`);
+                  const paidAmount = b?.paidPaise ?? 0;
+                  const pending = Math.max(0, f.monthlyAmountPaise - paidAmount);
+                  return (
+                    <div key={f.freelancerId} className="flex flex-wrap items-center justify-between gap-4 p-3.5 hover:bg-muted/10 transition-colors">
+                      <div className="flex items-center gap-3 min-w-[200px]">
+                        <Avatar id={f.freelancerId} name={f.name ?? 'Freelancer'} size="md" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Link href={`/freelancers/${f.freelancerId}`} className="font-semibold text-sm hover:underline">
+                              {f.name ?? 'Freelancer'}
+                            </Link>
+                            <Badge variant="info" className="text-[10px] font-normal">Freelancer</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{f.scope || f.skill || f.email || 'Contractor'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-6">
+                        <div className="text-right">
+                          <span className="block text-[11px] text-muted-foreground">Monthly Pay</span>
+                          <Price paise={f.monthlyAmountPaise} currency={c.currency} className="font-semibold text-sm" />
+                        </div>
+                        <div className="text-right">
+                          <span className="block text-[11px] text-muted-foreground">Paid on Contract</span>
+                          <Price paise={paidAmount} currency={c.currency} className="text-sm font-medium text-success" />
+                        </div>
+                        <div className="text-right min-w-[80px]">
+                          <span className="block text-[11px] text-muted-foreground">This Month</span>
+                          {pending > 0 ? (
+                            <span className="text-xs font-semibold text-warning"><Price paise={pending} currency={c.currency} /> pending</span>
+                          ) : (
+                            <span className="text-xs font-medium text-muted-foreground">Settled</span>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            openLogPayment({
+                              payeeType: PayeeType.FREELANCER,
+                              freelancerId: f.freelancerId,
+                              contractId: c._id,
+                              amountPaise: pending > 0 ? pending : f.monthlyAmountPaise,
+                              category: PayoutCategory.CONTRACT_FEE,
+                            })
+                          }
+                        >
+                          <Send className="mr-1 h-3 w-3" /> Pay
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center">
+              <Users className="mb-2 h-8 w-8 text-muted-foreground/50" />
+              <p className="text-sm font-medium">No contractors linked to this contract</p>
+              <p className="mb-3 mt-1 max-w-sm text-xs text-muted-foreground">
+                Link team members or external freelancers who are paid a monthly fee from this client retainer.
+              </p>
+              <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add contractors
+              </Button>
+            </div>
+          )}
+        </Tile>
+
         <Tile span={8} title="Terms">
           <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2">
             <div>
@@ -309,7 +593,7 @@ function Inner({ contractId }: { contractId: string }) {
             )}
           </dl>
         </Tile>
-        <Tile span={4} title="All time">
+        <Tile span={4} title="All time billing">
           {invoices.isLoading ? (
             <Skeleton className="h-16" />
           ) : (
@@ -340,13 +624,14 @@ function Inner({ contractId }: { contractId: string }) {
         </Tile>
       </Bento>
 
+      {/* Invoice history */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-lg font-bold">Invoice history</h2>
           {history.length > 0 && <p className="text-xs text-muted-foreground">Drafts and written-off invoices aren’t counted in the totals.</p>}
         </div>
         <DataTable
-          columns={columns}
+          columns={invoiceColumns}
           rows={history}
           rowKey={(inv) => inv._id}
           loading={invoices.isLoading}
@@ -362,6 +647,36 @@ function Inner({ contractId }: { contractId: string }) {
               action={
                 <Button size="sm" variant="brand" onClick={() => setGenerateOpen(true)}>
                   Generate invoice
+                </Button>
+              }
+            />
+          }
+        />
+      </div>
+
+      {/* Payout history */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-display text-lg font-bold">Contract payout history</h2>
+          <Button size="sm" variant="outline" onClick={() => openLogPayment({ contractId: c._id, category: PayoutCategory.CONTRACT_FEE })}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Log payment
+          </Button>
+        </div>
+        <DataTable
+          columns={payoutColumns}
+          rows={contractPayouts.data?.items ?? []}
+          rowKey={(p) => p._id}
+          loading={contractPayouts.isLoading}
+          error={contractPayouts.error}
+          onRetry={() => contractPayouts.refetch()}
+          empty={
+            <EmptyState
+              illustration="money"
+              title="No payouts logged yet"
+              description="Payouts logged for this contract will appear here and deduct from contractor balances."
+              action={
+                <Button size="sm" variant="outline" onClick={() => openLogPayment({ contractId: c._id, category: PayoutCategory.CONTRACT_FEE })}>
+                  <Send className="mr-1.5 h-3.5 w-3.5" /> Log first payment
                 </Button>
               }
             />

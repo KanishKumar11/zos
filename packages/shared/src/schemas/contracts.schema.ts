@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 import { ContractStatus } from '../enums';
-import { isoDateSchema } from './common.schema';
+import { isoDateSchema, objectIdSchema } from './common.schema';
 
 /** '' from an untouched input means "not provided". */
 const blank = <T extends z.ZodTypeAny>(schema: T) =>
@@ -17,6 +17,20 @@ const clientIdField = z
   .regex(/^[a-f0-9]{24}$/i, 'Pick a client');
 
 export const contractMonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Pick a month');
+
+export const contractMemberInputSchema = z.object({
+  userId: objectIdSchema,
+  monthlyAmountPaise: z.coerce.number().int().min(0, 'Monthly pay cannot be negative').default(0),
+  role: z.string().max(120).optional(),
+});
+export type ContractMemberInput = z.infer<typeof contractMemberInputSchema>;
+
+export const contractFreelancerInputSchema = z.object({
+  freelancerId: objectIdSchema,
+  monthlyAmountPaise: z.coerce.number().int().min(0, 'Monthly pay cannot be negative').default(0),
+  scope: z.string().max(300).optional(),
+});
+export type ContractFreelancerInput = z.infer<typeof contractFreelancerInputSchema>;
 
 const contractFields = z.object({
   name: z.string().trim().min(2, 'Give the contract a name').max(120),
@@ -35,6 +49,10 @@ const contractFields = z.object({
   billingDay: clearable(z.coerce.number().int().min(1, 'Pick a day from 1 to 28').max(28, 'Pick a day from 1 to 28')),
   /** GST % used by default when invoices are generated from this contract. */
   gstPercent: clearable(z.coerce.number().min(0, 'GST cannot be negative').max(50, 'GST looks too high')),
+  /** Team members assigned to this contract with their monthly pay. */
+  members: z.array(contractMemberInputSchema).optional(),
+  /** Freelancers / external contractors assigned to this contract with their monthly pay. */
+  freelancers: z.array(contractFreelancerInputSchema).optional(),
 });
 
 const endAfterStart = (v: { startDate?: Date | null; endDate?: Date | null }) =>

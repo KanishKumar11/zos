@@ -50,6 +50,11 @@ export class PayoutsController {
     return this.svc.projectBalances(id);
   }
 
+  @Get('balances/contract/:id')
+  contractBalances(@Param('id', ObjectIdPipe) id: string) {
+    return this.svc.contractBalances(id);
+  }
+
   @Get('balances/member/:id')
   memberBalances(@Param('id', ObjectIdPipe) id: string) {
     return this.svc.payeeBalances(PayeeType.MEMBER, id);

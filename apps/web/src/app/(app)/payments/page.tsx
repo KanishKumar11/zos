@@ -190,9 +190,9 @@ export default function PaymentsPage() {
     { id: 'payeeType', header: 'Type', cell: () => null, className: 'hidden', csv: (r) => (r.payeeType === PayeeType.MEMBER ? 'Team' : 'Freelancer') },
     {
       id: 'project',
-      header: 'Project',
+      header: 'Project / Contract',
       cell: (r) => <PayoutProject row={r} />,
-      csv: (r) => (r.projectId ? (r.projectName ?? 'Deleted project') : 'General'),
+      csv: (r) => (r.contractId ? (r.contractName ?? 'Deleted contract') : r.projectId ? (r.projectName ?? 'Deleted project') : 'General'),
     },
     {
       id: 'method',

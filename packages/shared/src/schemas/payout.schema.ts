@@ -11,8 +11,9 @@ export const createPayoutSchema = z
     payeeType: z.nativeEnum(PayeeType),
     userId: optionalObjectIdSchema,
     freelancerId: optionalObjectIdSchema,
-    /** Optional — general bonuses/advances needn't belong to a project. */
+    /** Optional — payments can belong to a project, a contract retainer, or neither (general bonus/advance). */
     projectId: optionalObjectIdSchema,
+    contractId: optionalObjectIdSchema,
     amountPaise: z.number({ invalid_type_error: 'Enter an amount' }).int().min(1, 'Enter an amount'),
     currency: z.string().length(3).default('INR'),
     paidAt: ymd,
@@ -35,6 +36,7 @@ export type CreatePayoutParsed = z.output<typeof createPayoutSchema>;
 export const updatePayoutSchema = z
   .object({
     projectId: z.union([objectIdSchema, z.literal(''), z.null()]).optional(),
+    contractId: z.union([objectIdSchema, z.literal(''), z.null()]).optional(),
     amountPaise: z.number().int().min(1).optional(),
     paidAt: ymd.optional(),
     method: z.nativeEnum(PayoutMethod).optional(),
@@ -52,6 +54,7 @@ export const listPayoutsQuerySchema = z.object({
   userId: objectIdSchema.optional(),
   freelancerId: objectIdSchema.optional(),
   projectId: objectIdSchema.optional(),
+  contractId: objectIdSchema.optional(),
   clientId: objectIdSchema.optional(),
   method: z.nativeEnum(PayoutMethod).optional(),
   category: z.nativeEnum(PayoutCategory).optional(),

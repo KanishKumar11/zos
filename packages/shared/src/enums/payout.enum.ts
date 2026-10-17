@@ -14,6 +14,7 @@ export enum PayoutMethod {
 
 export enum PayoutCategory {
   PROJECT_FEE = 'PROJECT_FEE',
+  CONTRACT_FEE = 'CONTRACT_FEE',
   ADVANCE = 'ADVANCE',
   BONUS = 'BONUS',
   REIMBURSEMENT = 'REIMBURSEMENT',
@@ -32,6 +33,7 @@ export const PAYOUT_METHOD_LABEL: Record<PayoutMethod, string> = {
 
 export const PAYOUT_CATEGORY_LABEL: Record<PayoutCategory, string> = {
   PROJECT_FEE: 'Project fee',
+  CONTRACT_FEE: 'Contract fee',
   ADVANCE: 'Advance',
   BONUS: 'Bonus',
   REIMBURSEMENT: 'Reimbursement',

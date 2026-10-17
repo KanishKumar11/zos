@@ -41,8 +41,8 @@ export default function FreelancerPage({ params }: { params: Promise<{ id: strin
   if (fl.isLoading) return <PageSkeleton />;
   if (fl.isError || !fl.data) return <ErrorState title="Couldn't open this freelancer" error={fl.error} onRetry={() => fl.refetch()} />;
   const f = fl.data;
-  const deals = f.balances.filter((b) => b.projectId);
-  const general = f.balances.filter((b) => !b.projectId).reduce((s, b) => s + b.paidPaise, 0);
+  const deals = f.balances.filter((b) => b.projectId || b.contractId);
+  const general = f.balances.filter((b) => !b.projectId && !b.contractId).reduce((s, b) => s + b.paidPaise, 0);
   const agreed = f.balances.reduce((s, b) => s + b.agreedPaise, 0) + f.legacyEngagements.reduce((s, l) => s + l.agreedPaise, 0);
   const paid = f.balances.reduce((s, b) => s + b.paidPaise, 0);
   // Pending per project deal, plus older (unlinked) agreements not yet covered by general payments.

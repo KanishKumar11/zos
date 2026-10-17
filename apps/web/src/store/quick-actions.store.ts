@@ -7,6 +7,7 @@ export interface LogPaymentPrefill {
   userId?: string;
   freelancerId?: string;
   projectId?: string;
+  contractId?: string;
   amountPaise?: number;
   /** A PayoutCategory value, e.g. 'STIPEND'. */
   category?: string;

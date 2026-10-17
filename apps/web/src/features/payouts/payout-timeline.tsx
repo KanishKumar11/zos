@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 
 import { PAYOUT_CATEGORY_LABEL, PAYOUT_METHOD_LABEL, PayeeType, PayoutCategory } from '@agency/shared';
 
+import { cn } from '@/lib/cn';
 import { identityColor } from '@/lib/identity';
 import { isNewSince } from '@/lib/last-visit';
 
@@ -27,8 +28,29 @@ export function payeeHref(r: Pick<PayoutRow, 'payeeType' | 'userId' | 'freelance
   return r.freelancerId ? `/freelancers/${r.freelancerId}` : undefined;
 }
 
-/** Project cell shared by the timeline and tables: chip, "Deleted project" or "General". */
-export function PayoutProject({ row, className }: { row: Pick<PayoutRow, 'projectId' | 'projectName'>; className?: string }) {
+/** Project or contract cell shared by the timeline and tables: chip, contract link, "Deleted" or "General". */
+export function PayoutProject({
+  row,
+  className,
+}: {
+  row: Pick<PayoutRow, 'projectId' | 'projectName' | 'contractId' | 'contractName'>;
+  className?: string;
+}) {
+  if (row.contractId) {
+    if (!row.contractName) return <span className={className ?? 'text-muted-foreground'}>Deleted contract</span>;
+    return (
+      <Link
+        href={`/contracts/${row.contractId}`}
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs font-medium text-foreground hover:bg-accent hover:border-foreground/20 transition-colors',
+          className,
+        )}
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Contract</span>
+        <span className="truncate">{row.contractName}</span>
+      </Link>
+    );
+  }
   if (!row.projectId) return <span className={className ?? 'text-muted-foreground'}>General</span>;
   if (!row.projectName) return <span className={className ?? 'text-muted-foreground'}>Deleted project</span>;
   return <ProjectChip id={row.projectId} name={row.projectName} href={`/projects/${row.projectId}?tab=people`} className={className} />;

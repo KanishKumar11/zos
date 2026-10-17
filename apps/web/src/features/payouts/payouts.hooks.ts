@@ -25,6 +25,8 @@ export interface PayoutRow {
   projectId?: string;
   projectName?: string;
   projectCode?: string;
+  contractId?: string;
+  contractName?: string;
   amountPaise: number;
   currency: string;
   paidAt: string;
@@ -43,6 +45,8 @@ export interface BalanceRow {
   projectName: string;
   projectCode?: string;
   projectStatus?: string;
+  contractId?: string | null;
+  contractName?: string;
   agreedPaise: number;
   paidPaise: number;
   pendingPaise: number;
@@ -76,6 +80,7 @@ export const payoutsApi = {
   update: (id: string, body: UpdatePayoutInput) => unwrap<PayoutRow>(api.patch(`/payouts/${id}`, body)),
   remove: (id: string) => unwrap<{ ok: true }>(api.delete(`/payouts/${id}`)),
   projectBalances: (id: string) => unwrap<BalanceRow[]>(api.get(`/payouts/balances/project/${id}`)),
+  contractBalances: (id: string) => unwrap<BalanceRow[]>(api.get(`/payouts/balances/contract/${id}`)),
   memberBalances: (id: string) => unwrap<BalanceRow[]>(api.get(`/payouts/balances/member/${id}`)),
   freelancerBalances: (id: string) => unwrap<BalanceRow[]>(api.get(`/payouts/balances/freelancer/${id}`)),
   owed: () =>
@@ -109,6 +114,14 @@ export function useProjectPayoutBalances(projectId: string | undefined) {
     queryKey: ['payouts', 'balances', 'project', projectId],
     queryFn: () => payoutsApi.projectBalances(projectId!),
     enabled: !!projectId,
+  });
+}
+
+export function useContractPayoutBalances(contractId: string | undefined) {
+  return useQuery({
+    queryKey: ['payouts', 'balances', 'contract', contractId],
+    queryFn: () => payoutsApi.contractBalances(contractId!),
+    enabled: !!contractId,
   });
 }
 

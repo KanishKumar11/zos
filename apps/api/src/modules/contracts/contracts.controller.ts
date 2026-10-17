@@ -50,20 +50,24 @@ export class ContractsController {
   }
 
   @Post()
-  create(
+  async create(
     @CurrentUser() actor: JwtPayload,
     @Body(new ZodValidationPipe(createContractSchema)) body: CreateContractInput,
   ) {
-    return this.svc.create(body, actor.sub);
+    const doc = await this.svc.create(body, actor.sub);
+    const [res] = await this.svc.withBilling([doc]);
+    return res;
   }
 
   @Patch(':id')
-  update(
+  async update(
     @Param('id', ObjectIdPipe) id: string,
     @CurrentUser() actor: JwtPayload,
     @Body(new ZodValidationPipe(updateContractSchema)) body: UpdateContractInput,
   ) {
-    return this.svc.update(id, body, actor.sub);
+    const doc = await this.svc.update(id, body, actor.sub);
+    const [res] = await this.svc.withBilling([doc]);
+    return res;
   }
 
   @Delete(':id')

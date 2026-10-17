@@ -39,6 +39,7 @@ import { Select } from '@/components/ui/select';
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { Price, useCanSeePrices } from '@/components/viz';
+import { useContracts } from '@/features/contracts/contracts.hooks';
 import { useCreateFreelancer, useFreelancers } from '@/features/freelancers/freelancers.hooks';
 import {
   useAddProjectFreelancer,
@@ -54,13 +55,14 @@ import {
   usePayout,
   usePayouts,
   useUpdatePayout,
+  type BalanceRow,
 } from './payouts.hooks';
 
-const NO_PROJECT = '__none__';
+const NO_TARGET = '__none__';
 
 interface FormState {
   payee: string; // "MEMBER:<id>" | "FREELANCER:<id>"
-  projectId: string; // project id | NO_PROJECT | ''
+  target: string; // "p:<projectId>" | "c:<contractId>" | NO_TARGET | ""
   amountPaise: number | undefined;
   paidAt: string;
   method: PayoutMethod;
@@ -75,12 +77,18 @@ const blank = (prefill: LogPaymentPrefill = {}, keep?: Partial<FormState>): Form
     : prefill.freelancerId
       ? `${PayeeType.FREELANCER}:${prefill.freelancerId}`
       : '',
-  projectId: prefill.projectId ?? '',
+  target: prefill.contractId
+    ? `c:${prefill.contractId}`
+    : prefill.projectId
+      ? `p:${prefill.projectId}`
+      : '',
   amountPaise: prefill.amountPaise,
   paidAt: keep?.paidAt ?? todayLocal(),
   method: keep?.method ?? PayoutMethod.BANK,
   reference: '',
-  category: (prefill.category as PayoutCategory | undefined) ?? PayoutCategory.PROJECT_FEE,
+  category:
+    (prefill.category as PayoutCategory | undefined) ??
+    (prefill.contractId ? PayoutCategory.CONTRACT_FEE : PayoutCategory.PROJECT_FEE),
   note: prefill.note ?? '',
 });
 
@@ -109,6 +117,7 @@ export function LogPaymentSheet() {
   const staff = useStaffDirectory({ enabled });
   const freelancers = useFreelancers(undefined, { enabled });
   const projects = useAllProjects({ enabled });
+  const contracts = useContracts({}, { enabled });
   const editing = usePayout(open ? editId : undefined);
 
   const { type: payeeType, id: payeeId } = splitPayee(form.payee);
@@ -135,9 +144,10 @@ export function LogPaymentSheet() {
   useEffect(() => {
     const p = editing.data;
     if (!open || !editId || !p) return;
+    const target = p.contractId ? `c:${p.contractId}` : p.projectId ? `p:${p.projectId}` : NO_TARGET;
     setForm({
       payee: `${p.payeeType}:${p.userId ?? p.freelancerId}`,
-      projectId: p.projectId ?? NO_PROJECT,
+      target,
       amountPaise: p.amountPaise,
       paidAt: toLocalDateInput(p.paidAt),
       method: p.method,
@@ -175,57 +185,119 @@ export function LogPaymentSheet() {
     return [...team, ...fls];
   }, [staff.data, freelancers.data, canSee]);
 
-  const balanceByProject = useMemo(
-    () => new Map((balances.data ?? []).map((b) => [b.projectId ?? NO_PROJECT, b])),
-    [balances.data],
-  );
+  const balanceByTarget = useMemo(() => {
+    const map = new Map<string, BalanceRow>();
+    for (const b of balances.data ?? []) {
+      if (b.contractId) map.set(`c:${b.contractId}`, b);
+      else if (b.projectId) map.set(`p:${b.projectId}`, b);
+      else map.set(NO_TARGET, b);
+    }
+    return map;
+  }, [balances.data]);
 
-  const projectOptions = useMemo<ComboboxOption[]>(() => {
-    const theirs: ComboboxOption[] = [];
-    const others: ComboboxOption[] = [];
+  const targetOptions = useMemo<ComboboxOption[]>(() => {
+    const theirContracts: ComboboxOption[] = [];
+    const otherContracts: ComboboxOption[] = [];
+    const theirProjects: ComboboxOption[] = [];
+    const otherProjects: ComboboxOption[] = [];
+
+    // Contracts
+    for (const c of contracts.data ?? []) {
+      const b = balanceByTarget.get(`c:${c._id}`);
+      const onContract =
+        payeeType === PayeeType.MEMBER
+          ? (c.members ?? []).some((m) => m.userId === payeeId)
+          : (c.freelancers ?? []).some((f) => f.freelancerId === payeeId);
+
+      const opt: ComboboxOption = {
+        value: `c:${c._id}`,
+        label: c.name,
+        description:
+          onContract && b
+            ? canSee
+              ? `Monthly pay ${formatPaise(b.agreedPaise)} · paid ${formatPaise(b.paidPaise)} · ${b.pendingPaise > 0 ? `${formatPaise(b.pendingPaise)} pending` : 'nothing pending'}`
+              : 'Contract retainer'
+            : payeeId
+              ? `${formatPaise(c.monthlyAmountPaise)}/mo retainer · not linked`
+              : `${formatPaise(c.monthlyAmountPaise)}/mo retainer`,
+        group: payeeId ? (onContract ? 'Their contracts' : 'Other contracts') : 'Contracts',
+      };
+      (onContract ? theirContracts : otherContracts).push(opt);
+    }
+
+    // Projects
     for (const p of projects.data?.items ?? []) {
-      const b = balanceByProject.get(p._id);
+      const b = balanceByTarget.get(`p:${p._id}`);
       const onProject =
         payeeType === PayeeType.MEMBER
           ? p.members.some((m) => m.userId === payeeId)
           : (p.freelancers ?? []).some((f) => f.freelancerId === payeeId);
       const opt: ComboboxOption = {
-        value: p._id,
+        value: `p:${p._id}`,
         label: p.name,
         keywords: p.code,
-        description: onProject && b
-          ? canSee
-            ? `Agreed ${formatPaise(b.agreedPaise)} · paid ${formatPaise(b.paidPaise)} · ${b.pendingPaise > 0 ? `${formatPaise(b.pendingPaise)} pending` : 'nothing pending'}`
-            : p.code
-          : payeeId
-            ? `${p.code} · not on this project yet`
-            : p.code,
+        description:
+          onProject && b
+            ? canSee
+              ? `Agreed ${formatPaise(b.agreedPaise)} · paid ${formatPaise(b.paidPaise)} · ${b.pendingPaise > 0 ? `${formatPaise(b.pendingPaise)} pending` : 'nothing pending'}`
+              : p.code
+            : payeeId
+              ? `${p.code} · not on this project yet`
+              : p.code,
         group: payeeId ? (onProject ? 'Their projects' : 'Other projects') : 'Projects',
       };
-      (onProject ? theirs : others).push(opt);
+      (onProject ? theirProjects : otherProjects).push(opt);
     }
-    // Keep the payee's own projects first; within each group, ones with money pending first.
-    theirs.sort((a, b) => (balanceByProject.get(b.value)?.pendingPaise ?? 0) - (balanceByProject.get(a.value)?.pendingPaise ?? 0));
+
+    theirContracts.sort((a, b) => (balanceByTarget.get(b.value)?.pendingPaise ?? 0) - (balanceByTarget.get(a.value)?.pendingPaise ?? 0));
+    theirProjects.sort((a, b) => (balanceByTarget.get(b.value)?.pendingPaise ?? 0) - (balanceByTarget.get(a.value)?.pendingPaise ?? 0));
+
     return [
-      { value: NO_PROJECT, label: 'No project (bonus, advance, general)', group: 'General' },
-      ...theirs,
-      ...others,
+      { value: NO_TARGET, label: 'No project / contract (bonus, advance, general)', group: 'General' },
+      ...theirContracts,
+      ...theirProjects,
+      ...otherContracts,
+      ...otherProjects,
     ];
-  }, [projects.data, balanceByProject, payeeType, payeeId, canSee]);
+  }, [contracts.data, projects.data, balanceByTarget, payeeType, payeeId, canSee]);
 
   // ── Derived state ───────────────────────────────────────────────────────────────
-  const project = (projects.data?.items ?? []).find((p) => p._id === form.projectId);
+  const isContract = form.target.startsWith('c:');
+  const isProject = form.target.startsWith('p:');
+  const targetId = isContract || isProject ? form.target.slice(2) : '';
+
+  const contract = isContract ? (contracts.data ?? []).find((c) => c._id === targetId) : undefined;
+  const project = isProject ? (projects.data?.items ?? []).find((p) => p._id === targetId) : undefined;
+
   const onProject =
     !project || !payeeId
       ? true
       : payeeType === PayeeType.MEMBER
         ? project.members.some((m) => m.userId === payeeId)
         : (project.freelancers ?? []).some((f) => f.freelancerId === payeeId);
-  const balance = project ? balanceByProject.get(project._id) : undefined;
+
+  const onContract =
+    !contract || !payeeId
+      ? true
+      : payeeType === PayeeType.MEMBER
+        ? (contract.members ?? []).some((m) => m.userId === payeeId)
+        : (contract.freelancers ?? []).some((f) => f.freelancerId === payeeId);
+
+  const balance = isContract
+    ? balanceByTarget.get(`c:${targetId}`)
+    : isProject
+      ? balanceByTarget.get(`p:${targetId}`)
+      : undefined;
+
   const payeeName = payeeOptions.find((o) => o.value === form.payee)?.label ?? 'This person';
 
-  // When editing, the current payment is already inside "paid".
-  const alreadyCounted = editId && editing.data?.projectId === form.projectId ? editing.data.amountPaise : 0;
+  const alreadyCounted =
+    editId &&
+    ((isContract && editing.data?.contractId === targetId) ||
+      (isProject && editing.data?.projectId === targetId))
+      ? editing.data.amountPaise
+      : 0;
+
   const paidAfter = (balance?.paidPaise ?? 0) - alreadyCounted + (form.amountPaise ?? 0);
   const agreed = balance?.agreedPaise ?? 0;
   const overAgreed = !!balance && agreed > 0 && paidAfter > agreed;
@@ -243,9 +315,12 @@ export function LogPaymentSheet() {
     },
     { enabled: enabled && !!payeeId && !!form.paidAt },
   );
-  const duplicate = (sameDay.data?.items ?? []).find(
-    (p) => p._id !== editId && p.amountPaise === form.amountPaise && (p.projectId ?? NO_PROJECT) === (form.projectId || NO_PROJECT),
-  );
+
+  const duplicate = (sameDay.data?.items ?? []).find((p) => {
+    if (p._id === editId || p.amountPaise !== form.amountPaise) return false;
+    const pTarget = p.contractId ? `c:${p.contractId}` : p.projectId ? `p:${p.projectId}` : NO_TARGET;
+    return pTarget === (form.target || NO_TARGET);
+  });
 
   const busy = create.isPending || update.isPending || remove.isPending;
 
@@ -261,11 +336,11 @@ export function LogPaymentSheet() {
   const validate = (): boolean => {
     const e: typeof errors = {};
     if (!editId && !form.payee) e.payee = 'Choose who you paid';
-    if (!form.projectId) e.projectId = 'Choose a project, or "No project"';
+    if (!form.target) e.target = 'Choose a project, contract, or "General"';
     if (!form.amountPaise || form.amountPaise <= 0) e.amountPaise = 'Enter an amount';
     if (!form.paidAt) e.paidAt = 'Pick a date';
     else if (form.paidAt > toLocalDateInput(new Date(Date.now() + 86_400_000 * 31))) e.paidAt = "That's more than a month ahead — check the date";
-    if (project && !onProject) e.projectId = `${payeeName} isn't on ${project.name} yet — add them below`;
+    if (project && !onProject) e.target = `${payeeName} isn't on ${project.name} yet — add them below`;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -274,7 +349,7 @@ export function LogPaymentSheet() {
     if (err instanceof ApiRequestError && Object.keys(err.fieldErrors).length) {
       const fe: typeof errors = {};
       for (const [k, v] of Object.entries(err.fieldErrors)) {
-        const key = (k === 'userId' || k === 'freelancerId' ? 'payee' : k) as keyof FormState;
+        const key = (k === 'userId' || k === 'freelancerId' ? 'payee' : k === 'projectId' || k === 'contractId' ? 'target' : k) as keyof FormState;
         fe[key] = v[0];
       }
       setErrors(fe);
@@ -284,13 +359,16 @@ export function LogPaymentSheet() {
 
   const submit = async (another: boolean) => {
     if (busy || !validate()) return;
-    const projectId = form.projectId === NO_PROJECT ? undefined : form.projectId;
+    const targetProjectId = isProject ? targetId : undefined;
+    const targetContractId = isContract ? targetId : undefined;
+
     try {
       if (editId) {
         await update.mutateAsync({
           id: editId,
           body: {
-            projectId: projectId ?? '',
+            projectId: isProject ? targetId : '',
+            contractId: isContract ? targetId : '',
             amountPaise: form.amountPaise,
             paidAt: form.paidAt,
             method: form.method,
@@ -306,7 +384,8 @@ export function LogPaymentSheet() {
         payeeType: payeeType!,
         userId: payeeType === PayeeType.MEMBER ? payeeId : undefined,
         freelancerId: payeeType === PayeeType.FREELANCER ? payeeId : undefined,
-        projectId,
+        projectId: targetProjectId,
+        contractId: targetContractId,
         amountPaise: form.amountPaise!,
         paidAt: form.paidAt,
         method: form.method,
@@ -315,7 +394,7 @@ export function LogPaymentSheet() {
         note: form.note || undefined,
       });
       if (another) {
-        setForm((f) => ({ ...blank({}, f), payee: '', projectId: '' }));
+        setForm((f) => ({ ...blank({}, f), payee: '', target: '' }));
         setDirty(false);
       } else {
         close();
@@ -352,7 +431,7 @@ export function LogPaymentSheet() {
       } else {
         await addFreelancer.mutateAsync({ id: project._id, body: { freelancerId: payeeId, agreedPaise: addFeePaise ?? 0 } });
       }
-      setErrors((e) => ({ ...e, projectId: undefined }));
+      setErrors((e) => ({ ...e, target: undefined }));
       void balances.refetch();
     } catch (err) {
       setServerError(getErrorMessage(err));
@@ -446,7 +525,7 @@ export function LogPaymentSheet() {
                   value={form.payee || undefined}
                   onChange={(v) => {
                     set('payee', v ?? '');
-                    if (!prefill.projectId) set('projectId', '');
+                    if (!prefill.projectId && !prefill.contractId) set('target', '');
                   }}
                   placeholder="Choose a team member or freelancer"
                   searchPlaceholder="Search people…"
@@ -466,19 +545,39 @@ export function LogPaymentSheet() {
             </FormField>
 
             <FormField
-              label="For project"
+              label="For contract or project"
               required
-              error={errors.projectId}
-              hint={!payeeId ? 'Pick the person first to see their projects and balances.' : undefined}
+              error={errors.target}
+              hint={!payeeId ? 'Pick the person first to see their contracts, projects and balances.' : undefined}
             >
               <Combobox
-                options={projectOptions}
-                value={form.projectId || undefined}
-                onChange={(v) => set('projectId', v ?? '')}
-                placeholder="Choose a project"
-                searchPlaceholder="Search projects…"
-                loading={projects.isLoading}
-                invalid={!!errors.projectId}
+                options={targetOptions}
+                value={form.target || undefined}
+                onChange={(v) => {
+                  const nextTarget = v ?? '';
+                  set('target', nextTarget);
+                  if (nextTarget.startsWith('c:')) {
+                    set('category', PayoutCategory.CONTRACT_FEE);
+                    const cId = nextTarget.slice(2);
+                    const b = balanceByTarget.get(`c:${cId}`);
+                    if (!form.amountPaise && b?.agreedPaise) {
+                      set('amountPaise', b.pendingPaise > 0 ? b.pendingPaise : b.agreedPaise);
+                    }
+                  } else if (nextTarget.startsWith('p:')) {
+                    if (form.category === PayoutCategory.CONTRACT_FEE) {
+                      set('category', PayoutCategory.PROJECT_FEE);
+                    }
+                    const pId = nextTarget.slice(2);
+                    const b = balanceByTarget.get(`p:${pId}`);
+                    if (!form.amountPaise && b?.pendingPaise) {
+                      set('amountPaise', b.pendingPaise);
+                    }
+                  }
+                }}
+                placeholder="Choose a contract, project, or general"
+                searchPlaceholder="Search contracts & projects…"
+                loading={projects.isLoading || contracts.isLoading}
+                invalid={!!errors.target}
               />
             </FormField>
 
@@ -506,6 +605,18 @@ export function LogPaymentSheet() {
               </div>
             )}
 
+            {contract && payeeId && !onContract && (
+              <div className="space-y-1 rounded-md border border-warning/40 bg-warning/5 p-3 text-xs">
+                <p className="flex items-center gap-2 font-medium text-warning">
+                  <Info className="h-4 w-4" />
+                  {payeeName} isn&apos;t linked to {contract.name} yet
+                </p>
+                <p className="text-muted-foreground">
+                  You can still log this payout under the contract, or add them as a contractor in the Contract settings to track monthly pay.
+                </p>
+              </div>
+            )}
+
             <FormField label="Amount" required error={errors.amountPaise}>
               <MoneyInput
                 value={form.amountPaise}
@@ -513,7 +624,7 @@ export function LogPaymentSheet() {
                 invalid={!!errors.amountPaise}
                 placeholder="0"
               />
-              {balance && onProject && (
+              {balance && ((isProject && onProject) || (isContract && onContract)) && (
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {pendingNow > 0 && (
                     <Chip onClick={() => set('amountPaise', pendingNow)}>Pay pending <Price paise={pendingNow} /></Chip>
@@ -521,11 +632,14 @@ export function LogPaymentSheet() {
                   {agreed > 0 && pendingNow > 0 && pendingNow !== agreed && (
                     <Chip onClick={() => set('amountPaise', Math.round(pendingNow / 2))}>Half <Price paise={Math.round(pendingNow / 2)} /></Chip>
                   )}
+                  {isContract && agreed > 0 && (
+                    <Chip onClick={() => set('amountPaise', agreed)}>Monthly agreed <Price paise={agreed} /></Chip>
+                  )}
                 </div>
               )}
             </FormField>
 
-            {balance && onProject && form.projectId !== NO_PROJECT && (
+            {balance && ((isProject && onProject) || (isContract && onContract)) && form.target !== NO_TARGET && (
               <div
                 className={cn(
                   'rounded-md border px-3 py-2 text-xs',
@@ -541,9 +655,9 @@ export function LogPaymentSheet() {
                       />
                     </div>
                     <p>
-                      After this: <strong><Price paise={paidAfter} /></strong> paid of <Price paise={agreed} /> agreed
+                      After this: <strong><Price paise={paidAfter} /></strong> paid of <Price paise={agreed} /> {isContract ? 'monthly pay' : 'agreed'}
                       {overAgreed ? (
-                        <span className="text-warning"> — <Price paise={paidAfter - agreed} /> over the agreed fee</span>
+                        <span className="text-warning"> — <Price paise={paidAfter - agreed} /> over the {isContract ? 'monthly pay' : 'agreed fee'}</span>
                       ) : (
                         <> · <Price paise={Math.max(0, agreed - paidAfter)} /> still pending</>
                       )}
@@ -552,7 +666,7 @@ export function LogPaymentSheet() {
                 ) : (
                   <p className="flex items-center gap-1.5 text-muted-foreground">
                     <Info className="h-3.5 w-3.5" />
-                    No agreed fee set for {payeeName} on this project. Paid so far: <Price paise={balance.paidPaise - alreadyCounted} />.
+                    No agreed fee set for {payeeName} on this {isContract ? 'contract' : 'project'}. Paid so far: <Price paise={balance.paidPaise - alreadyCounted} />.
                   </p>
                 )}
               </div>
@@ -603,7 +717,7 @@ export function LogPaymentSheet() {
             </div>
 
             <FormField label="Note" hint={payeeType === PayeeType.MEMBER ? `${payeeName} can see this note in their earnings.` : undefined}>
-              <Textarea rows={2} value={form.note} onChange={(e) => set('note', e.target.value)} placeholder="e.g. Second milestone, design phase" maxLength={500} />
+              <Textarea rows={2} value={form.note} onChange={(e) => set('note', e.target.value)} placeholder="e.g. October contract payment, milestone" maxLength={500} />
             </FormField>
           </SheetBody>
 

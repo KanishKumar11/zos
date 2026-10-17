@@ -3,11 +3,12 @@
 
 import Link from 'next/link';
 
-import { PAYOUT_METHOD_LABEL, PayeeType } from '@agency/shared';
+import { PAYOUT_METHOD_LABEL, PayeeType, PayoutCategory } from '@agency/shared';
 
 import { formatDate } from '@/lib/formatters';
 import { useQuickActions } from '@/store/quick-actions.store';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProgressBar } from '@/components/ui/progress-bar';
@@ -30,7 +31,7 @@ export function PersonPayments({ userId }: { userId: string }) {
       <Card className="lg:col-span-3">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
-            <CardTitle>Projects &amp; payments</CardTitle>
+            <CardTitle>Contracts, Projects &amp; Payments</CardTitle>
             <p className="mt-1 text-[13px] text-muted-foreground">
               Paid <Price paise={paid} />
               {pending > 0 && (
@@ -51,13 +52,25 @@ export function PersonPayments({ userId }: { userId: string }) {
           ) : balances.isError ? (
             <ErrorState error={balances.error} onRetry={() => balances.refetch()} />
           ) : rows.length === 0 ? (
-            <EmptyState title="Not on any project" />
+            <EmptyState title="Not on any project or contract" />
           ) : (
             <ul className="divide-y">
               {rows.map((b) => (
-                <li key={b.projectId ?? 'general'} className="grid gap-2 px-5 py-3 sm:grid-cols-[1fr_170px_auto] sm:items-center">
+                <li
+                  key={b.contractId ? `c-${b.contractId}` : b.projectId ? `p-${b.projectId}` : 'general'}
+                  className="grid gap-2 px-5 py-3 sm:grid-cols-[1fr_170px_auto] sm:items-center"
+                >
                   <div>
-                    {b.projectId ? (
+                    {b.contractId ? (
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="text-[10px] font-normal uppercase tracking-wider">
+                          Contract
+                        </Badge>
+                        <Link href={`/contracts/${b.contractId}`} className="font-medium hover:underline">
+                          {b.contractName}
+                        </Link>
+                      </div>
+                    ) : b.projectId ? (
                       <Link href={`/projects/${b.projectId}?tab=people`} className="font-medium hover:underline">
                         {b.projectName}
                       </Link>
@@ -72,18 +85,55 @@ export function PersonPayments({ userId }: { userId: string }) {
                           <>
                             {' '}
                             of <Price paise={b.agreedPaise} />
+                            {b.contractId ? '/mo' : ''}
                           </>
                         ) : null}
                       </span>
                     </div>
                   </div>
-                  {b.agreedPaise > 0 ? <ProgressBar value={b.paidPaise} max={b.agreedPaise} /> : <span className="text-xs text-muted-foreground">{b.projectId ? 'No fee set' : ''}</span>}
-                  {b.projectId ? (
+                  {b.agreedPaise > 0 ? (
+                    <ProgressBar value={b.paidPaise} max={b.agreedPaise} />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {b.projectId || b.contractId ? 'No fee set' : ''}
+                    </span>
+                  )}
+                  {b.contractId ? (
                     <Button
                       size="sm"
                       variant={b.pendingPaise > 0 ? 'default' : 'outline'}
                       className="h-7 px-2.5 text-xs"
-                      onClick={() => openLogPayment({ payeeType: 'MEMBER', userId, projectId: b.projectId!, amountPaise: b.pendingPaise || undefined })}
+                      onClick={() =>
+                        openLogPayment({
+                          payeeType: 'MEMBER',
+                          userId,
+                          contractId: b.contractId!,
+                          amountPaise: b.pendingPaise || b.agreedPaise || undefined,
+                          category: PayoutCategory.CONTRACT_FEE,
+                        })
+                      }
+                    >
+                      {b.pendingPaise > 0 ? (
+                        <>
+                          Pay <Price paise={b.pendingPaise} compact className="ml-1" />
+                        </>
+                      ) : (
+                        'Pay'
+                      )}
+                    </Button>
+                  ) : b.projectId ? (
+                    <Button
+                      size="sm"
+                      variant={b.pendingPaise > 0 ? 'default' : 'outline'}
+                      className="h-7 px-2.5 text-xs"
+                      onClick={() =>
+                        openLogPayment({
+                          payeeType: 'MEMBER',
+                          userId,
+                          projectId: b.projectId!,
+                          amountPaise: b.pendingPaise || undefined,
+                        })
+                      }
                     >
                       {b.pendingPaise > 0 ? (
                         <>

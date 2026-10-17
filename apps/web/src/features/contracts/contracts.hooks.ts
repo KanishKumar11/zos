@@ -23,6 +23,26 @@ export interface ContractBilling {
   billedMonths: string[];
 }
 
+export interface ContractMemberRow {
+  userId: string;
+  monthlyAmountPaise: number;
+  role?: string;
+  name?: string;
+  email?: string;
+  avatarUrl?: string;
+  addedAt?: string;
+}
+
+export interface ContractFreelancerRow {
+  freelancerId: string;
+  monthlyAmountPaise: number;
+  scope?: string;
+  name?: string;
+  email?: string;
+  skill?: string;
+  addedAt?: string;
+}
+
 export interface ContractRow {
   _id: string;
   name: string;
@@ -37,14 +57,20 @@ export interface ContractRow {
   billingDay?: number;
   /** Default GST % for invoices generated from this contract. */
   gstPercent?: number;
+  members?: ContractMemberRow[];
+  freelancers?: ContractFreelancerRow[];
+  totalMonthlyPayPaise?: number;
+  netMonthlyMarginPaise?: number;
   createdAt: string;
   billing?: ContractBilling;
 }
 
 /** Wire shape: dates as yyyy-mm-dd strings, null clears a field on update. */
-export type ContractBody = Omit<CreateContractInput, 'startDate' | 'endDate'> & {
+export type ContractBody = Omit<CreateContractInput, 'startDate' | 'endDate' | 'members' | 'freelancers'> & {
   startDate?: string | null;
   endDate?: string | null;
+  members?: { userId: string; monthlyAmountPaise: number; role?: string }[];
+  freelancers?: { freelancerId: string; monthlyAmountPaise: number; scope?: string }[];
 };
 
 const contractsApi = {
@@ -67,10 +93,11 @@ function invalidateContracts(qc: QueryClient, opts: { invoices?: boolean } = {})
   if (opts.invoices) void qc.invalidateQueries({ queryKey: ['invoices'] });
 }
 
-export function useContracts(q: ListContractsQuery = {}) {
+export function useContracts(q: ListContractsQuery = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: qk.contracts.all(q as Record<string, unknown>),
     queryFn: () => contractsApi.list(q),
+    enabled: options?.enabled,
   });
 }
 

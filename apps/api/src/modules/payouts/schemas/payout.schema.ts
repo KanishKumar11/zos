@@ -11,6 +11,7 @@ export class Payout {
   @Prop({ type: MS.Types.ObjectId, ref: 'User' }) userId?: Types.ObjectId;
   @Prop({ type: MS.Types.ObjectId, ref: 'Freelancer' }) freelancerId?: Types.ObjectId;
   @Prop({ type: MS.Types.ObjectId, ref: 'Project' }) projectId?: Types.ObjectId;
+  @Prop({ type: MS.Types.ObjectId, ref: 'Contract' }) contractId?: Types.ObjectId;
   @Prop({ type: Number, required: true }) amountPaise!: number;
   @Prop({ default: 'INR' }) currency!: string;
   @Prop({ type: Date, required: true }) paidAt!: Date;
@@ -28,6 +29,7 @@ export class Payout {
 export type PayoutDocument = HydratedDocument<Payout>;
 export const PayoutSchema = SchemaFactory.createForClass(Payout);
 PayoutSchema.index({ projectId: 1, paidAt: -1 });
+PayoutSchema.index({ contractId: 1, paidAt: -1 });
 PayoutSchema.index({ userId: 1, paidAt: -1 });
 PayoutSchema.index({ freelancerId: 1, paidAt: -1 });
 PayoutSchema.index({ paidAt: -1 });
