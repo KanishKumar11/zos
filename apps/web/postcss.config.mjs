@@ -2,8 +2,6 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 
-
-
 // PostCSS config used by Next.js to process Tailwind directives.
 export default {
   plugins: {
