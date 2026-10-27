@@ -3,7 +3,7 @@
 // SVG text and aria-labels, through formatCompact guarded by useCanSeePrices).
 'use client';
 
-import { CalendarRange, CalendarDays } from 'lucide-react';
+import { CalendarRange, CalendarDays, ArrowUpRight, AlertCircle, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
@@ -141,42 +141,168 @@ export function MoneyFlowTile({
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const shortMonth = (m: string) => MONTHS[Number(m.split('-')[1]) - 1] ?? m;
 
-/** The one ink tile: what the agency kept this month, margin and a 6-month trend. */
+/** The one ink tile: what the agency kept this month, margin, 6-month trend, and outflow breakdown. */
 export function KeptTile({ flow, charts, loading }: { flow?: CockpitFlow; charts?: OwnerCharts; loading: boolean }) {
   const profit = (charts?.profitByMonth ?? []).slice(-6);
   const kept = flow?.keptPaise ?? 0;
   const margin = flow && flow.inPaise > 0 ? Math.round((kept / flow.inPaise) * 100) : null;
   const prev = profit.length >= 2 ? profit[profit.length - 2]!.profitPaise : 0;
+  const outflows = flow?.outflows;
+  const totalOut = flow?.outPaise ?? 0;
+
   return (
-    <Tile span={4} tone="ink" title={kept < 0 ? 'Spent more than came in' : 'Kept this month'}>
+    <Tile
+      span={4}
+      tone="ink"
+      title={kept < 0 ? 'Spent more than came in' : 'Kept this month'}
+      action={
+        <Link
+          href="/payments"
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-rail-foreground/60 transition-colors hover:text-white"
+        >
+          <span>All payouts</span>
+          <ArrowUpRight className="h-3 w-3" />
+        </Link>
+      }
+    >
       {loading || !flow ? (
-        <Skeleton className="h-36 w-full opacity-20" />
+        <Skeleton className="h-64 w-full opacity-20" />
       ) : (
-        <>
-          <BigNumber
-            caption={
-              flow.inPaise === 0 && flow.outPaise === 0
-                ? 'Nothing in or out yet this month'
-                : margin !== null
-                  ? `${margin}% margin on what came in`
-                  : 'Nothing collected yet this month'
-            }
-          >
-            <Price paise={kept} compact className={kept < 0 ? 'text-destructive' : 'text-brand'} />
-          </BigNumber>
-          <div className="mt-2 min-h-[1rem]">
-            <TrendDelta current={kept} previous={prev} />
+        <div className="flex h-full flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-baseline justify-between gap-2">
+              <BigNumber
+                caption={
+                  flow.inPaise === 0 && flow.outPaise === 0
+                    ? 'Nothing in or out yet this month'
+                    : margin !== null
+                      ? `${margin}% margin on what came in`
+                      : 'Nothing collected yet this month'
+                }
+              >
+                <Price paise={kept} compact className={kept < 0 ? 'text-destructive' : 'text-brand'} />
+              </BigNumber>
+              <div className="min-h-[1rem]">
+                <TrendDelta current={kept} previous={prev} />
+              </div>
+            </div>
+
+            {profit.length >= 2 && (
+              <div className="mt-3">
+                <Sparkline values={profit.map((p) => p.profitPaise)} color="hsl(var(--primary))" height={52} />
+                <div className="mt-1 flex justify-between text-[11px] opacity-60 font-figures">
+                  <span>{shortMonth(profit[0]!.month)}</span>
+                  <span>6-month cashflow</span>
+                  <span>{shortMonth(profit[profit.length - 1]!.month)}</span>
+                </div>
+              </div>
+            )}
           </div>
-          {profit.length >= 2 && (
-            <div className="mt-3">
-              <Sparkline values={profit.map((p) => p.profitPaise)} color="hsl(var(--primary))" height={64} />
-              <div className="mt-1 flex justify-between text-xs opacity-70">
-                <span>{shortMonth(profit[0]!.month)}</span>
-                <span>{shortMonth(profit[profit.length - 1]!.month)}</span>
+
+          {/* Outflow breakdown & spend distribution */}
+          {outflows && totalOut > 0 && (
+            <div className="space-y-2.5 border-t border-white/10 pt-3.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-rail-foreground/80">Monthly Outflows</span>
+                <span className="font-figures font-semibold text-rail-foreground">
+                  <Price paise={totalOut} compact /> spent
+                </span>
+              </div>
+
+              {/* Stacked Proportional Bar */}
+              <SegmentBar
+                height="h-2"
+                showLabels={false}
+                segments={[
+                  { value: outflows.teamPaise, color: OUTFLOW_COLORS.team, label: 'Team' },
+                  { value: outflows.payrollPaise, color: OUTFLOW_COLORS.payroll, label: 'Payroll' },
+                  { value: outflows.expensesPaise, color: OUTFLOW_COLORS.expenses, label: 'Expenses' },
+                  { value: outflows.freelancerPaise, color: OUTFLOW_COLORS.freelancers, label: 'Freelancers' },
+                ]}
+              />
+
+              {/* 3 Clickable Metric Pills */}
+              <div className="grid grid-cols-3 gap-2 pt-0.5">
+                <Link
+                  href="/payments"
+                  className="group rounded-xl border border-white/5 bg-white/[0.03] p-2 transition-all hover:border-white/15 hover:bg-white/[0.07]"
+                >
+                  <div className="flex items-center gap-1.5 text-[11px] text-rail-foreground/60">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: OUTFLOW_COLORS.team }} />
+                    <span className="truncate">Team</span>
+                  </div>
+                  <div className="mt-1 font-figures text-xs font-semibold text-rail-foreground">
+                    <Price paise={outflows.teamPaise} compact />
+                  </div>
+                  <div className="font-figures text-[10px] text-rail-foreground/40">
+                    {Math.round((outflows.teamPaise / totalOut) * 100)}%
+                  </div>
+                </Link>
+
+                <Link
+                  href="/payroll"
+                  className="group rounded-xl border border-white/5 bg-white/[0.03] p-2 transition-all hover:border-white/15 hover:bg-white/[0.07]"
+                >
+                  <div className="flex items-center gap-1.5 text-[11px] text-rail-foreground/60">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: OUTFLOW_COLORS.payroll }} />
+                    <span className="truncate">Payroll</span>
+                  </div>
+                  <div className="mt-1 font-figures text-xs font-semibold text-rail-foreground">
+                    <Price paise={outflows.payrollPaise} compact />
+                  </div>
+                  <div className="font-figures text-[10px] text-rail-foreground/40">
+                    {Math.round((outflows.payrollPaise / totalOut) * 100)}%
+                  </div>
+                </Link>
+
+                <Link
+                  href="/expenses"
+                  className="group rounded-xl border border-white/5 bg-white/[0.03] p-2 transition-all hover:border-white/15 hover:bg-white/[0.07]"
+                >
+                  <div className="flex items-center gap-1.5 text-[11px] text-rail-foreground/60">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: OUTFLOW_COLORS.expenses }} />
+                    <span className="truncate">Expenses</span>
+                  </div>
+                  <div className="mt-1 font-figures text-xs font-semibold text-rail-foreground">
+                    <Price paise={outflows.expensesPaise} compact />
+                  </div>
+                  <div className="font-figures text-[10px] text-rail-foreground/40">
+                    {Math.round((outflows.expensesPaise / totalOut) * 100)}%
+                  </div>
+                </Link>
               </div>
             </div>
           )}
-        </>
+
+          {/* Reserve / Solvency Callout */}
+          <div className="pt-1">
+            {kept < 0 ? (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs">
+                <div className="flex min-w-0 items-center gap-2">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                  <span className="truncate text-[11px] text-rail-foreground/90">
+                    Covered from agency cash reserves
+                  </span>
+                </div>
+                <span className="shrink-0 font-figures text-xs font-bold text-destructive">
+                  <Price paise={Math.abs(kept)} compact />
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs">
+                <div className="flex min-w-0 items-center gap-2">
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                  <span className="truncate text-[11px] text-rail-foreground/90">
+                    Retained as operating surplus
+                  </span>
+                </div>
+                <span className="shrink-0 font-figures text-xs font-bold text-emerald-400">
+                  +<Price paise={kept} compact />
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </Tile>
   );
