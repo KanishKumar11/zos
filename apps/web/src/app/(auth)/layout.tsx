@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import type { ReactNode } from 'react';
 import { ShieldCheck, Lock } from 'lucide-react';
 
-import { BrandLogo, BrandMark } from '@/components/layout/brand';
+import { BrandLogo } from '@/components/layout/brand';
 
 function OrbitTelemetry() {
   // Concentric activity rings echoing in-app project, cashflow, and team health.
@@ -113,7 +113,6 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
         {/* Brand Header: perfectly left-aligned */}
         <div className="relative z-10 flex items-center gap-3">
-          <BrandMark className="h-8 w-8" />
           <BrandLogo tone="rail" className="h-6 w-auto" />
           <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 font-mono text-[10px] uppercase font-medium tracking-wider text-rail-foreground/60">
             Studio • v2.4
@@ -158,7 +157,6 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
         {/* Mobile top bar */}
         <div className="relative z-10 mb-6 flex items-center gap-2.5 lg:hidden">
-          <BrandMark className="h-8 w-8" />
           <BrandLogo className="h-6" />
           <span className="rounded-full border border-border/80 bg-muted/60 px-2 py-0.5 font-mono text-[10px] uppercase font-medium tracking-wider text-muted-foreground">
             ZOS

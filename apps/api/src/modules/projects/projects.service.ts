@@ -495,7 +495,26 @@ export class ProjectsService {
     if (input.dueDate !== undefined) ms.dueDate = input.dueDate ? new Date(input.dueDate) : undefined;
     if (input.note !== undefined) ms.note = input.note;
     if (input.status !== undefined) ms.status = input.status;
-    if (input.invoiceId !== undefined) ms.invoiceId = new Types.ObjectId(input.invoiceId);
+    if (input.invoiceId !== undefined) {
+      if (input.invoiceId) {
+        const invOid = new Types.ObjectId(input.invoiceId);
+        ms.invoiceId = invOid;
+        const inv = await this.invoices.findById(invOid).exec();
+        if (inv) {
+          if (!input.status) {
+            ms.status = inv.status === 'PAID' ? 'COLLECTED' : 'INVOICED';
+          }
+          const matchingLi = inv.lineItems?.find((li) => String(li.projectId) === projectId);
+          if (matchingLi && !matchingLi.milestoneId) {
+            matchingLi.milestoneId = ms._id;
+            await inv.save();
+          }
+        }
+      } else {
+        ms.invoiceId = undefined;
+        if (!input.status) ms.status = 'PENDING';
+      }
+    }
     doc.markModified('milestones');
     return doc.save();
   }

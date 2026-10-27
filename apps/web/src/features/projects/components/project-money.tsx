@@ -5,7 +5,7 @@
 //    "Mark collected", add and remove.
 'use client';
 
-import { FileText, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, FileText, Link2, Plus, Sparkles, Trash2, Unlink } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -16,6 +16,12 @@ import { formatDate } from '@/lib/formatters';
 
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { MoneyInput } from '@/components/ui/money-input';
@@ -196,6 +202,7 @@ export function ProjectMilestones({ project }: { project: ProjectRow }) {
   });
   const [errors, setErrors] = useState<{ name?: string; amountPaise?: string }>({});
   const cur = project.currency ?? 'INR';
+  const budget = project.clientBudgetPaise ?? 0;
   const invoiceById = new Map((invoices.data ?? []).map((i) => [i._id, i]));
   const milestones = project.milestones ?? [];
   const linkedIds = new Set(milestones.map((m) => m.invoiceId).filter(Boolean));
@@ -203,8 +210,31 @@ export function ProjectMilestones({ project }: { project: ProjectRow }) {
     .filter((i) => !linkedIds.has(i._id))
     .sort((a, b) => (a.issueDate ?? a.createdAt ?? '').localeCompare(b.issueDate ?? b.createdAt ?? ''));
   const scheduled = milestones.reduce((s, m) => s + (m.amountPaise ?? 0), 0);
-  const budget = project.clientBudgetPaise ?? 0;
   const today = todayLocal();
+
+  const unlinkedMilestones = milestones.filter((m) => !m.invoiceId);
+
+  const linkInvoice = (milestoneId: string, invoice: InvoiceRow) => {
+    updateMilestone.mutate({
+      id: project._id,
+      milestoneId,
+      body: {
+        invoiceId: invoice._id,
+        status: invoice.status === 'PAID' ? 'COLLECTED' : 'INVOICED',
+      },
+    });
+  };
+
+  const unlinkInvoice = (milestoneId: string) => {
+    updateMilestone.mutate({
+      id: project._id,
+      milestoneId,
+      body: {
+        invoiceId: '',
+        status: 'PENDING',
+      },
+    });
+  };
 
   const save = async () => {
     const e: typeof errors = {};
@@ -319,6 +349,25 @@ export function ProjectMilestones({ project }: { project: ProjectRow }) {
                           <FileText className="mr-1 h-3.5 w-3.5" /> Invoice this
                         </Button>
                       )}
+                      {!ms.invoiceId && looseInvoices.length > 0 && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={updateMilestone.isPending}>
+                              <Link2 className="mr-1 h-3.5 w-3.5" /> Link invoice <ChevronDown className="ml-1 h-3 w-3 opacity-60" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            {looseInvoices.map((i) => (
+                              <DropdownMenuItem key={i._id} onClick={() => linkInvoice(ms._id, i)} className="flex items-center justify-between text-xs">
+                                <span className="font-figures font-medium">{i.number}</span>
+                                <span className="text-muted-foreground font-figures">
+                                  {formatCompact(i.totalPaise / 100, cur)} · {i.status}
+                                </span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                       {ms.status === 'INVOICED' && !inv && (
                         <Button
                           size="sm"
@@ -348,7 +397,11 @@ export function ProjectMilestones({ project }: { project: ProjectRow }) {
                       </button>
                     </div>
                   </div>
-                  {inv ? <LinkedInvoice inv={inv} /> : ms.invoiceId && !invoices.isLoading ? <p className="mt-2 border-t pt-2 text-xs text-muted-foreground">Linked invoice was deleted.</p> : null}
+                  {inv ? (
+                    <LinkedInvoice inv={inv} onUnlink={() => unlinkInvoice(ms._id)} />
+                  ) : ms.invoiceId && !invoices.isLoading ? (
+                    <p className="mt-2 border-t pt-2 text-xs text-muted-foreground">Linked invoice was deleted.</p>
+                  ) : null}
                 </div>
               </li>
             );
@@ -356,27 +409,62 @@ export function ProjectMilestones({ project }: { project: ProjectRow }) {
           {looseInvoices.length > 0 && (
             <>
               <li className="relative pt-2 text-xs font-medium text-muted-foreground">Invoices outside the milestones</li>
-              {looseInvoices.map((inv) => (
-                <li key={inv._id} className="relative">
-                  <span
-                    className="absolute -left-6 top-3 h-4 w-4 rounded-full border-2 border-card"
-                    style={{ background: inv.status === 'PAID' ? STATE_COLOR.collected : inv.isOverdue ? STATE_COLOR.late : STATE_COLOR.invoiced }}
-                    aria-hidden
-                  />
-                  <div className="rounded-xl border border-dashed p-3">
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <Link href={`/invoices/${inv._id}`} className="font-figures font-semibold hover:underline">
-                        {inv.number}
-                      </Link>
-                      <StatusBadge status={inv.isOverdue && inv.status !== 'PAID' ? 'OVERDUE' : inv.status} />
-                      {inv.issueDate && <span className="text-xs text-muted-foreground">Issued {formatDate(inv.issueDate)}</span>}
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        <Price paise={inv.paidPaise} currency={inv.currency} /> of <Price paise={inv.totalPaise} currency={inv.currency} /> received
-                      </span>
+              {looseInvoices.map((inv) => {
+                const matchingMs = unlinkedMilestones.find((m) => m.amountPaise === inv.totalPaise);
+                return (
+                  <li key={inv._id} className="relative">
+                    <span
+                      className="absolute -left-6 top-3 h-4 w-4 rounded-full border-2 border-card"
+                      style={{ background: inv.status === 'PAID' ? STATE_COLOR.collected : inv.isOverdue ? STATE_COLOR.late : STATE_COLOR.invoiced }}
+                      aria-hidden
+                    />
+                    <div className="rounded-xl border border-dashed p-3">
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <Link href={`/invoices/${inv._id}`} className="font-figures font-semibold hover:underline">
+                          {inv.number}
+                        </Link>
+                        <StatusBadge status={inv.isOverdue && inv.status !== 'PAID' ? 'OVERDUE' : inv.status} />
+                        {inv.issueDate && <span className="text-xs text-muted-foreground">Issued {formatDate(inv.issueDate)}</span>}
+                        <span className="text-xs text-muted-foreground">
+                          <Price paise={inv.paidPaise} currency={inv.currency} /> of <Price paise={inv.totalPaise} currency={inv.currency} /> received
+                        </span>
+
+                        <div className="ml-auto flex items-center gap-1.5">
+                          {matchingMs && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-7 px-2 text-xs bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20"
+                              disabled={updateMilestone.isPending}
+                              onClick={() => linkInvoice(matchingMs._id, inv)}
+                            >
+                              <Sparkles className="mr-1 h-3 w-3 animate-pulse" />
+                              Link to &ldquo;{matchingMs.name}&rdquo;
+                            </Button>
+                          )}
+                          {unlinkedMilestones.length > 0 && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" disabled={updateMilestone.isPending}>
+                                  <Link2 className="mr-1 h-3.5 w-3.5" /> Link to milestone <ChevronDown className="ml-1 h-3 w-3 opacity-60" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56">
+                                {unlinkedMilestones.map((ms) => (
+                                  <DropdownMenuItem key={ms._id} onClick={() => linkInvoice(ms._id, inv)} className="flex items-center justify-between text-xs">
+                                    <span>{ms.name}</span>
+                                    <span className="font-figures text-muted-foreground">{formatCompact((ms.amountPaise ?? 0) / 100, cur)}</span>
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </>
           )}
         </ol>
@@ -442,16 +530,30 @@ export function ProjectMilestones({ project }: { project: ProjectRow }) {
   );
 }
 
-function LinkedInvoice({ inv }: { inv: InvoiceRow }) {
+function LinkedInvoice({ inv, onUnlink }: { inv: InvoiceRow; onUnlink?: () => void }) {
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2 text-xs">
-      <Link href={`/invoices/${inv._id}`} className="font-figures font-medium text-brand-ink hover:underline">
-        {inv.number}
-      </Link>
-      <StatusBadge status={inv.isOverdue && inv.status !== 'PAID' ? 'OVERDUE' : inv.status} />
-      <span className="text-muted-foreground">
-        <Price paise={inv.paidPaise} currency={inv.currency} /> of <Price paise={inv.totalPaise} currency={inv.currency} /> received
-      </span>
+    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href={`/invoices/${inv._id}`} className="font-figures font-medium text-brand-ink hover:underline">
+          {inv.number}
+        </Link>
+        <StatusBadge status={inv.isOverdue && inv.status !== 'PAID' ? 'OVERDUE' : inv.status} />
+        <span className="text-muted-foreground">
+          <Price paise={inv.paidPaise} currency={inv.currency} /> of <Price paise={inv.totalPaise} currency={inv.currency} /> received
+        </span>
+      </div>
+      {onUnlink && (
+        <button
+          type="button"
+          onClick={onUnlink}
+          title="Unlink invoice from milestone"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <Unlink className="h-3 w-3" />
+          <span>Unlink</span>
+        </button>
+      )}
     </div>
   );
 }
+

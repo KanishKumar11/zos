@@ -139,6 +139,14 @@
   .mark-wash {
     background: linear-gradient(transparent 62%, hsl(var(--brand-wash)) 62%);
   }
+  /* Hide scrollbar across all browsers while retaining scrollability */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
