@@ -81,9 +81,9 @@ export function DataTable<Row>({
   const clickable = !!rowHref || !!onRowClick;
 
   return (
-    <div className={cn('relative w-full overflow-x-auto rounded-[var(--radius)] border bg-card', className)}>
+    <div className={cn('relative w-full overflow-x-auto rounded-2xl border border-border/80 bg-card/90 backdrop-blur-sm shadow-xs', className)}>
       <table className="w-full text-sm">
-        <thead className="border-b bg-muted/50">
+        <thead className="border-b bg-muted/40 backdrop-blur-xs">
           <tr>
             {columns.map((col) => {
               const active = sort?.by === col.id;

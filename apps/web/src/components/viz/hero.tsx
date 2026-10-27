@@ -35,10 +35,10 @@ export function Hero({
 }) {
   usePageTitle(pageTitle, crumbs);
   return (
-    <header className={cn('space-y-3', className)}>
+    <header className={cn('space-y-3.5', className)}>
       {(eyebrow || aside) && (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {eyebrow ? <p className="text-[13px] text-muted-foreground">{eyebrow}</p> : <span />}
+          {eyebrow ? <p className="text-[13px] font-medium text-muted-foreground">{eyebrow}</p> : <span />}
           {aside && <div className="flex flex-wrap items-center gap-2">{aside}</div>}
         </div>
       )}
@@ -48,9 +48,15 @@ export function Hero({
           <Skeleton className="h-10 w-3/5 max-w-xl" />
         </div>
       ) : (
-        <h1 className="font-display max-w-[24ch] text-[clamp(1.85rem,4.2vw,3.25rem)] font-bold leading-[1.05]">{children}</h1>
+        <h1 className="font-display max-w-4xl text-[clamp(1.85rem,3.4vw,2.85rem)] font-bold leading-[1.12] tracking-tight [text-wrap:balance]">
+          {children}
+        </h1>
       )}
-      {lede && !loading && <p className="max-w-[62ch] text-[15px] text-muted-foreground">{lede}</p>}
+      {lede && !loading && (
+        <p className="max-w-2xl text-[15px] leading-relaxed text-muted-foreground [text-wrap:pretty]">
+          {lede}
+        </p>
+      )}
     </header>
   );
 }
@@ -66,7 +72,7 @@ export function HeroMark({ children }: { children: ReactNode }) {
 /** Small "Only you see these figures" style chip. */
 export function PrivacyChip({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-card/80 px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-xs">
       <span className="h-1.5 w-1.5 rounded-full bg-brand" />
       {children}
     </span>

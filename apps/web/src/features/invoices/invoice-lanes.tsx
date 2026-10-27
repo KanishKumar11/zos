@@ -91,42 +91,56 @@ export function InvoiceLanes({
   since?: number | null;
 }) {
   if (loading) return <LanesSkeleton />;
-  if (error) return <ErrorState title="Couldn't load invoices" error={error} onRetry={onRetry} className="rounded-[var(--radius)] border bg-card" />;
-  if (!rows || rows.length === 0) return <div className="rounded-[var(--radius)] border bg-card">{empty}</div>;
+  if (error) return <ErrorState title="Couldn't load invoices" error={error} onRetry={onRetry} className="rounded-2xl border border-border/80 bg-card p-6" />;
+  if (!rows || rows.length === 0) return <div className="rounded-2xl border border-border/80 bg-card p-6">{empty}</div>;
 
   const byLane = new Map<LaneKey, InvoiceRow[]>(LANES.map((l) => [l.key, []]));
   for (const r of rows) byLane.get(laneOf(r))!.push(r);
 
   return (
     <div className="overflow-x-auto pb-1" role="region" aria-label="Invoices by status">
-      <div className="grid min-w-full auto-cols-[minmax(250px,1fr)] grid-flow-col gap-3 lg:auto-cols-[calc((100%_-_2.25rem)/4)]">
+      <div className="grid min-w-full auto-cols-[minmax(260px,1fr)] grid-flow-col gap-3.5 lg:auto-cols-[calc((100%_-_2.625rem)/4)]">
         {LANES.filter((lane) => !hideEmptyLanes || byLane.get(lane.key)!.length > 0).map((lane) => {
           const all = sortLane(lane.key, byLane.get(lane.key)!);
           const shown = all.slice(0, LANE_LIMIT);
+          const isOverdue = lane.key === 'overdue';
           return (
-            <section key={lane.key} className="flex min-w-0 flex-col rounded-[var(--radius)] border bg-muted/40 p-2.5" aria-label={`${lane.label}: ${all.length}`}>
-              <header className="mb-2.5 flex items-baseline justify-between gap-2 px-1">
+            <section
+              key={lane.key}
+              className={cn(
+                'flex min-w-0 flex-col rounded-2xl border border-border/80 bg-muted/25 backdrop-blur-sm p-3 transition-colors',
+                isOverdue && 'border-destructive/30 bg-destructive/[0.03]',
+              )}
+              aria-label={`${lane.label}: ${all.length}`}
+            >
+              <header className="mb-3 flex items-baseline justify-between gap-2 px-1">
                 <h3 className="flex items-center gap-2 text-[13px] font-semibold">
-                  <span className="h-2 w-2 rounded-full" style={{ background: lane.color }} aria-hidden />
+                  <span className="h-2.5 w-2.5 rounded-full ring-2 ring-background" style={{ background: lane.color }} aria-hidden />
                   {lane.label}
-                  <span className="font-figures text-xs font-normal text-muted-foreground">{all.length}</span>
+                  <span className="rounded-full bg-background/80 px-2 py-0.5 font-figures text-[11px] font-medium text-muted-foreground shadow-2xs">
+                    {all.length}
+                  </span>
                 </h3>
                 {all.length > 0 && (
                   <span className="text-xs text-muted-foreground">
-                    <Price paise={laneSum(lane.key, all)} compact className="font-medium text-foreground" /> {lane.sumLabel}
+                    <Price paise={laneSum(lane.key, all)} compact className="font-semibold text-foreground" /> {lane.sumLabel}
                   </span>
                 )}
               </header>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2.5">
                 {shown.length === 0 ? (
-                  <p className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
+                  <p className="rounded-xl border border-dashed border-border/70 px-3 py-6 text-center text-xs text-muted-foreground">
                     {lane.key === 'overdue' ? 'Nothing is late. Nice.' : 'Nothing here'}
                   </p>
                 ) : (
                   shown.map((r) => <InvoiceCard key={r._id} row={r} lane={lane.key} since={since} />)
                 )}
                 {all.length > shown.length && (
-                  <button type="button" onClick={onShowTable} className="rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-card hover:text-foreground">
+                  <button
+                    type="button"
+                    onClick={onShowTable}
+                    className="rounded-xl px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+                  >
                     {all.length - shown.length} more — see them all in the table
                   </button>
                 )}
@@ -151,8 +165,8 @@ function InvoiceCard({ row, lane, since }: { row: InvoiceRow; lane: LaneKey; sin
     <Link
       href={`/invoices/${row._id}`}
       className={cn(
-        'group block rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        lane === 'overdue' && 'border-destructive/30',
+        'group block rounded-xl border border-border/80 bg-card/95 backdrop-blur-sm p-3.5 shadow-xs transition-all duration-200 hover:border-foreground/30 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        lane === 'overdue' && 'border-destructive/40 bg-card hover:border-destructive/60',
         writtenOff && 'opacity-70',
       )}
     >
@@ -202,7 +216,7 @@ function InvoiceCard({ row, lane, since }: { row: InvoiceRow; lane: LaneKey; sin
         </div>
       )}
 
-      <div className="mt-3 flex items-end justify-between gap-2">
+      <div className="mt-3.5 flex items-end justify-between gap-2 border-t border-border/50 pt-2.5">
         <div className="min-w-0">
           {lane === 'sent' || lane === 'overdue' ? (
             <>
@@ -236,7 +250,7 @@ function InvoiceCard({ row, lane, since }: { row: InvoiceRow; lane: LaneKey; sin
             </>
           )}
         </div>
-        <span className={cn('shrink-0 text-right text-[11px] text-muted-foreground', lane === 'overdue' && 'text-destructive')}>
+        <span className={cn('shrink-0 text-right text-[11px] text-muted-foreground', lane === 'overdue' && 'text-destructive font-medium')}>
           {lane === 'draft'
             ? row.issueDate
               ? `Dated ${formatDate(row.issueDate)}`
@@ -261,10 +275,10 @@ function InvoiceCard({ row, lane, since }: { row: InvoiceRow; lane: LaneKey; sin
 function LanesSkeleton() {
   return (
     <div className="overflow-x-auto pb-1" aria-busy>
-      <div className="grid min-w-full auto-cols-[minmax(250px,1fr)] grid-flow-col gap-3 lg:auto-cols-[calc((100%_-_2.25rem)/4)]">
+      <div className="grid min-w-full auto-cols-[minmax(260px,1fr)] grid-flow-col gap-3.5 lg:auto-cols-[calc((100%_-_2.625rem)/4)]">
         {LANES.map((l) => (
-          <div key={l.key} className="space-y-2 rounded-[var(--radius)] border bg-muted/40 p-2.5">
-            <Skeleton className="h-4 w-24" />
+          <div key={l.key} className="space-y-2.5 rounded-2xl border border-border/80 bg-muted/25 p-3">
+            <Skeleton className="h-4 w-24 rounded-md" />
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-28 rounded-xl" />
             ))}

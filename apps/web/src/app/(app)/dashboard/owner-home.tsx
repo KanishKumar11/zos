@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Bento, Hero, HeroFigure, HeroMark, Price, PrivacyChip, SpotIllustration, Tile } from '@/components/viz';
 import { AgingTile, CashCalendarTile, KeptTile, MoneyFlowTile } from '@/features/dashboard/cockpit-tiles';
 import { useOwnerCharts, useOwnerCockpit, useOwnerDashboard, type OwnerCockpit } from '@/features/dashboard/dashboard.hooks';
+import { projectHealth } from '@/features/dashboard/project-health';
 import { HealthLegend, ProjectHealthWall } from '@/features/dashboard/project-health-wall';
 import { useImportStatus, useOwed } from '@/features/payouts/payouts.hooks';
 
@@ -137,6 +138,8 @@ export function OwnerHome() {
   const waiting = (owed.data?.team.length ?? 0) + (owed.data?.freelancers.length ?? 0);
   const monthLabel = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date());
 
+  const riskyProjectsCount = (c?.projects ?? []).map((p) => projectHealth(p)).filter((h) => h.tone === 'bad').length;
+
   return (
     <div className="space-y-6">
       <Hero
@@ -159,10 +162,81 @@ export function OwnerHome() {
         {c ? <HeroSentence c={c} /> : 'Your agency at a glance.'}
       </Hero>
 
+      {/* Real-time Agency Pulse Strip */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:gap-4">
+        {/* Metric 1: Live Projects */}
+        <Link
+          href="/projects"
+          className="group rounded-2xl border border-border/80 bg-card/85 p-4 backdrop-blur-sm transition-all duration-200 hover:border-foreground/30 hover:bg-card hover:shadow-md hover:-translate-y-0.5"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Projects</span>
+            <span className="h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20" />
+          </div>
+          <div className="mt-2 text-2xl font-bold font-figures tracking-tight">
+            {c ? c.projects.length : <Skeleton className="h-7 w-12" />}
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground truncate">
+            {c ? (riskyProjectsCount > 0 ? `${riskyProjectsCount} need attention` : 'All on track') : '…'}
+          </p>
+        </Link>
+
+        {/* Metric 2: Collected Month */}
+        <Link
+          href="/invoices?status=PAID"
+          className="group rounded-2xl border border-border/80 bg-card/85 p-4 backdrop-blur-sm transition-all duration-200 hover:border-foreground/30 hover:bg-card hover:shadow-md hover:-translate-y-0.5"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Collected</span>
+            <span className="h-2 w-2 rounded-full bg-blue-500 ring-2 ring-blue-500/20" />
+          </div>
+          <div className="mt-2 text-2xl font-bold font-figures tracking-tight">
+            {c ? <Price paise={c.month.revenuePaise} compact /> : <Skeleton className="h-7 w-20" />}
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground truncate">
+            {c ? (c.month.inPaise > 0 ? `${Math.round((c.month.keptPaise / c.month.inPaise) * 100)}% kept margin` : 'This month') : '…'}
+          </p>
+        </Link>
+
+        {/* Metric 3: Outstanding Receivables */}
+        <Link
+          href="/invoices?status=open"
+          className="group rounded-2xl border border-border/80 bg-card/85 p-4 backdrop-blur-sm transition-all duration-200 hover:border-foreground/30 hover:bg-card hover:shadow-md hover:-translate-y-0.5"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Receivables</span>
+            <span className="h-2 w-2 rounded-full bg-amber-500 ring-2 ring-amber-500/20" />
+          </div>
+          <div className="mt-2 text-2xl font-bold font-figures tracking-tight">
+            {c ? <Price paise={c.aging.outstandingPaise} compact /> : <Skeleton className="h-7 w-20" />}
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground truncate">
+            {c ? (c.aging.overdueCount > 0 ? `${c.aging.overdueCount} overdue` : 'Zero overdue') : '…'}
+          </p>
+        </Link>
+
+        {/* Metric 4: Payouts Due */}
+        <Link
+          href="/payments"
+          className="group rounded-2xl border border-border/80 bg-card/85 p-4 backdrop-blur-sm transition-all duration-200 hover:border-foreground/30 hover:bg-card hover:shadow-md hover:-translate-y-0.5"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Paid Out</span>
+            <span className="h-2 w-2 rounded-full bg-primary ring-2 ring-primary/20" />
+          </div>
+          <div className="mt-2 text-2xl font-bold font-figures tracking-tight">
+            {c ? <Price paise={c.month.outPaise} compact /> : <Skeleton className="h-7 w-20" />}
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground truncate">
+            {waiting > 0 ? `${waiting} awaiting pay` : 'All settled'}
+          </p>
+        </Link>
+      </div>
+
       {imports.data?.pending && (
         <Link
           href="/payments"
-          className="flex items-center gap-3 rounded-[var(--radius)] border border-info/30 bg-info/5 px-4 py-3 text-sm transition-colors hover:bg-info/10"
+          className="flex items-center gap-3 rounded-2xl border border-info/30 bg-info/5 px-4 py-3 text-sm transition-colors hover:bg-info/10"
         >
           <span className="flex-1">
             <span className="font-medium">Older payments need importing.</span> Bring them into Payments out so balances and profit are
@@ -178,7 +252,7 @@ export function OwnerHome() {
       </div>
 
       {cockpit.isError ? (
-        <div className="rounded-[var(--radius)] border bg-card">
+        <div className="rounded-2xl border bg-card">
           <ErrorState error={cockpit.error} onRetry={() => void cockpit.refetch()} title="Couldn't load your figures" />
         </div>
       ) : (
@@ -196,7 +270,7 @@ export function OwnerHome() {
             {loading || !c ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {[0, 1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-24 w-full" />
+                  <Skeleton key={i} className="h-24 w-full rounded-2xl" />
                 ))}
               </div>
             ) : c.projects.length === 0 ? (

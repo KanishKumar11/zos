@@ -7,9 +7,9 @@ import { useMe } from '@/features/auth/auth.hooks';
 import { useAuthStore } from '@/store/auth.store';
 
 import { CommandPalette } from '@/components/layout/command-palette';
+import { FloatingDock } from '@/components/layout/floating-dock';
 import { KeyboardShortcuts } from '@/components/layout/keyboard-shortcuts';
 import { MobileNav } from '@/components/layout/mobile-nav';
-import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { ConfirmHost } from '@/components/ui/confirm-dialog';
 import { PageSkeleton } from '@/components/ui/states';
@@ -38,14 +38,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <TooltipProvider>
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar />
-          <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-8 md:py-8">
-            <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
-          </main>
-        </div>
+      <div className="flex min-h-screen flex-col bg-background">
+        <Topbar />
+        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 md:px-8 md:py-8 pb-28 md:pb-32">
+          <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
+        </main>
+        <FloatingDock />
       </div>
       <MobileNav />
       <CommandPalette />

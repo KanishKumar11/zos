@@ -72,7 +72,7 @@ import { LettersModule } from './modules/letters/letters.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [
         {
-          ttl: (config.get<number>('throttler.ttl') ?? 60) * 1000,
+          ttl: (config.get<number>('throttler.ttlSeconds') ?? 60) * 1000,
           limit: config.get<number>('throttler.limit') ?? 100,
         },
       ],

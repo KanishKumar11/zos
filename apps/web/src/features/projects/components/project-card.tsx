@@ -32,9 +32,9 @@ function CardShell({ project, children }: { project: ProjectRow; children: React
   return (
     <Link
       href={`/projects/${project._id}`}
-      className="group relative block min-w-0 animate-rise overflow-hidden rounded-[var(--radius)] border bg-card p-4 outline-none transition-[border-color,box-shadow] hover:border-foreground/25 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring"
+      className="group relative block min-w-0 animate-rise overflow-hidden rounded-2xl border border-border/80 bg-card/90 backdrop-blur-sm p-4.5 sm:p-5 outline-none shadow-xs transition-all duration-200 hover:border-foreground/30 hover:shadow-xl hover:-translate-y-1 focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span className="absolute inset-x-0 top-0 h-1" style={{ background: identityColor(project._id) }} aria-hidden />
+      <span className="absolute inset-x-0 top-0 h-1.5 rounded-t-2xl" style={{ background: identityColor(project._id) }} aria-hidden />
       {children}
     </Link>
   );
@@ -88,13 +88,19 @@ export function OwnerProjectCard({
             {p.status !== 'ACTIVE' && <StatusBadge status={p.status} />}
           </div>
           {health && (
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {health.time ? `Time ${pct(health.time.elapsed)}` : 'No dates'} · billed {pct(health.billedShare)} · paid out {pct(health.paidOutShare)}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span className="inline-flex items-center rounded-md bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-foreground/80">
+                {health.time ? `Time ${pct(health.time.elapsed)}` : 'No dates'}
+              </span>
+              <span>·</span>
+              <span>billed <strong className="font-semibold text-foreground">{pct(health.billedShare)}</strong></span>
+              <span>·</span>
+              <span>paid out <strong className="font-semibold text-foreground">{pct(health.paidOutShare)}</strong></span>
+            </div>
           )}
         </div>
       </div>
-      <div className="mt-3.5 flex items-center justify-between gap-2 border-t pt-3">
+      <div className="mt-4 flex items-center justify-between gap-2 border-t border-border/60 pt-3.5">
         <div className="min-w-0 space-y-0.5">
           <p className="text-xs text-muted-foreground">
             {p.clientBudgetPaise ? (
@@ -110,8 +116,8 @@ export function OwnerProjectCard({
         <TeamFaces members={p.members} />
       </div>
       {reasons.length > 0 && (
-        <p className="mt-2.5 flex items-start gap-1.5 rounded-lg bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
-          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" /> {reasons.join(' · ')}
+        <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-warning/25 bg-warning/10 px-3 py-2 text-xs text-warning">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {reasons.join(' · ')}
         </p>
       )}
     </CardShell>
@@ -152,13 +158,13 @@ export function StaffProjectCard({ project: p }: { project: ProjectRow }) {
         )}
       </div>
 
-      <div className="mt-3.5 flex items-center justify-between gap-2 border-t pt-3">
+      <div className="mt-4 flex items-center justify-between gap-2 border-t border-border/60 pt-3.5">
         <Deadline project={p} />
         <TeamFaces members={p.members} />
       </div>
 
       {mine && mine.agreedPaise > 0 && (
-        <div className="mt-3 flex items-center gap-3 rounded-lg bg-brand-wash px-3 py-2">
+        <div className="mt-3 flex items-center gap-3 rounded-xl bg-brand-wash px-3.5 py-2.5">
           <FillJar value={mine.paidPaise} max={mine.agreedPaise} size="sm" label={`${Math.round((mine.paidPaise / mine.agreedPaise) * 100)}% of your fee received`} />
           <div className="min-w-0 text-xs">
             <p>
@@ -178,8 +184,8 @@ export function StaffProjectCard({ project: p }: { project: ProjectRow }) {
       )}
 
       {reasons.length > 0 && (
-        <p className="mt-2.5 flex items-start gap-1.5 rounded-lg bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
-          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" /> {reasons.join(' · ')}
+        <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-warning/25 bg-warning/10 px-3 py-2 text-xs text-warning">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {reasons.join(' · ')}
         </p>
       )}
     </CardShell>
@@ -188,7 +194,7 @@ export function StaffProjectCard({ project: p }: { project: ProjectRow }) {
 
 export function ProjectCardSkeleton() {
   return (
-    <div className="rounded-[var(--radius)] border bg-card p-4">
+    <div className="rounded-2xl border border-border/80 bg-card/90 p-5 shadow-xs">
       <div className="flex gap-3.5">
         <Skeleton className="h-[74px] w-[74px] rounded-full" />
         <div className="flex-1 space-y-2">
@@ -197,7 +203,7 @@ export function ProjectCardSkeleton() {
           <Skeleton className="h-5 w-24" />
         </div>
       </div>
-      <Skeleton className="mt-4 h-8 w-full" />
+      <Skeleton className="mt-4 h-8 w-full rounded-xl" />
     </div>
   );
 }

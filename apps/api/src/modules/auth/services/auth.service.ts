@@ -2,6 +2,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -34,6 +35,9 @@ const REFRESH_TTL_DAYS = 30;
 const INVITE_TTL_HOURS = 72;
 const RESET_TTL_HOURS = 2;
 
+// Pre-computed round-12 bcrypt hash to equalize execution time and prevent timing-based user enumeration.
+const DUMMY_HASH = '$2a$12$8lFJthUOZGv0PDGTTrpMJuKNDI13FpC/pgps7sHKLL9w3jY.Cah96';
+
 export interface IssuedTokens {
   accessToken: string;
   refreshToken: string;
@@ -55,7 +59,8 @@ export class AuthService {
   // ── Login ────────────────────────────────────────────────────────────────────────
   async login(input: LoginInput, meta: { ip?: string; ua?: string }): Promise<IssuedTokens> {
     const user = await this.users.findByEmail(input.email);
-    const ok = user ? await comparePassword(input.password, user.passwordHash) : false;
+    const hashToCompare = user ? user.passwordHash : DUMMY_HASH;
+    const ok = await comparePassword(input.password, hashToCompare);
     if (!user || !ok) {
       throw new UnauthorizedException({ code: ErrorCodes.INVALID_CREDENTIALS, message: 'Invalid credentials' });
     }
@@ -154,8 +159,14 @@ export class AuthService {
   async createInvite(
     input: InviteUserInput | { email: string; name: string; role: Role; departmentId?: string; designationId?: string },
     invitedBy: string,
-    extra: { clientId?: string; title?: string } = {},
+    extra: { clientId?: string; title?: string; actorRole?: Role } = {},
   ): Promise<{ token: string; expiresAt: Date; inviteId: string }> {
+    if (input.role === Role.OWNER && extra.actorRole && extra.actorRole !== Role.OWNER) {
+      throw new ForbiddenException({
+        code: ErrorCodes.FORBIDDEN,
+        message: 'Only workspace owners can invite another owner',
+      });
+    }
     const email = input.email.toLowerCase().trim();
     const existing = await this.users.findByEmail(email);
     if (existing) {
@@ -212,7 +223,7 @@ export class AuthService {
   }
 
   /** New link for an open invite (the old link stops working). */
-  async resendInvite(inviteId: string, scope: { clientId?: string } = {}) {
+  async resendInvite(inviteId: string, scope: { clientId?: string; actorRole?: Role } = {}) {
     const invite = await this.inviteModel.findOne({
       _id: inviteId,
       acceptedAt: { $exists: false },
@@ -220,6 +231,12 @@ export class AuthService {
       ...(scope.clientId ? { clientId: scope.clientId } : {}),
     });
     if (!invite) throw new BadRequestException({ code: ErrorCodes.INVITE_INVALID, message: 'This invite is no longer open' });
+    if (invite.role === Role.OWNER && scope.actorRole && scope.actorRole !== Role.OWNER) {
+      throw new ForbiddenException({
+        code: ErrorCodes.FORBIDDEN,
+        message: 'Only workspace owners can resend an owner invite',
+      });
+    }
     const token = this.tokens.signInvite({ sub: invite.email, email: invite.email });
     invite.tokenHash = this.tokens.hash(token);
     invite.expiresAt = new Date(Date.now() + INVITE_TTL_HOURS * 3600 * 1000);
@@ -229,12 +246,22 @@ export class AuthService {
     return { token, email: invite.email, name: invite.name, clientId: invite.clientId?.toString(), expiresAt: invite.expiresAt };
   }
 
-  async revokeInvite(inviteId: string, scope: { clientId?: string } = {}) {
-    const res = await this.inviteModel.updateOne(
-      { _id: inviteId, acceptedAt: { $exists: false }, ...(scope.clientId ? { clientId: scope.clientId } : {}) },
-      { $set: { revokedAt: new Date() } },
-    );
-    if (!res.matchedCount) throw new BadRequestException({ code: ErrorCodes.INVITE_INVALID, message: 'Invite not found' });
+  async revokeInvite(inviteId: string, scope: { clientId?: string; actorRole?: Role } = {}) {
+    const invite = await this.inviteModel.findOne({
+      _id: inviteId,
+      acceptedAt: { $exists: false },
+      revokedAt: { $exists: false },
+      ...(scope.clientId ? { clientId: scope.clientId } : {}),
+    });
+    if (!invite) throw new BadRequestException({ code: ErrorCodes.INVITE_INVALID, message: 'Invite not found' });
+    if (invite.role === Role.OWNER && scope.actorRole && scope.actorRole !== Role.OWNER) {
+      throw new ForbiddenException({
+        code: ErrorCodes.FORBIDDEN,
+        message: 'Only workspace owners can revoke an owner invite',
+      });
+    }
+    invite.revokedAt = new Date();
+    await invite.save();
     return { ok: true };
   }
 

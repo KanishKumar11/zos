@@ -14,7 +14,7 @@ const SPAN: Record<number, string> = {
 };
 
 export function Bento({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('grid grid-cols-12 gap-3.5', className)} {...props} />;
+  return <div className={cn('grid grid-cols-12 gap-4 lg:gap-5', className)} {...props} />;
 }
 
 export function Tile({
@@ -38,18 +38,27 @@ export function Tile({
   return (
     <section
       className={cn(
-        'min-w-0 animate-rise rounded-[var(--radius)] border p-4 sm:p-5',
-        tone === 'default' && 'bg-card',
-        tone === 'ink' && 'border-foreground bg-foreground text-background',
-        tone === 'wash' && 'border-brand/20 bg-brand-wash',
+        'min-w-0 animate-rise rounded-2xl border p-5 sm:p-6 transition-all duration-200',
+        tone === 'default' &&
+          'border-border/80 bg-card/90 shadow-sm hover:border-border hover:shadow-md backdrop-blur-sm',
+        tone === 'ink' &&
+          'relative overflow-hidden border border-white/10 bg-gradient-to-br from-rail via-rail/95 to-black text-rail-foreground shadow-xl ring-1 ring-white/10 before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-transparent before:via-primary/60 before:to-transparent',
+        tone === 'wash' && 'border-primary/20 bg-primary/[0.04] text-foreground',
         SPAN[span],
         className,
       )}
     >
       {(title || action) && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           {title && (
-            <h2 className={cn('text-[13px] font-semibold', tone === 'ink' ? 'text-background/70' : 'text-muted-foreground')}>{title}</h2>
+            <h2
+              className={cn(
+                'text-[13px] font-semibold tracking-wide',
+                tone === 'ink' ? 'text-rail-foreground/80' : 'text-muted-foreground',
+              )}
+            >
+              {title}
+            </h2>
           )}
           {action}
         </div>
@@ -63,8 +72,8 @@ export function Tile({
 export function BigNumber({ children, caption, className }: { children: ReactNode; caption?: ReactNode; className?: string }) {
   return (
     <div className={className}>
-      <div className="font-display text-[2.1rem] font-bold leading-none">{children}</div>
-      {caption && <p className="mt-1.5 text-xs opacity-75">{caption}</p>}
+      <div className="font-display text-[2.2rem] sm:text-[2.5rem] font-bold leading-none tracking-tight">{children}</div>
+      {caption && <p className="mt-2 text-xs opacity-75 leading-relaxed">{caption}</p>}
     </div>
   );
 }

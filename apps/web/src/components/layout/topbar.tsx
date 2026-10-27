@@ -25,6 +25,7 @@ import {
 import { useLogout } from '@/features/auth/auth.hooks';
 import { useUnreadCount } from '@/features/notifications/notifications.hooks';
 
+import { Brand } from './brand';
 import { navLabelFor } from './nav-config';
 import { useNewActions } from './quick-actions';
 
@@ -93,7 +94,7 @@ export function Topbar() {
   const canSettings = user?.role === Role.OWNER || user?.role === Role.ADMIN;
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border/70 bg-background/80 px-4 backdrop-blur-md md:px-8">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border/70 bg-background/85 px-4 backdrop-blur-md md:px-8">
       <button
         type="button"
         className="-ml-1 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
@@ -102,6 +103,11 @@ export function Topbar() {
       >
         <Menu className="h-5 w-5" />
       </button>
+
+      <div className="flex items-center gap-3">
+        <Brand tone="paper" className="shrink-0" />
+        <div className="hidden h-4 w-px bg-border/80 sm:block" />
+      </div>
 
       <Breadcrumbs />
 

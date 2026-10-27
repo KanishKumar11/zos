@@ -77,15 +77,15 @@ export function PayoutDayTimeline({
   return (
     <div className="space-y-6">
       {days.map((d) => (
-        <section key={d.day} aria-label={d.label}>
-          <div className="mb-3 flex items-baseline justify-between gap-3 border-b pb-1.5">
-            <h3 className="text-[13px] font-semibold">{d.label}</h3>
-            <span className="text-xs text-muted-foreground">
+        <section key={d.day} aria-label={d.label} className="rounded-2xl border border-border/80 bg-card/85 backdrop-blur-sm p-4.5 sm:p-5 shadow-xs">
+          <div className="mb-4 flex items-baseline justify-between gap-3 border-b border-border/60 pb-2.5">
+            <h3 className="text-sm font-semibold tracking-tight">{d.label}</h3>
+            <span className="rounded-full bg-muted/60 px-2.5 py-0.5 text-xs text-muted-foreground font-figures">
               {d.items.length} payment{d.items.length === 1 ? '' : 's'}
               {d.items.length > 1 && (
                 <>
                   {' · '}
-                  <Price paise={d.totalPaise} compact />
+                  <Price paise={d.totalPaise} compact className="font-semibold text-foreground" />
                 </>
               )}
             </span>
@@ -143,12 +143,12 @@ function toItem(r: PayoutRow, onOpen: (row: PayoutRow) => void, showPayee: boole
         <button
           type="button"
           onClick={() => onOpen(r)}
-          className="group -mr-1 flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-sm font-semibold hover:bg-accent"
+          className="group -mr-1 flex shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1 text-sm font-semibold transition-all hover:bg-accent hover:border-foreground/20"
           aria-label={`Edit payment to ${r.payeeName}`}
           title="Edit payment"
         >
           <Price paise={r.amountPaise} currency={r.currency} />
-          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+          <Pencil className="h-3 w-3 text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
         </button>
       </div>
     ),

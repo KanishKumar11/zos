@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   HttpCode,
   Param,
   HttpStatus,
@@ -13,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
 import {
@@ -29,6 +31,7 @@ import {
 import { emitAudit } from '@/common/utils/audit.util';
 
 import { REFRESH_COOKIE_NAME } from '@/common/constants/app.constants';
+import { ErrorCodes } from '@/common/constants/error-codes';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { PortalAccess } from '@/common/decorators/portal-access.decorator';
 import { Public } from '@/common/decorators/public.decorator';
@@ -58,6 +61,7 @@ export class AuthController {
 
   // ── Public ───────────────────────────────────────────────────────────────────────
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(
@@ -95,28 +99,30 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('accept-invite')
   acceptInvite(@Body(new ZodValidationPipe(acceptInviteSchema)) input: AcceptInviteInput) {
     return this.auth.acceptInvite(input);
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   async forgot(@Body(new ZodValidationPipe(requestPasswordResetSchema)) input: RequestPasswordResetInput) {
     const { token } = await this.auth.requestReset(input);
     if (token) {
       const link = `${this.config.get<string>('app.webUrl')}/reset-password?token=${token}`;
-      try {
-        await this.mail.sendResetLink(input.email, link);
-      } catch {
+      // Fire-and-forget email dispatch so network mail latency does not leak whether user exists
+      void this.mail.sendResetLink(input.email, link).catch(() => {
         // don't leak mail failures during password reset
-      }
+      });
     }
     return { ok: true };
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   async reset(@Body(new ZodValidationPipe(performPasswordResetSchema)) input: PerformPasswordResetInput) {
@@ -154,7 +160,15 @@ export class AuthController {
     @CurrentUser() user: JwtPayload,
     @Body(new ZodValidationPipe(inviteUserSchema)) input: InviteUserInput,
   ) {
-    const { token, expiresAt, inviteId } = await this.auth.createInvite(input, user.sub);
+    if (input.role === Role.OWNER && user.role !== Role.OWNER) {
+      throw new ForbiddenException({
+        code: ErrorCodes.FORBIDDEN,
+        message: 'Only workspace owners can invite another owner',
+      });
+    }
+    const { token, expiresAt, inviteId } = await this.auth.createInvite(input, user.sub, {
+      actorRole: user.role,
+    });
     const emailed = await this.sendInviteMail(input.email, input.name, token);
     emitAudit(this.events, {
       actorId: user.sub,
@@ -174,16 +188,22 @@ export class AuthController {
 
   @Roles(Role.OWNER, Role.ADMIN)
   @Post('invites/:id/resend')
-  async resendInvite(@Param('id', ObjectIdPipe) id: string) {
-    const r = await this.auth.resendInvite(id);
+  async resendInvite(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ObjectIdPipe) id: string,
+  ) {
+    const r = await this.auth.resendInvite(id, { actorRole: user.role });
     const emailed = await this.sendInviteMail(r.email, r.name, r.token);
     return { ok: true, expiresAt: r.expiresAt, emailed };
   }
 
   @Roles(Role.OWNER, Role.ADMIN)
   @Delete('invites/:id')
-  revokeInvite(@Param('id', ObjectIdPipe) id: string) {
-    return this.auth.revokeInvite(id);
+  revokeInvite(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ObjectIdPipe) id: string,
+  ) {
+    return this.auth.revokeInvite(id, { actorRole: user.role });
   }
 
   /** Emails an invite link. Returns false (instead of failing the request) when mail is down. */
@@ -207,7 +227,7 @@ export class AuthController {
     const isProd = this.config.get('app.nodeEnv') === 'production';
     const domain = this.config.get<string | undefined>('app.cookieDomain');
     res.cookie('access_token', accessToken, {
-      httpOnly: false, // middleware decodes it for UX gating
+      httpOnly: true, // Hardened: Protected against XSS. Read by server/edge middleware via Cookie request header
       secure: isProd,
       sameSite: 'lax',
       path: '/',

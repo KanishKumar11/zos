@@ -39,17 +39,17 @@ export function PeopleGrid({
 }) {
   if (loading) {
     return (
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-44 rounded-[var(--radius)]" />
+          <Skeleton key={i} className="h-44 rounded-2xl" />
         ))}
       </div>
     );
   }
-  if (error && !people) return <ErrorState title="Couldn't load the team" error={error} onRetry={onRetry} className="rounded-[var(--radius)] border bg-card" />;
-  if (!people || people.length === 0) return <div className="rounded-[var(--radius)] border bg-card">{empty}</div>;
+  if (error && !people) return <ErrorState title="Couldn't load the team" error={error} onRetry={onRetry} className="rounded-2xl border border-border/80 bg-card p-6" />;
+  if (!people || people.length === 0) return <div className="rounded-2xl border border-border/80 bg-card p-6">{empty}</div>;
   return (
-    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {people.map((u) => (
         <li key={u._id} className="min-w-0">
           <PersonCard user={u} dept={deptLabel(u)} desig={desigLabel(u)} />
@@ -68,50 +68,50 @@ function PersonCard({ user: u, dept, desig }: { user: UserRow; dept?: string; de
     <Link
       href={`/team/${u._id}`}
       className={cn(
-        'group flex h-full animate-rise flex-col rounded-[var(--radius)] border bg-card p-4 transition-colors hover:border-foreground/25',
+        'group relative flex h-full animate-rise flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/90 backdrop-blur-sm p-5 shadow-xs outline-none transition-all duration-200 hover:border-foreground/30 hover:shadow-xl hover:-translate-y-1 focus-visible:ring-2 focus-visible:ring-ring',
         inactive && 'opacity-60',
       )}
     >
       {/* Identity strip in the person's colour */}
-      <div className="-mx-4 -mt-4 mb-3 h-1.5 rounded-t-[var(--radius)]" style={{ background: identityColor(u._id, 0.85) }} aria-hidden />
-      <div className="flex items-start gap-3">
+      <span className="absolute inset-x-0 top-0 h-1.5 rounded-t-2xl" style={{ background: identityColor(u._id, 0.85) }} aria-hidden />
+      <div className="flex items-start gap-3.5 pt-1">
         {progress ? (
           <HealthRing
             size={60}
             rings={[{ value: progress.pct, color: finished ? 'hsl(var(--success))' : identityColor(u._id), label: 'Onboarding' }]}
-            center={<Avatar id={u._id} name={u.name} size="lg" className="h-10 w-10" />}
+            center={<Avatar id={u._id} name={u.name} size="lg" className="h-10 w-10 ring-2 ring-background" />}
           />
         ) : (
-          <Avatar id={u._id} name={u.name} size="lg" className="h-[60px] w-[60px] text-base" />
+          <Avatar id={u._id} name={u.name} size="lg" className="h-[60px] w-[60px] text-base ring-2 ring-background" />
         )}
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className="truncate font-display text-[17px] font-bold leading-tight group-hover:underline">{u.name}</p>
+          <p className="truncate font-display text-[17px] font-bold leading-tight transition-colors group-hover:text-primary">{u.name}</p>
           <p className="truncate text-xs text-muted-foreground">{u.email}</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge variant="outline">{ROLE_LABEL[u.role] ?? u.role}</Badge>
             {u.status !== UserStatus.ACTIVE && <StatusBadge status={u.status} />}
           </div>
         </div>
       </div>
-      <dl className="mb-3 mt-4 grid gap-1.5 text-[13px]">
+      <dl className="mb-3 mt-4 grid gap-1.5 border-t border-border/50 pt-3 text-[13px]">
         <div className="flex justify-between gap-3">
           <dt className="text-muted-foreground">Department</dt>
-          <dd className="min-w-0 truncate text-right">{dept ?? <span className="text-muted-foreground">Not set</span>}</dd>
+          <dd className="min-w-0 truncate text-right font-medium">{dept ?? <span className="text-muted-foreground font-normal">Not set</span>}</dd>
         </div>
         {desig && (
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Designation</dt>
-            <dd className="min-w-0 truncate text-right">{desig}</dd>
+            <dd className="min-w-0 truncate text-right font-medium">{desig}</dd>
           </div>
         )}
         <div className="flex justify-between gap-3">
           <dt className="text-muted-foreground">With us</dt>
-          <dd className="text-right">{tenure ?? <span className="text-muted-foreground">No joining date</span>}</dd>
+          <dd className="text-right font-figures">{tenure ?? <span className="text-muted-foreground">No joining date</span>}</dd>
         </div>
       </dl>
-      <div className="mt-auto flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
-        <span>{progress ? (finished ? 'Onboarding done' : `Onboarding ${progress.done} of ${progress.total}`) : 'No onboarding checklist'}</span>
-        <span className="truncate">{u.lastLoginAt ? `Seen ${formatDate(u.lastLoginAt, { day: 'numeric', month: 'short' })}` : 'Never signed in'}</span>
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+        <span className="truncate">{progress ? (finished ? 'Onboarding done' : `Onboarding ${progress.done}/${progress.total}`) : 'No onboarding checklist'}</span>
+        <span className="shrink-0">{u.lastLoginAt ? `Seen ${formatDate(u.lastLoginAt, { day: 'numeric', month: 'short' })}` : 'Never signed in'}</span>
       </div>
     </Link>
   );

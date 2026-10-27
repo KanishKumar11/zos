@@ -284,7 +284,7 @@ function OwnerClients() {
         clients.isLoading ? (
           <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 6 }, (_, i) => (
-              <Skeleton key={i} className="h-44 rounded-[var(--radius)]" />
+              <Skeleton key={i} className="h-44 rounded-2xl" />
             ))}
           </div>
         ) : clients.isError ? (
@@ -325,12 +325,13 @@ function ClientCard({ client: c, series }: { client: ClientRow; series: number[]
   return (
     <Link
       href={`/clients/${c._id}`}
-      className="group block min-w-0 animate-rise rounded-[var(--radius)] border bg-card p-4 outline-none transition-[border-color,box-shadow] hover:border-foreground/25 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring"
+      className="group relative block min-w-0 animate-rise overflow-hidden rounded-2xl border border-border/80 bg-card/90 backdrop-blur-sm p-5 outline-none shadow-xs transition-all duration-200 hover:border-foreground/30 hover:shadow-xl hover:-translate-y-1 focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="flex items-start gap-3">
-        <Avatar id={c._id} name={c.name} size="lg" className="rounded-xl" />
+      <span className="absolute inset-x-0 top-0 h-1.5 rounded-t-2xl" style={{ background: identityColor(c._id) }} aria-hidden />
+      <div className="flex items-start gap-3.5 pt-1">
+        <Avatar id={c._id} name={c.name} size="lg" className="rounded-xl ring-2 ring-background" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold">{c.name}</p>
+          <p className="truncate text-[15px] font-semibold transition-colors group-hover:text-primary">{c.name}</p>
           <p className="truncate text-xs text-muted-foreground">{contact || 'No contact yet'}</p>
         </div>
         {s?.overduePaise ? <Badge variant="danger">Overdue</Badge> : null}
@@ -347,7 +348,7 @@ function ClientCard({ client: c, series }: { client: ClientRow; series: number[]
             <p className="font-display text-2xl font-bold text-success">Settled</p>
           )}
           {s?.overduePaise ? (
-            <p className="text-[11px] text-destructive">
+            <p className="mt-0.5 text-[11px] font-medium text-destructive">
               <Price paise={s.overduePaise} compact /> overdue
             </p>
           ) : null}
@@ -356,7 +357,7 @@ function ClientCard({ client: c, series }: { client: ClientRow; series: number[]
           {series ? (
             <>
               <Sparkline values={series} color={identityColor(c._id)} height={36} />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="mt-1 text-[11px] text-muted-foreground">
                 <Price paise={s?.invoicedPaise ?? series[series.length - 1]} compact /> lifetime
               </p>
             </>
@@ -370,16 +371,16 @@ function ClientCard({ client: c, series }: { client: ClientRow; series: number[]
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <Building2 className="h-3.5 w-3.5" />
-          <span className="font-figures text-foreground">{s?.activeProjects ?? 0}</span> active / {s?.totalProjects ?? 0} projects
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-0.5 text-[11px]">
+          <Building2 className="h-3 w-3 text-muted-foreground" />
+          <span className="font-figures font-medium text-foreground">{s?.activeProjects ?? 0}</span> active / {s?.totalProjects ?? 0} projects
         </span>
-        <span className="inline-flex items-center gap-1">
-          <Users className="h-3.5 w-3.5" />
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-0.5 text-[11px]">
+          <Users className="h-3 w-3 text-muted-foreground" />
           {s?.portalUsers ? `${s.portalUsers} on portal` : 'No portal access'}
         </span>
-        {c.referredBy && <span>Referred by <span className="text-foreground">{c.referredBy}</span></span>}
+        {c.referredBy && <span>Referred by <span className="font-medium text-foreground">{c.referredBy}</span></span>}
         {s?.lastPaymentAt && <span>Paid {formatDate(s.lastPaymentAt, { day: 'numeric', month: 'short' })}</span>}
       </div>
     </Link>
