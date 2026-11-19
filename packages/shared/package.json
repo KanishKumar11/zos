@@ -27,8 +27,8 @@
     }
   },
   "scripts": {
-    "build": "node init && tsc -p tsconfig.json",
-    "dev": "node init && tsc -p tsconfig.json --watch",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist .turbo"
